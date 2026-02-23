@@ -103,6 +103,8 @@ cd FrameX-Android
 - **No ads** — ever
 - All data stays on-device
 
+[Full Privacy Policy](https://maheshsharan.github.io/FrameX-Android/privacy-policy)
+
 ---
 
 ## Credits

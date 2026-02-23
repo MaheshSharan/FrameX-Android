@@ -321,11 +321,11 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 QuickActionButton(
-                    title = "Performance",
-                    subtitle = "Refresh Rate, Interval",
+                    title = "Diagnostics",
+                    subtitle = "Polling interval · Logs",
                     iconContainerColor = Color(0xFF10B981).copy(alpha = 0.1f),
                     iconContentColor = Color(0xFF34D399),
-                    onClick = { Toast.makeText(context, "Performance adjustments coming soon", Toast.LENGTH_SHORT).show() },
+                    onClick = { Toast.makeText(context, "Diagnostics panel coming in v1.1", Toast.LENGTH_SHORT).show() },
                     modifier = Modifier.weight(1f),
                     icon = { Icon(Icons.Default.Bolt, null) }
                 )

@@ -41,7 +41,10 @@ build_errors.txt
 # Internal research / design folders — not part of the public source
 perfstats/
 stitch/
-docs/
+# Internal planning docs inside docs/ — keep private
+docs/PRD.md
+docs/sizuka_Api.md
+docs/assets/
 
 # Kotlin incremental compilation files
 kotlin/
