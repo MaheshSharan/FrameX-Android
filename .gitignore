@@ -1,0 +1,47 @@
+# ──────────────────────────────────────────────
+#  FrameX Android — .gitignore
+# ──────────────────────────────────────────────
+
+# Gradle caches and build output
+.gradle/
+build/
+app/build/
+**/build/
+
+# Sensitive / generated signing artifacts — NEVER commit
+*.jks
+*.keystore
+*.pfx
+keystore.properties
+signing.properties
+google-services.json
+secrets.properties
+
+# Heap dumps and profiler snapshots
+*.hprof
+
+# APK / AAB release artifacts
+*.apk
+*.aab
+
+# Android Studio IDE files
+*.iml
+.idea/
+local.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Debug / log files
+build_errors.txt
+*.log
+
+# Internal research / design folders — not part of the public source
+perfstats/
+stitch/
+docs/
+
+# Kotlin incremental compilation files
+kotlin/
