@@ -283,6 +283,7 @@ fun OverlayContent(
     val availableModules = listOf(
         Triple("fps", "FPS", "${metricsState.fps}") to Icons.Default.Speed,
         Triple("cpu", "CPU", "${metricsState.cpuMhz} MHz") to Icons.Default.Memory,
+        Triple("cpu_cluster", "CPU Clusters", "U:${metricsState.cpuClusterUltraMhz} P:${metricsState.cpuClusterPerfMhz} E:${metricsState.cpuClusterEffMhz}") to Icons.Default.Memory,
         Triple("ram", "RAM", String.format("%.1f GB", metricsState.ramUsedGb)) to Icons.Default.DeveloperBoard,
         Triple("temp", "TEMP", String.format("%.1f°C", metricsState.batteryTempC)) to Icons.Default.DeviceThermostat,
         Triple("net", "NET", if (metricsState.networkRxKbps > 1024) String.format("%.1f MB/s", (metricsState.networkRxKbps + metricsState.networkTxKbps) / 1024f) else String.format("%.0f KB/s", metricsState.networkRxKbps + metricsState.networkTxKbps)) to Icons.Default.NetworkCheck

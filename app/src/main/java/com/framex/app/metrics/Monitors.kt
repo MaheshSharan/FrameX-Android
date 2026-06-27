@@ -94,21 +94,35 @@ class FpsMonitor @Inject constructor(
 
 @Singleton
 class CpuMonitor @Inject constructor() {
+    data class CpuClusterState(val effMhz: Int, val perfMhz: Int, val ultraMhz: Int)
+
+    // Expose cluster frequency states for the 1+3+4 architecture
+    val cpuClusterUsage: Flow<CpuClusterState> = flow {
+        while (true) {
+            val eff = readFreq(0)   // Cores 0-3 (Cortex-A510 Efficiency)
+            val perf = readFreq(4)  // Cores 4-6 (Cortex-A715 Performance)
+            val ultra = readFreq(7) // Core 7 (Cortex-X3 Ultra)
+            emit(CpuClusterState(eff, perf, ultra))
+            delay(1000)
+        }
+    }
+
     // Exact same approach as PerfStats: read cpu0 current clock frequency from sysfs.
-    // This file is world-readable on all Android devices — no Shizuku required.
-    // Returns kHz; divide by 1000 = MHz.
     val cpuUsage: Flow<Int> = flow {
         while (true) {
-            try {
-                val raw = java.io.File(
-                    "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
-                ).readText().trim()
-                val mhz = (raw.toIntOrNull() ?: 0) / 1000
-                emit(mhz)
-            } catch (e: Exception) {
-                emit(0)
-            }
+            emit(readFreq(0))
             delay(1000)
+        }
+    }
+
+    private fun readFreq(coreIndex: Int): Int {
+        return try {
+            val raw = java.io.File(
+                "/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_cur_freq"
+            ).readText().trim()
+            (raw.toIntOrNull() ?: 0) / 1000
+        } catch (e: Exception) {
+            0
         }
     }
 }

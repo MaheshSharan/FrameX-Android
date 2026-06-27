@@ -15,6 +15,9 @@ import javax.inject.Singleton
 data class MetricsState(
     val fps: Int = 0,
     val cpuMhz: Int = 0,
+    val cpuClusterUltraMhz: Int = 0,
+    val cpuClusterPerfMhz: Int = 0,
+    val cpuClusterEffMhz: Int = 0,
     val ramUsedGb: Float = 0f,
     val ramTotalGb: Float = 0f,
     val batteryTempC: Float = 0f,
@@ -70,6 +73,15 @@ class MetricsEngine @Inject constructor(
                         _metricsState.value = _metricsState.value.copy(cpuMhz = it)
                     }
                 }
+                toggleModule("cpu_cluster", enabled) {
+                    cpuMonitor.cpuClusterUsage.collect { clusters ->
+                        _metricsState.value = _metricsState.value.copy(
+                            cpuClusterEffMhz = clusters.effMhz,
+                            cpuClusterPerfMhz = clusters.perfMhz,
+                            cpuClusterUltraMhz = clusters.ultraMhz
+                        )
+                    }
+                }
                 toggleModule("ram", enabled) {
                     ramMonitor.ramUsage.collect {
                         _metricsState.value = _metricsState.value.copy(
@@ -113,7 +125,12 @@ class MetricsEngine @Inject constructor(
             moduleJobs.remove(key)
             // Reset state field to zero so the overlay doesn't show stale data.
             _metricsState.value = when (key) {
-                "cpu"     -> _metricsState.value.copy(cpuMhz = 0)
+                "cpu"         -> _metricsState.value.copy(cpuMhz = 0)
+                "cpu_cluster" -> _metricsState.value.copy(
+                    cpuClusterEffMhz = 0,
+                    cpuClusterPerfMhz = 0,
+                    cpuClusterUltraMhz = 0
+                )
                 "ram"     -> _metricsState.value.copy(ramUsedGb = 0f, ramTotalGb = 0f)
                 "net"     -> _metricsState.value.copy(networkRxKbps = 0f, networkTxKbps = 0f)
                 "temp"    -> _metricsState.value.copy(batteryTempC = 0f)

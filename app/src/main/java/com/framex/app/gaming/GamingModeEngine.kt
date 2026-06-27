@@ -211,6 +211,11 @@ class GamingModeEngine @Inject constructor(
 
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
         
+        // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
+        try {
+            shizukuManager.executeCommand("pm trim-caches 4G")
+        } catch (e: Exception) { /* Non-critical */ }
+        
         // OriginOS 6 "Final Boss" Fix: Force re-bind the Notification Listener.
         // On Vivo/Oppo, the listener can fall into a 'coma' if unused. 
         // Disabling and re-enabling it right before use wakes it up 100% of the time.
@@ -257,10 +262,9 @@ class GamingModeEngine @Inject constructor(
             }
 
             // ----------------------------------------------------------------
-            // Phase 2 — User apps (using smart fallback)
+            // Phase 2 — User apps (using smart fallback & standby buckets)
             // ----------------------------------------------------------------
             val affectedPkgs = mutableSetOf<String>()
-            // Track Google apps we actually processed so we can restore them later
             affectedPkgs.addAll(googleTargets)
 
             val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
@@ -272,6 +276,12 @@ class GamingModeEngine @Inject constructor(
                     statusText = "Suspending ${app.label}"
                 )
                 suspendOrRestrict(app.packageName, app.label)
+                
+                // Restrict Standby Bucket to minimize CPU/alarm triggers
+                try {
+                    shizukuManager.executeCommand("am set-standby-bucket ${app.packageName} restricted")
+                } catch (e: Exception) { /* Non-critical */ }
+                
                 affectedPkgs.add(app.packageName)
             }
 
@@ -322,16 +332,16 @@ class GamingModeEngine @Inject constructor(
 
         if (isBlocked) {
             // Step 3: Fallback — Kill and neuter the app via AppOps
-            // This won't turn the icon gray but will prevent it from running.
             shizukuManager.executeCommand("am force-stop $packageName")
             shizukuManager.executeCommand("cmd appops set $packageName RUN_IN_BACKGROUND ignore")
             shizukuManager.executeCommand("cmd appops set $packageName RUN_ANY_IN_BACKGROUND ignore")
             shizukuManager.executeCommand("cmd appops set $packageName START_FOREGROUND ignore")
+            shizukuManager.executeCommand("cmd appops set $packageName WAKE_LOCK ignore")
         } else {
             // Even if suspended successfully, we still apply AppOps as a backup layer
             shizukuManager.executeCommand("cmd appops set $packageName RUN_IN_BACKGROUND ignore")
             shizukuManager.executeCommand("cmd appops set $packageName RUN_ANY_IN_BACKGROUND ignore")
-            // Note: am force-stop is always good practice to clear existing RAM
+            shizukuManager.executeCommand("cmd appops set $packageName WAKE_LOCK ignore")
             shizukuManager.executeCommand("am force-stop $packageName")
         }
     }
@@ -347,18 +357,26 @@ class GamingModeEngine @Inject constructor(
         _state.value = GamingModeState.Disabling
 
         try {
-            // Unsuspend all OEM packages
+            // Unsuspend all OEM packages and restore AppOps
             SAFE_TO_SUSPEND.forEach { pkg ->
                 shizukuManager.executeCommand("pm unsuspend --user 0 $pkg")
+                shizukuManager.executeCommand("cmd appops set $pkg RUN_IN_BACKGROUND allow")
+                shizukuManager.executeCommand("cmd appops set $pkg RUN_ANY_IN_BACKGROUND allow")
+                shizukuManager.executeCommand("cmd appops set $pkg START_FOREGROUND allow")
+                shizukuManager.executeCommand("cmd appops set $pkg WAKE_LOCK allow")
             }
 
-            // Unsuspend + restore AppOps for user packages we actually changed
+            // Unsuspend + restore AppOps + Standby Bucket for user packages we actually changed
             val affected = settingsRepository.getGamingAffectedPackages()
             affected.forEach { pkg ->
                 shizukuManager.executeCommand("pm unsuspend --user 0 $pkg")
                 shizukuManager.executeCommand("cmd appops set $pkg RUN_IN_BACKGROUND allow")
                 shizukuManager.executeCommand("cmd appops set $pkg RUN_ANY_IN_BACKGROUND allow")
                 shizukuManager.executeCommand("cmd appops set $pkg START_FOREGROUND allow")
+                shizukuManager.executeCommand("cmd appops set $pkg WAKE_LOCK allow")
+                try {
+                    shizukuManager.executeCommand("am set-standby-bucket $pkg active")
+                } catch (e: Exception) { /* Non-critical */ }
             }
             settingsRepository.setGamingAffectedPackages(emptySet())
 
@@ -369,8 +387,7 @@ class GamingModeEngine @Inject constructor(
             }
 
         } catch (e: Exception) {
-            // Always transition to Idle even on partial failure — leaving the mode in
-            // a broken "Active" state is worse than a failed restore.
+            // Always transition to Idle even on partial failure
         }
 
         settingsRepository.setGamingModeActive(false)

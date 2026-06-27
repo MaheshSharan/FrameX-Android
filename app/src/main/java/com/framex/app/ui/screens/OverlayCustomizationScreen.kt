@@ -91,7 +91,8 @@ fun OverlayCustomizationScreen(
         mutableStateOf(
             listOf(
                 MetricModule("fps", "Frames Per Second", "120", Icons.Default.Speed, savedModules.contains("fps")),
-                MetricModule("cpu", "CPU Usage", "34%", Icons.Default.Memory, savedModules.contains("cpu")),
+                MetricModule("cpu", "CPU Frequency", "2.8 GHz", Icons.Default.Memory, savedModules.contains("cpu")),
+                MetricModule("cpu_cluster", "CPU Clusters", "U: 2.8G | P: 2.2G | E: 1.6G", Icons.Default.Memory, savedModules.contains("cpu_cluster")),
                 MetricModule("ram", "RAM Usage", "4.2 GB", Icons.Default.DeveloperBoard, savedModules.contains("ram")),
                 MetricModule("temp", "Battery Temp", "38°C", Icons.Default.DeviceThermostat, savedModules.contains("temp")),
                 MetricModule("net", "Network Speed", "1.2 MB", Icons.Default.NetworkCheck, savedModules.contains("net"))
