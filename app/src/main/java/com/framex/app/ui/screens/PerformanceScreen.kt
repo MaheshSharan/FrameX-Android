@@ -1932,20 +1932,22 @@ fun PerformanceScreen(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
         ) {
-            Box(
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color.White.copy(0.06f))
             ) {
                 Column(
+                    modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(32.dp)
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(130.dp)
+                            .size(100.dp)
                             .clip(CircleShape)
                             .background(Color.White.copy(0.04f))
                             .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), CircleShape),
@@ -1955,11 +1957,11 @@ fun PerformanceScreen(
                             Icons.Default.RocketLaunch,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(56.dp)
+                            modifier = Modifier.size(44.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
                         "DEPLOYING OPTIMIZATIONS",
@@ -1967,7 +1969,7 @@ fun PerformanceScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         currentPhrase,
@@ -1976,7 +1978,7 @@ fun PerformanceScreen(
                         textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     LinearProgressIndicator(
                         progress = { progress },
@@ -1988,7 +1990,7 @@ fun PerformanceScreen(
                         trackColor = Color.White.copy(0.06f)
                     )
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
                         "System resources are being reallocated for peak gaming stability and performance.",
