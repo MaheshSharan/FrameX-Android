@@ -52,10 +52,10 @@ class SettingsRepository @Inject constructor(
     val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
 
     // Overlay window position — persists the last dragged location across service restarts.
-    private val _overlayX = MutableStateFlow(prefs.getInt(KEY_OVERLAY_X, 100))
+    private val _overlayX = MutableStateFlow(prefs.getInt(KEY_OVERLAY_PORTRAIT_X, -1))
     val overlayX: StateFlow<Int> = _overlayX.asStateFlow()
 
-    private val _overlayY = MutableStateFlow(prefs.getInt(KEY_OVERLAY_Y, 100))
+    private val _overlayY = MutableStateFlow(prefs.getInt(KEY_OVERLAY_PORTRAIT_Y, -1))
     val overlayY: StateFlow<Int> = _overlayY.asStateFlow()
 
     fun setOverlayMode(mode: String) {
@@ -108,8 +108,16 @@ class SettingsRepository @Inject constructor(
         _isOnboardingCompleted.value = completed
     }
 
-    fun setOverlayPosition(x: Int, y: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_X, x).putInt(KEY_OVERLAY_Y, y).apply()
+    fun getOverlayPosition(isLandscape: Boolean): Pair<Int, Int> {
+        val keyX = if (isLandscape) KEY_OVERLAY_LANDSCAPE_X else KEY_OVERLAY_PORTRAIT_X
+        val keyY = if (isLandscape) KEY_OVERLAY_LANDSCAPE_Y else KEY_OVERLAY_PORTRAIT_Y
+        return Pair(prefs.getInt(keyX, -1), prefs.getInt(keyY, -1))
+    }
+
+    fun setOverlayPosition(isLandscape: Boolean, x: Int, y: Int) {
+        val keyX = if (isLandscape) KEY_OVERLAY_LANDSCAPE_X else KEY_OVERLAY_PORTRAIT_X
+        val keyY = if (isLandscape) KEY_OVERLAY_LANDSCAPE_Y else KEY_OVERLAY_PORTRAIT_Y
+        prefs.edit().putInt(keyX, x).putInt(keyY, y).apply()
         _overlayX.value = x
         _overlayY.value = y
     }
@@ -162,8 +170,10 @@ class SettingsRepository @Inject constructor(
         private const val KEY_OVERLAY_BORDER_COLOR_INDEX = "overlay_border_color_index"
         private const val KEY_OVERLAY_TEXT_COLOR_INDEX = "overlay_text_color_index"
         private const val KEY_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
-        private const val KEY_OVERLAY_X = "overlay_x"
-        private const val KEY_OVERLAY_Y = "overlay_y"
+        private const val KEY_OVERLAY_PORTRAIT_X = "overlay_x"
+        private const val KEY_OVERLAY_PORTRAIT_Y = "overlay_y"
+        private const val KEY_OVERLAY_LANDSCAPE_X = "overlay_landscape_x"
+        private const val KEY_OVERLAY_LANDSCAPE_Y = "overlay_landscape_y"
         private const val KEY_GAMING_WHITELIST = "gaming_mode_whitelist"
         private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
         private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"

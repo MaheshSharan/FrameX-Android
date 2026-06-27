@@ -94,13 +94,21 @@ class OverlayManager @Inject constructor(
                             windowParams?.let { p ->
                                 p.x += dx.toInt()
                                 p.y += dy.toInt()
+                                
+                                val screenSize = getScreenSize()
+                                val viewWidth = composeView?.width ?: 0
+                                val viewHeight = composeView?.height ?: 0
+                                p.x = p.x.coerceIn(0, (screenSize.x - viewWidth).coerceAtLeast(0))
+                                p.y = p.y.coerceIn(0, (screenSize.y - viewHeight).coerceAtLeast(0))
+                                
                                 composeView?.let { windowManager.updateViewLayout(it, p) }
                             }
                         },
                         onDragEnd = {
-                            // Persist position so next service start restores exact location.
                             windowParams?.let { p ->
-                                settingsRepository.setOverlayPosition(p.x, p.y)
+                                val currentOrientation = context.resources.configuration.orientation
+                                val isCurrentLandscape = currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                                settingsRepository.setOverlayPosition(isCurrentLandscape, p.x, p.y)
                             }
                         },
                         onModeToggle = {
@@ -127,8 +135,48 @@ class OverlayManager @Inject constructor(
         // Without this, the View default background can block alpha compositing on some ROMs.
         composeView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         
+        composeView?.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            val width = right - left
+            val height = bottom - top
+            val oldWidth = oldRight - oldLeft
+            val oldHeight = oldBottom - oldTop
+            
+            if (width > 0 && height > 0 && (width != oldWidth || height != oldHeight)) {
+                val currentOrientation = context.resources.configuration.orientation
+                val isCurrentLandscape = currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val screenSize = getScreenSize()
+                val (currentX, currentY) = settingsRepository.getOverlayPosition(isCurrentLandscape)
+                
+                var targetX = currentX
+                var targetY = currentY
+                
+                if (targetX == -1 || targetY == -1) {
+                    targetX = (screenSize.x - width) / 2
+                    targetY = (screenSize.y - height) / 2
+                } else {
+                    targetX = targetX.coerceIn(0, (screenSize.x - width).coerceAtLeast(0))
+                    targetY = targetY.coerceIn(0, (screenSize.y - height).coerceAtLeast(0))
+                }
+                
+                windowParams?.let { params ->
+                    params.x = targetX
+                    params.y = targetY
+                    composeView?.let { view ->
+                        try {
+                            windowManager.updateViewLayout(view, params)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+        }
+        
         lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
+        val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val (savedX, savedY) = settingsRepository.getOverlayPosition(isLandscape)
 
         windowParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -147,9 +195,8 @@ class OverlayManager @Inject constructor(
             android.graphics.PixelFormat.RGBA_8888
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            // Restore last saved drag position — users don't lose their placement on restart.
-            x = settingsRepository.overlayX.value
-            y = settingsRepository.overlayY.value
+            x = if (savedX == -1) 100 else savedX
+            y = if (savedY == -1) 100 else savedY
         }
 
         try {
@@ -168,6 +215,52 @@ class OverlayManager @Inject constructor(
             overlayLifecycleOwner = null
             windowParams = null
         }
+    }
+
+    fun handleOrientationChange(orientation: Int) {
+        val isLandscape = orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val screenSize = getScreenSize()
+        val viewWidth = composeView?.width ?: 0
+        val viewHeight = composeView?.height ?: 0
+
+        if (viewWidth > 0 && viewHeight > 0) {
+            val (savedX, savedY) = settingsRepository.getOverlayPosition(isLandscape)
+            var targetX = savedX
+            var targetY = savedY
+
+            if (targetX == -1 || targetY == -1) {
+                targetX = (screenSize.x - viewWidth) / 2
+                targetY = (screenSize.y - viewHeight) / 2
+            } else {
+                targetX = targetX.coerceIn(0, (screenSize.x - viewWidth).coerceAtLeast(0))
+                targetY = targetY.coerceIn(0, (screenSize.y - viewHeight).coerceAtLeast(0))
+            }
+
+            windowParams?.let { params ->
+                params.x = targetX
+                params.y = targetY
+                composeView?.let { view ->
+                    try {
+                        windowManager.updateViewLayout(view, params)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getScreenSize(): android.graphics.Point {
+        val size = android.graphics.Point()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            size.x = bounds.width()
+            size.y = bounds.height()
+        } else {
+            val display = windowManager.defaultDisplay
+            display.getSize(size)
+        }
+        return size
     }
 }
 

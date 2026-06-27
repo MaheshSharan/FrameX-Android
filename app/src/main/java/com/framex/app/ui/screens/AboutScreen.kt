@@ -40,6 +40,24 @@ fun AboutScreen(
     val context = LocalContext.current
     val accentColor = MaterialTheme.colorScheme.primary
 
+    val packageInfo = try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+    } catch (e: Exception) {
+        null
+    }
+    val versionName = packageInfo?.versionName ?: "1.2"
+    val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+        packageInfo?.longVersionCode ?: 3L
+    } else {
+        @Suppress("DEPRECATION")
+        packageInfo?.versionCode?.toLong() ?: 3L
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -95,7 +113,7 @@ fun AboutScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text("FrameX", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text("v1.1 (Build 101)", fontSize = 14.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+            Text("v$versionName (Build $versionCode)", fontSize = 14.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
             
             Spacer(modifier = Modifier.height(24.dp))
             

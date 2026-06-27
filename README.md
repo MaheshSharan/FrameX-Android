@@ -1,14 +1,16 @@
 # FrameX
 
+![FrameX Banner](docs/assets/banner.png)
+
 > Real-time performance overlay for Android. Powered by [Shizuku](https://github.com/RikkaApps/Shizuku) — no root required.
 
 > [!IMPORTANT]
-> The **Gaming Performance Mode** engine is a specialized implementation specifically hardened and optimized for **Android 16** and **Vivo OriginOS/FuntouchOS** environments. Its package suspension and restricted-state flows are custom-tailored for peak efficiency on these devices and may not reflect universal behavior on all Android skins.
+> **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices. Behavior on other Android skins may vary. Use this feature at your own risk.
 
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)](https://developer.android.com/about/versions/oreo)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/version-1.2.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.2.0)
 
 ---
 
@@ -28,6 +30,27 @@ FrameX shows a draggable, fully customisable overlay with live system stats on t
 - [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running
   - Activate via Wireless Debugging (no PC needed on Android 11+) or ADB
   - Also works with the Sui module on rooted devices
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/ui/onboard1.jpeg" width="150"/><br/><sub><b>Onboarding 1</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/onboard2.jpeg" width="150"/><br/><sub><b>Onboarding 2</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/onboard3.jpeg" width="150"/><br/><sub><b>Onboarding 3</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/dash-no-setup.jpeg" width="150"/><br/><sub><b>Dashboard (No Setup)</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/dash-setup-done.jpeg" width="150"/><br/><sub><b>Dashboard (Running)</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/ui/setup_system.jpeg" width="150"/><br/><sub><b>System Setup</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/overlay_config.jpeg" width="150"/><br/><sub><b>Overlay Config</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/appearance_settings.jpeg" width="150"/><br/><sub><b>Appearance settings</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/perfomance.jpeg" width="150"/><br/><sub><b>Performance Mode</b></sub></td>
+    <td align="center"><img src="docs/assets/ui/about-legal.jpeg" width="150"/><br/><sub><b>About & Legal</b></sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -124,6 +147,4 @@ cd FrameX-Android
 
 ## License
 
-```
-MIT License — see LICENSE for details.
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
