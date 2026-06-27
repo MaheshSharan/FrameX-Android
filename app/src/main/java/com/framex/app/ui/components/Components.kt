@@ -97,7 +97,7 @@ fun QuickActionButton(
                     .background(iconContainerColor),
                 contentAlignment = Alignment.Center
             ) {
-                Providers(LocalContentColor provides iconContentColor) {
+                CompositionLocalProvider(LocalContentColor provides iconContentColor) {
                     icon()
                 }
             }
@@ -118,7 +118,3 @@ fun QuickActionButton(
     }
 }
 
-@Composable
-fun Providers(vararg providers: ProvidedValue<*>, content: @Composable () -> Unit) {
-    CompositionLocalProvider(*providers, content = content)
-}

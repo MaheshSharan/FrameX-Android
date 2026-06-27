@@ -34,6 +34,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            // Use debug signing for now so it's installable via GitHub
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 }
 
 dependencies {
