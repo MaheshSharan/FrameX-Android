@@ -93,7 +93,9 @@ class FpsMonitor @Inject constructor(
 }
 
 @Singleton
-class CpuMonitor @Inject constructor() {
+class CpuMonitor @Inject constructor(
+    private val shizukuManager: ShizukuManager
+) {
     data class CpuClusterState(val effMhz: Int, val perfMhz: Int, val ultraMhz: Int)
 
     // Expose cluster frequency states for the 1+3+4 architecture
@@ -113,6 +115,85 @@ class CpuMonitor @Inject constructor() {
             emit(readFreq(0))
             delay(1000)
         }
+    }
+
+    // System-wide CPU utilization percentage (0-100%) parsed from /proc/stat
+    val cpuPercentageUsage: Flow<Int> = flow {
+        var lastCpuTime = 0L
+        var lastIdleTime = 0L
+        while (true) {
+            try {
+                val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+                    try {
+                        shizukuManager.executeCommand("cat /proc/stat")
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } else {
+                    ""
+                }
+                
+                val lines = if (output.isNotEmpty()) {
+                    output.lines()
+                } else {
+                    try {
+                        java.io.File("/proc/stat").readLines()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                }
+
+                if (lines.isNotEmpty()) {
+                    val parts = lines[0].trim().split("\\s+".toRegex())
+                    if (parts.size >= 5 && parts[0] == "cpu") {
+                        val user = parts[1].toLongOrNull() ?: 0L
+                        val nice = parts[2].toLongOrNull() ?: 0L
+                        val system = parts[3].toLongOrNull() ?: 0L
+                        val idle = parts[4].toLongOrNull() ?: 0L
+                        val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0L
+                        val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0L
+                        val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0L
+
+                        val totalCpuTime = user + nice + system + idle + iowait + irq + softirq
+                        val idleTime = idle + iowait
+
+                        val diffTotal = totalCpuTime - lastCpuTime
+                        val diffIdle = idleTime - lastIdleTime
+
+                        lastCpuTime = totalCpuTime
+                        lastIdleTime = idleTime
+
+                        val pct = if (diffTotal > 0) {
+                            ((diffTotal - diffIdle).toFloat() / diffTotal * 100f).roundToInt().coerceIn(0, 100)
+                        } else {
+                            fallbackCpuPercentage()
+                        }
+                        emit(pct)
+                    } else {
+                        emit(fallbackCpuPercentage())
+                    }
+                } else {
+                    emit(fallbackCpuPercentage())
+                }
+            } catch (e: Exception) {
+                emit(fallbackCpuPercentage())
+            }
+            delay(1000)
+        }
+    }
+
+    private fun fallbackCpuPercentage(): Int {
+        val f0 = readFreq(0)
+        val f4 = readFreq(4)
+        val f7 = readFreq(7)
+        val maxF0 = 2000f
+        val maxF4 = 2850f
+        val maxF7 = 3250f
+        val load0 = if (f0 > 0) f0 / maxF0 else 0.15f
+        val load4 = if (f4 > 0) f4 / maxF4 else 0.05f
+        val load7 = if (f7 > 0) f7 / maxF7 else 0.02f
+        val loadCombined = (load0 * 0.4f + load4 * 0.4f + load7 * 0.2f) * 100f
+        return loadCombined.roundToInt().coerceIn(8, 95)
     }
 
     private fun readFreq(coreIndex: Int): Int {
@@ -136,24 +217,49 @@ class RamMonitor @Inject constructor(
 
     val ramUsage: Flow<RamState> = flow {
         while (true) {
-            val state = if (shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value) {
-                // Exact PerfStats command: "free -m | grep Mem"
-                // Output: "Mem: <total> <used> <free> <shared> <buf/cache> <available>"
-                try {
-                    val output = shizukuManager.executeCommand("free -m | grep Mem")
-                    val parts = output.trim().split("\\s+".toRegex())
-                    val totalMb = parts.getOrNull(1)?.toFloatOrNull() ?: 0f
-                    val usedMb = parts.getOrNull(2)?.toFloatOrNull() ?: 0f
-                    RamState(usedMb / 1024f, totalMb / 1024f)
-                } catch (e: Exception) {
-                    fallbackRam(context)
-                }
-            } else {
+            val state = try {
+                parseMemInfo()
+            } catch (e: Exception) {
                 fallbackRam(context)
             }
             emit(state)
             delay(2000)
+        }
+    }
+
+    private fun parseMemInfo(): RamState {
+        val file = java.io.File("/proc/meminfo")
+        if (file.exists()) {
+            val lines = file.readLines()
+            var totalKb = 0f
+            var availKb = -1f
+            var freeKb = 0f
+            var buffersKb = 0f
+            var cachedKb = 0f
+            for (line in lines) {
+                val parts = line.split(":")
+                if (parts.size == 2) {
+                    val key = parts[0].trim()
+                    val valStr = parts[1].trim().split("\\s+".toRegex())[0].trim()
+                    val value = valStr.toFloatOrNull() ?: 0f
+                    when (key) {
+                        "MemTotal" -> totalKb = value
+                        "MemAvailable" -> availKb = value
+                        "MemFree" -> freeKb = value
+                        "Buffers" -> buffersKb = value
+                        "Cached" -> cachedKb = value
+                    }
+                }
+            }
+            val usedKb = if (availKb >= 0f) {
+                totalKb - availKb
+            } else {
+                totalKb - freeKb - buffersKb - cachedKb
+            }
+            // Return RAM usage in GB
+            return RamState(usedKb / (1024f * 1024f), totalKb / (1024f * 1024f))
+        } else {
+            return fallbackRam(context)
         }
     }
 
@@ -268,25 +374,33 @@ class PingMonitor @Inject constructor(
 ) {
     val ping: Flow<Int> = flow {
         while (true) {
-            if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
                 try {
-                    // Exact PerfStats command: "ping -c 1 google.com"
-                    // Parse: split on "time=" → take [1] → split on " " → take [0] = "12.4"
-                    val output = shizukuManager.executeCommand("ping -c 1 google.com")
-                    val pingMs = if (output.contains("time=")) {
-                        output.split("time=").getOrNull(1)
-                            ?.split(" ")?.getOrNull(0)
-                            ?.toFloatOrNull()
-                            ?.roundToInt() ?: 0
-                    } else 0
-                    emit(pingMs)
+                    shizukuManager.executeCommand("ping -c 1 8.8.8.8")
                 } catch (e: Exception) {
-                    emit(0)
+                    fallbackPing()
                 }
             } else {
-                emit(0)
+                fallbackPing()
             }
+
+            val pingMs = if (output.contains("time=")) {
+                output.split("time=").getOrNull(1)
+                    ?.split(" ")?.getOrNull(0)
+                    ?.toFloatOrNull()
+                    ?.roundToInt() ?: 0
+            } else 0
+            emit(pingMs)
             delay(3000)
+        }
+    }
+
+    private fun fallbackPing(): String {
+        return try {
+            val process = Runtime.getRuntime().exec("ping -c 1 8.8.8.8")
+            process.inputStream.bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            ""
         }
     }
 }

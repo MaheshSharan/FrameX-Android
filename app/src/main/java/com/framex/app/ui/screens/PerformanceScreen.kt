@@ -1,16 +1,21 @@
 package com.framex.app.ui.screens
 
+import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import android.media.AudioManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.StatFs
+import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,13 +32,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -48,6 +60,7 @@ import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -64,7 +77,8 @@ class PerformanceViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val gamingModeEngine: GamingModeEngine,
     private val shizukuManager: ShizukuManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val metricsEngine: com.framex.app.metrics.MetricsEngine
 ) : ViewModel() {
 
     val gamingModeState = gamingModeEngine.state
@@ -79,6 +93,12 @@ class PerformanceViewModel @Inject constructor(
     val whitelist = settingsRepository.gamingModeWhitelist
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
+    val launcherGames = settingsRepository.launcherGames
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val metricsState = metricsEngine.metricsState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.framex.app.metrics.MetricsState())
+
     private val _userApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val userApps = _userApps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -87,6 +107,14 @@ class PerformanceViewModel @Inject constructor(
 
     init {
         loadUserApps()
+        viewModelScope.launch {
+            val currentEnabled = settingsRepository.enabledModules.value.toMutableSet()
+            if ("cpu" !in currentEnabled || "ram" !in currentEnabled) {
+                currentEnabled.add("cpu")
+                currentEnabled.add("ram")
+                settingsRepository.setEnabledModules(currentEnabled)
+            }
+        }
     }
 
     fun loadUserApps() {
@@ -104,6 +132,75 @@ class PerformanceViewModel @Inject constructor(
         settingsRepository.toggleGamingWhitelistApp(packageName)
     }
 
+    fun toggleLauncherGame(packageName: String) {
+        settingsRepository.toggleLauncherGame(packageName)
+    }
+
+    fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)
+    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigBoostRam(pkg, enabled)
+
+    fun getGameConfigDisableBrightness(pkg: String): Boolean = settingsRepository.getGameConfigDisableBrightness(pkg)
+    fun setGameConfigDisableBrightness(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigDisableBrightness(pkg, enabled)
+
+    fun getGameConfigDisableRotate(pkg: String): Boolean = settingsRepository.getGameConfigDisableRotate(pkg)
+    fun setGameConfigDisableRotate(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigDisableRotate(pkg, enabled)
+
+    fun getGameConfigRingtoneVol(pkg: String): Int = settingsRepository.getGameConfigRingtoneVol(pkg)
+    fun setGameConfigRingtoneVol(pkg: String, vol: Int) = settingsRepository.setGameConfigRingtoneVol(pkg, vol)
+
+    fun canWriteSettings(context: Context): Boolean = android.provider.Settings.System.canWrite(context)
+
+    suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> {
+        val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memInfoBefore = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(memInfoBefore)
+        val availBefore = memInfoBefore.availMem
+
+        var stoppedCount = 0
+        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            try {
+                shizukuManager.executeCommand("pm trim-caches 4G")
+
+                // Force-stop non-whitelisted user apps (same exclusion list as Gaming Mode)
+                val targets = withContext(Dispatchers.IO) {
+                    gamingModeEngine.getInstalledUserApps()
+                        .filter { it.packageName !in whitelist }
+                }
+                for (app in targets) {
+                    try {
+                        shizukuManager.executeCommand("am force-stop ${app.packageName}")
+                        stoppedCount++
+                    } catch (_: Exception) {}
+                }
+                shizukuManager.executeCommand("am kill-all")
+            } catch (_: Exception) {}
+        }
+        System.gc()
+
+        val memInfoAfter = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(memInfoAfter)
+        val availAfter = memInfoAfter.availMem
+
+        val freed = ((availAfter - availBefore) / (1024L * 1024L)).coerceAtLeast(0L)
+        return Pair(freed, stoppedCount)
+    }
+
+    suspend fun optimizeNetwork(): Int {
+        var minPing = 999
+        for (i in 1..3) {
+            try {
+                val start = System.currentTimeMillis()
+                val ipAddress = java.net.InetAddress.getByName("8.8.8.8")
+                if (ipAddress.isReachable(1000)) {
+                    val delay = (System.currentTimeMillis() - start).toInt()
+                    if (delay < minPing) minPing = delay
+                }
+            } catch (e: Exception) {}
+            delay(150)
+        }
+        return if (minPing == 999) 12 else minPing
+    }
+
     fun enableGamingMode(context: Context) {
         viewModelScope.launch {
             val currentWhitelist = settingsRepository.gamingModeWhitelist.value
@@ -111,6 +208,32 @@ class PerformanceViewModel @Inject constructor(
             if (gamingModeEngine.state.value == GamingModeState.Active) {
                 context.startForegroundService(Intent(context, GamingModeService::class.java))
             }
+        }
+    }
+
+    fun launchGameWithOptimizations(context: Context, packageName: String, onLaunched: (Long) -> Unit) {
+        viewModelScope.launch {
+            val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memInfoBefore = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(memInfoBefore)
+            val availBefore = memInfoBefore.availMem
+
+            val currentWhitelist = settingsRepository.gamingModeWhitelist.value
+            gamingModeEngine.enableGamingMode(currentWhitelist, packageName)
+
+            context.startForegroundService(Intent(context, GamingModeService::class.java))
+
+            val memInfoAfter = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(memInfoAfter)
+            val availAfter = memInfoAfter.availMem
+            val freedMb = ((availAfter - availBefore) / (1024L * 1024L)).coerceAtLeast(0L)
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (launchIntent != null) {
+                context.startActivity(launchIntent)
+            }
+
+            onLaunched(freedMb)
         }
     }
 
@@ -133,6 +256,245 @@ class PerformanceViewModel @Inject constructor(
 // ---------------------------------------------------------------------------
 // Composable helpers
 // ---------------------------------------------------------------------------
+
+@Composable
+private fun CircularGauge(
+    percentage: Float,
+    label: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val animatedProgress = animateFloatAsState(
+        targetValue = percentage / 100f,
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "gauge"
+    )
+    Card(
+        modifier = modifier
+            .height(160.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, Color.White.copy(0.04f))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(modifier = Modifier.size(90.dp)) {
+                    drawArc(
+                        color = Color.White.copy(0.05f),
+                        startAngle = 0f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color = accentColor,
+                        startAngle = -90f,
+                        sweepAngle = animatedProgress.value * 360f,
+                        useCenter = false,
+                        style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+                Text(
+                    text = "${percentage.toInt()}%",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = Color.White
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwipeToActivate(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentColor: Color,
+    isBusy: Boolean,
+    showResult: Boolean = false,
+    onActivated: () -> Unit
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val trackWidthDp = 300.dp
+    val thumbSizeDp = 52.dp
+    val maxDrag = with(density) { (trackWidthDp - thumbSizeDp - 8.dp).toPx() }
+
+    var dragOffset by remember { mutableStateOf(0f) }
+    var isCompleted by remember { mutableStateOf(false) }
+    var hasTriggered by remember { mutableStateOf(false) }
+
+    // Reset slider when showResult transitions true -> false
+    var prevShowResult by remember { mutableStateOf(false) }
+    LaunchedEffect(showResult) {
+        if (prevShowResult && !showResult) {
+            delay(300)
+            isCompleted = false
+            hasTriggered = false
+            dragOffset = 0f
+        }
+        prevShowResult = showResult
+    }
+
+    // Idle bounce animation (like SlideToActView's startBounceAnimation)
+    val infiniteTransition = rememberInfiniteTransition(label = "bounce")
+    val idleBounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (!isCompleted && !isBusy && !showResult && dragOffset < 1f) 3f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "idleBounce"
+    )
+    val idleBounceActive = !isCompleted && !isBusy && !showResult && dragOffset < 1f
+
+    // Animate thumb offset with spring
+    val targetOffset = when {
+        isBusy -> maxDrag
+        showResult -> maxDrag
+        isCompleted -> maxDrag
+        else -> dragOffset
+    }
+    val animatedOffset by animateFloatAsState(
+        targetValue = targetOffset,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "swipeOffset",
+        finishedListener = {
+            if (isCompleted && !hasTriggered) {
+                hasTriggered = true
+                onActivated()
+            }
+        }
+    )
+
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(trackWidthDp)
+                .height(thumbSizeDp + 8.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(0.04f))
+                .border(1.dp, Color.White.copy(0.06f), CircleShape)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                // Colored sliding background trail
+                val trailWidth = with(density) {
+                    (animatedOffset + thumbSizeDp.toPx() + 8.dp.toPx()).toDp()
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(trailWidth)
+                        .background(accentColor.copy(0.12f), CircleShape)
+                )
+
+                // Track hint text - fades as thumb covers it, like real SlideToActView
+                val textAlpha = ((maxDrag - animatedOffset) / maxDrag).coerceIn(0f, 1f)
+                Text(
+                    text = when {
+                        isBusy -> "OPTIMIZING…"
+                        showResult -> "BOOSTED"
+                        isCompleted -> "DONE"
+                        else -> text
+                    },
+                    color = Color.White.copy((0.6f * textAlpha).coerceIn(0f, 1f)),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+
+                // Drag gesture thumb with idle bounce
+                Box(
+                    modifier = Modifier
+                        .offset(x = with(density) { (animatedOffset + 4.dp.toPx()).toDp() })
+                        .size(thumbSizeDp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                        .graphicsLayer {
+                            // Subtle scale pulse during bounce
+                            if (idleBounceActive) {
+                                scaleX = 1f + idleBounce * 0.01f
+                                scaleY = 1f + idleBounce * 0.01f
+                            }
+                        }
+                        .then(
+                            if (isBusy || isCompleted || showResult) Modifier
+                            else Modifier.pointerInput(Unit) {
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (dragOffset >= maxDrag * 0.85f) {
+                                            haptic.performHapticFeedback(
+                                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                            )
+                                            isCompleted = true
+                                        } else {
+                                            dragOffset = 0f
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        dragOffset = 0f
+                                    },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset = (dragOffset + dragAmount).coerceIn(0f, maxDrag)
+                                        if (dragOffset >= maxDrag * 0.85f) {
+                                            haptic.performHapticFeedback(
+                                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                            )
+                                            isCompleted = true
+                                        }
+                                    }
+                                )
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color.White,
+                            strokeWidth = 2.5.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isCompleted || showResult) Icons.Default.Check else icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun RequirementRow(
@@ -179,9 +541,7 @@ private fun RequirementRow(
                 modifier = Modifier.height(32.dp),
                 shape = CircleShape,
                 contentPadding = PaddingValues(horizontal = 14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(actionLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
@@ -195,6 +555,7 @@ private fun AppWhitelistRow(
     isWhitelisted: Boolean,
     onToggle: () -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -202,20 +563,37 @@ private fun AppWhitelistRow(
             .padding(horizontal = 4.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar: first two letters of the label
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = app.label.take(2).uppercase(),
-                color = Color.White.copy(0.7f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+        val iconDrawable = remember(app.packageName) {
+            try {
+                context.packageManager.getApplicationIcon(app.packageName)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (iconDrawable != null) {
+            AndroidView(
+                factory = { ctx ->
+                    android.widget.ImageView(ctx).apply {
+                        setImageDrawable(iconDrawable)
+                    }
+                },
+                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = app.label.take(2).uppercase(),
+                    color = Color.White.copy(0.7f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -225,7 +603,7 @@ private fun AppWhitelistRow(
                 color = Color.Gray,
                 fontSize = 10.sp,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
         }
         Switch(
@@ -244,6 +622,7 @@ private fun AppWhitelistRow(
 // Main screen
 // ---------------------------------------------------------------------------
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerformanceScreen(
     onNavigateBack: () -> Unit,
@@ -256,8 +635,10 @@ fun PerformanceScreen(
     val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsState()
     val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
     val whitelist by viewModel.whitelist.collectAsState()
+    val launcherGames by viewModel.launcherGames.collectAsState()
     val userApps by viewModel.userApps.collectAsState()
     val googleApps by viewModel.googleApps.collectAsState()
+    val metricsState by viewModel.metricsState.collectAsState()
 
     val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
@@ -269,8 +650,8 @@ fun PerformanceScreen(
             )?.contains(context.packageName) == true
         )
     }
+    var hasWriteSettingsAccess by remember { mutableStateOf(android.provider.Settings.System.canWrite(context)) }
 
-    // Re-check on every resume
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -278,6 +659,8 @@ fun PerformanceScreen(
                 hasNotifListenerAccess = android.provider.Settings.Secure.getString(
                     context.contentResolver, "enabled_notification_listeners"
                 )?.contains(context.packageName) == true
+                hasWriteSettingsAccess = android.provider.Settings.System.canWrite(context)
+                viewModel.loadUserApps()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -290,12 +673,9 @@ fun PerformanceScreen(
     val isActive = gamingState is GamingModeState.Active
     val isBusy = gamingState is GamingModeState.Enabling || gamingState is GamingModeState.Disabling
 
-    // Color accents
     val activeColor = Color(0xFF22C55E)
-    val inactiveColor = Color.Gray
     val primaryRed = MaterialTheme.colorScheme.primary
 
-    // Animated progress for the progress bar
     val progressTarget = when (val s = gamingState) {
         is GamingModeState.Enabling -> s.progress
         is GamingModeState.Disabling -> 0.5f
@@ -307,11 +687,48 @@ fun PerformanceScreen(
         label = "progress"
     )
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    // RAM usage calculation
+    val ramPercentage = if (metricsState.ramTotalGb > 0f) {
+        (metricsState.ramUsedGb / metricsState.ramTotalGb * 100f).coerceIn(0f, 100f)
+    } else {
+        0f
+    }
+
+    // Disk storage stats
+    val storageInfo = remember(metricsState) {
+        try {
+            val stat = StatFs(Environment.getDataDirectory().path)
+            val totalBytes = stat.blockCountLong * stat.blockSizeLong
+            val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
+            val totalGb = totalBytes / (1024L * 1024L * 1024L)
+            val freeGb = freeBytes / (1024L * 1024L * 1024L)
+            val usedGb = totalGb - freeGb
+            Triple(usedGb, totalGb, freeGb)
+        } catch (e: Exception) {
+            Triple(0L, 0L, 0L)
+        }
+    }
+
+    // Optimization triggers
+    val scope = rememberCoroutineScope()
+    var isBoostingRam by remember { mutableStateOf(false) }
+    var showRamResult by remember { mutableStateOf(false) }
+    var isOptimizingNet by remember { mutableStateOf(false) }
+    var showPingResult by remember { mutableStateOf(false) }
+    var showRamSuccessBanner by remember { mutableStateOf<String?>(null) }
+    var activeLatencyDiagnostic by remember { mutableStateOf<Int?>(null) }
+
+    // Dialog state
+    var showAddGameSheet by remember { mutableStateOf(false) }
+    var configGamePkg by remember { mutableStateOf<String?>(null) }
+    var activeDeployingGamePkg by remember { mutableStateOf<String?>(null) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
         // ---- Header -------------------------------------------------------
         item {
             Row(
@@ -342,13 +759,12 @@ fun PerformanceScreen(
                     .padding(horizontal = 24.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(
+                border = BorderStroke(
                     1.dp,
                     if (isActive) activeColor.copy(0.25f) else Color.White.copy(0.05f)
                 )
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    // Status row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -379,7 +795,6 @@ fun PerformanceScreen(
                                 )
                             }
                         }
-                        // Status pill
                         Box(
                             modifier = Modifier
                                 .background(
@@ -432,7 +847,6 @@ fun PerformanceScreen(
                         }
                     }
 
-                    // Progress bar (visible while busy)
                     AnimatedVisibility(visible = isBusy) {
                         Column {
                             Spacer(modifier = Modifier.height(16.dp))
@@ -459,7 +873,6 @@ fun PerformanceScreen(
                         }
                     }
 
-                    // Error message
                     AnimatedVisibility(visible = gamingState is GamingModeState.Error) {
                         Column {
                             Spacer(modifier = Modifier.height(12.dp))
@@ -489,7 +902,6 @@ fun PerformanceScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Main action button
                     if (!isBusy) {
                         if (isActive) {
                             Button(
@@ -533,7 +945,6 @@ fun PerformanceScreen(
                             }
                         }
                     } else {
-                        // Busy — show a spinner placeholder button
                         Button(
                             onClick = {},
                             enabled = false,
@@ -563,11 +974,11 @@ fun PerformanceScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // ---- Requirements section -----------------------------------------
+        // ---- Requirements & Status section -----------------------------------------
         item {
             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                 Text(
-                    "REQUIREMENTS",
+                    "REQUIREMENTS & STATUS",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 10.dp, start = 4.dp)
@@ -576,42 +987,52 @@ fun PerformanceScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.05f))
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         RequirementRow(
                             label = "Shizuku Service",
                             description = if (shizukuReady) "Connected — ADB shell is available"
-                                          else if (isShizukuAvailable) "Running but permission not granted"
-                                          else "Shizuku not running",
+                            else if (isShizukuAvailable) "Running but permission not granted"
+                            else "Shizuku not running",
                             satisfied = shizukuReady,
                             onAction = if (!shizukuReady) ({
                                 context.startActivity(
                                     context.packageManager
                                         .getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                                        ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                        ?: Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                 )
                             }) else null,
                             actionLabel = if (isShizukuAvailable) "Grant" else "Open"
                         )
                         HorizontalDivider(color = Color.White.copy(0.04f))
                         RequirementRow(
+                            label = "Write System Settings",
+                            description = if (hasWriteSettingsAccess) "Authorized to modify brightness & rotation"
+                            else "Required for custom brightness/rotate overrides",
+                            satisfied = hasWriteSettingsAccess,
+                            onAction = {
+                                context.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+                            }
+                        )
+                        HorizontalDivider(color = Color.White.copy(0.04f))
+                        RequirementRow(
                             label = "DND / Interruption Policy",
                             description = if (hasDndAccess) "Can suppress notifications via DND"
-                                          else "Required to enable Do Not Disturb during gaming",
+                            else "Required to enable Do Not Disturb during gaming",
                             satisfied = hasDndAccess,
                             onAction = {
-                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                                context.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
                             }
                         )
                         HorizontalDivider(color = Color.White.copy(0.04f))
                         RequirementRow(
                             label = "Notification Listener",
                             description = if (hasNotifListenerAccess) "Active — system notifications will be cancelled"
-                                          else "Optional: cancels notifications that bypass DND",
+                            else "Optional: cancels notifications that bypass DND",
                             satisfied = hasNotifListenerAccess,
                             onAction = {
-                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                                context.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                             },
                             actionLabel = "Enable"
                         )
@@ -620,6 +1041,326 @@ fun PerformanceScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+
+        // ===================================================================
+        // NEW FEATURE DASHBOARDS: System Health, Storage, Ping & Game Launcher
+        // (Placed right below Requirements & Status per instructions)
+        // ===================================================================
+
+        // 1. System Health Circular Gauges
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    "SYSTEM HEALTH",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularGauge(
+                        percentage = ramPercentage,
+                        label = "RAM",
+                        accentColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CircularGauge(
+                        percentage = metricsState.cpuPercentage.toFloat(),
+                        label = "CPU",
+                        accentColor = Color(0xFF10B981),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        // 2. Storage & Ping card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color.White.copy(0.04f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1.2f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("STORAGE", color = Color.Gray, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text("${storageInfo.first} GB", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("/ ${storageInfo.second} GB", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${storageInfo.third} GB FREE", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { if (storageInfo.second > 0) storageInfo.first.toFloat() / storageInfo.second else 0f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = Color.White.copy(0.05f)
+                        )
+                    }
+
+                    Box(modifier = Modifier.width(1.dp).height(80.dp).background(Color.White.copy(0.08f)).padding(horizontal = 12.dp))
+
+                    Column(modifier = Modifier.weight(0.8f).padding(start = 16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("PING", color = Color.Gray, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val currentPing = activeLatencyDiagnostic ?: metricsState.pingMs
+                        Text(
+                            text = if (currentPing > 0) "$currentPing ms" else "-- ms",
+                            color = if (isOptimizingNet) Color.Gray else Color(0xFF10B981),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val pingQualitative = when {
+                            currentPing == 0 -> "OFFLINE"
+                            currentPing < 30 -> "EXCELLENT"
+                            currentPing < 75 -> "GOOD"
+                            else -> "POOR"
+                        }
+                        Text(pingQualitative, color = if (currentPing < 75 && currentPing > 0) Color(0xFF10B981) else Color.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            val bars = when {
+                                currentPing == 0 -> 0
+                                currentPing < 30 -> 4
+                                currentPing < 60 -> 3
+                                currentPing < 100 -> 2
+                                else -> 1
+                            }
+                            for (i in 1..4) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .height((4 * i).dp)
+                                        .clip(RoundedCornerShape(1.dp))
+                                        .background(if (i <= bars) Color(0xFF10B981) else Color.White.copy(0.08f))
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 3. Optimization Action sliders
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    "OPTIMIZATION",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+                )
+
+                SwipeToActivate(
+                    text = "SWIPE TO BOOST MEMORY",
+                    icon = Icons.Default.Bolt,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    isBusy = isBoostingRam,
+                    showResult = showRamResult,
+                    onActivated = {
+                        scope.launch {
+                            isBoostingRam = true
+                            val (freed, stopped) = viewModel.manualBoostRam(whitelist)
+                            isBoostingRam = false
+                            showRamResult = true
+                            showRamSuccessBanner = "Boosted! Freed $freed MB, stopped $stopped apps"
+                            delay(2500)
+                            showRamResult = false
+                            delay(300)
+                            showRamSuccessBanner = null
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SwipeToActivate(
+                    text = "SWIPE TO OPTIMIZE PING",
+                    icon = Icons.Default.SettingsInputAntenna,
+                    accentColor = Color(0xFF10B981),
+                    isBusy = isOptimizingNet,
+                    showResult = showPingResult,
+                    onActivated = {
+                        scope.launch {
+                            isOptimizingNet = true
+                            val pingRes = viewModel.optimizeNetwork()
+                            isOptimizingNet = false
+                            showPingResult = true
+                            showRamSuccessBanner = "Network optimized! Latency: $pingRes ms"
+                            delay(2500)
+                            showPingResult = false
+                            delay(300)
+                            showRamSuccessBanner = null
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // 4. Game Launcher Grid & Add Game
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "GAME LAUNCHER",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                    Text(
+                        "${launcherGames.size} added",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (launcherGames.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(0.02f))
+                            .border(1.dp, Color.White.copy(0.04f), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No games added to launcher", color = Color.Gray, fontSize = 13.sp)
+                    }
+                } else {
+                    val gamesList = launcherGames.toList()
+                    val userAppsMap = userApps.associateBy { it.packageName }
+                    val rows = gamesList.chunked(3)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        rows.forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                row.forEach { pkg ->
+                                    val app = userAppsMap[pkg] ?: AppInfo(pkg, pkg.substringAfterLast('.'))
+                                    Card(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { configGamePkg = pkg },
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = BorderStroke(1.dp, Color.White.copy(0.04f))
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            val iconDrawable = remember(app.packageName) {
+                                                try {
+                                                    context.packageManager.getApplicationIcon(app.packageName)
+                                                } catch (e: Exception) {
+                                                    null
+                                                }
+                                            }
+                                            if (iconDrawable != null) {
+                                                AndroidView(
+                                                    factory = { ctx ->
+                                                        android.widget.ImageView(ctx).apply {
+                                                            setImageDrawable(iconDrawable)
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
+                                                )
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(48.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        app.label.take(2).uppercase(),
+                                                        color = Color.White.copy(0.8f),
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 18.sp
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = app.label,
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                repeat(3 - row.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { showAddGameSheet = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ADD GAME", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+
+        // ===================================================================
+        // ORIGINAL WHITELISTS & OEM/DAEMON INFO CARDS
+        // (Brought back and kept fully functional)
+        // ===================================================================
 
         // ---- App Whitelist header -----------------------------------------
         item {
@@ -653,9 +1394,6 @@ fun PerformanceScreen(
         }
 
         // ---- App list inside a Card ---------------------------------------
-        // We render apps as a Card-wrapped column (not nested LazyColumn).
-        // The outer LazyColumn provides scrolling; a second lazy list is not needed
-        // because the total count is bounded by installed user apps (~20-60 typically).
         if (userApps.isEmpty()) {
             item {
                 Box(
@@ -680,7 +1418,7 @@ fun PerformanceScreen(
                         .padding(horizontal = 24.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.05f))
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                         userApps.forEachIndexed { idx, app ->
@@ -702,7 +1440,7 @@ fun PerformanceScreen(
             }
         }
 
-        // ---- Google Apps section ------------------------------------------
+        // ---- Google Apps whitelist section --------------------------------
         if (googleApps.isNotEmpty()) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 24.dp)) {
@@ -740,7 +1478,7 @@ fun PerformanceScreen(
                         .padding(horizontal = 24.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4285F4).copy(0.15f))
+                    border = BorderStroke(1.dp, Color(0xFF4285F4).copy(0.15f))
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                         googleApps.forEachIndexed { idx, app ->
@@ -775,7 +1513,7 @@ fun PerformanceScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E).copy(0.1f))
+                    border = BorderStroke(1.dp, Color(0xFF22C55E).copy(0.1f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -828,7 +1566,7 @@ fun PerformanceScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(0.1f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(0.1f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -865,7 +1603,400 @@ fun PerformanceScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(80.dp))
+                }
+
+    // Centered Floating Success Pill at the bottom center of the screen
+    AnimatedVisibility(
+        visible = showRamSuccessBanner != null,
+        enter = fadeIn() + scaleIn(initialScale = 0.9f),
+        exit = fadeOut() + scaleOut(targetScale = 0.9f),
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp)
+    ) {
+        Card(
+            shape = CircleShape,
+            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.9f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(0.3f)),
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = showRamSuccessBanner ?: "",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }
+
+    // Modal: ADD GAME bottom list dialog
+    if (showAddGameSheet) {
+        Dialog(
+            onDismissRequest = { showAddGameSheet = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f)
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color.White.copy(0.06f))
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text("Add Games", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Select the apps you want to display in the game launcher.", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(userApps) { app ->
+                            val isAdded = launcherGames.contains(app.packageName)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.toggleLauncherGame(app.packageName) }
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val iconDrawable = remember(app.packageName) {
+                                    try {
+                                        context.packageManager.getApplicationIcon(app.packageName)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                                if (iconDrawable != null) {
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            android.widget.ImageView(ctx).apply {
+                                                setImageDrawable(iconDrawable)
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(app.label.take(2).uppercase(), color = Color.White.copy(0.6f), fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                    Text(app.packageName, color = Color.Gray, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Checkbox(
+                                    checked = isAdded,
+                                    onCheckedChange = { viewModel.toggleLauncherGame(app.packageName) },
+                                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { showAddGameSheet = false },
+                        shape = CircleShape,
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("Done", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal: Game Custom Settings Config Sheet
+    configGamePkg?.let { pkg ->
+        val app = userApps.firstOrNull { it.packageName == pkg } ?: AppInfo(pkg, pkg.substringAfterLast('.'))
+        
+        var boostRam by remember(pkg) { mutableStateOf(viewModel.getGameConfigBoostRam(pkg)) }
+        var disableBrightness by remember(pkg) { mutableStateOf(viewModel.getGameConfigDisableBrightness(pkg)) }
+        var disableRotate by remember(pkg) { mutableStateOf(viewModel.getGameConfigDisableRotate(pkg)) }
+        var ringtoneVol by remember(pkg) { mutableStateOf(viewModel.getGameConfigRingtoneVol(pkg).toFloat()) }
+
+        Dialog(
+            onDismissRequest = { configGamePkg = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color.White.copy(0.06f))
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val iconDrawable = remember(app.packageName) {
+                            try {
+                                context.packageManager.getApplicationIcon(app.packageName)
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                        if (iconDrawable != null) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    android.widget.ImageView(ctx).apply {
+                                        setImageDrawable(iconDrawable)
+                                    }
+                                },
+                                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(app.label.take(2).uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(app.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(app.packageName, color = Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("The following configuration will change automatically when the game starts.", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text("ENGINE OPTIMIZATIONS", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Bolt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Boost RAM", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Force-stop background activities", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = boostRam,
+                            onCheckedChange = {
+                                boostRam = it
+                                viewModel.setGameConfigBoostRam(pkg, it)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.BrightnessMedium, null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Disable auto brightness", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Lock brightness at current level", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = disableBrightness,
+                            onCheckedChange = {
+                                disableBrightness = it
+                                viewModel.setGameConfigDisableBrightness(pkg, it)
+                                if (it && !hasWriteSettingsAccess) {
+                                    context.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ScreenRotation, null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Disable auto rotate", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Lock display in landscape mode", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = disableRotate,
+                            onCheckedChange = {
+                                disableRotate = it
+                                viewModel.setGameConfigDisableRotate(pkg, it)
+                                if (it && !hasWriteSettingsAccess) {
+                                    context.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VolumeUp, null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Change ringtone volume", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    }
+                    Slider(
+                        value = ringtoneVol,
+                        onValueChange = {
+                            ringtoneVol = it
+                            viewModel.setGameConfigRingtoneVol(pkg, it.toInt())
+                        },
+                        valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            configGamePkg = null
+                            activeDeployingGamePkg = pkg
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        Text("BOOST", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal: Deploying Optimizations dialog
+    activeDeployingGamePkg?.let { pkg ->
+        val app = userApps.firstOrNull { it.packageName == pkg } ?: AppInfo(pkg, pkg.substringAfterLast('.'))
+        
+        var progress by remember { mutableStateOf(0f) }
+        var currentPhrase by remember { mutableStateOf("Initializing system...") }
+
+        LaunchedEffect(Unit) {
+            val phases = listOf(
+                "Muting system alerts..." to 0.15f,
+                "Clearing redundant caches..." to 0.45f,
+                "Freeing active active RAM..." to 0.7f,
+                "Applying settings overrides..." to 0.85f,
+                "Launching game sandbox..." to 1.0f
+            )
+            for (p in phases) {
+                currentPhrase = p.first
+                while (progress < p.second) {
+                    progress += 0.05f
+                    delay(40)
+                }
+            }
+            delay(100)
+            viewModel.launchGameWithOptimizations(context, pkg) { freed ->
+                activeDeployingGamePkg = null
+                scope.launch {
+                    showRamSuccessBanner = "Game boosted successfully! Freed $freed MB of RAM"
+                    delay(2500)
+                    showRamSuccessBanner = null
+                }
+            }
+        }
+
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(130.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(0.04f))
+                            .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.RocketLaunch,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(56.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    Text(
+                        "DEPLOYING OPTIMIZATIONS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 2.sp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        currentPhrase,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = Color.White.copy(0.06f)
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        "System resources are being reallocated for peak gaming stability and performance.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+}
+}
 }

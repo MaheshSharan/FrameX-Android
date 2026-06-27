@@ -159,6 +159,37 @@ class SettingsRepository @Inject constructor(
     fun getGamingAffectedPackages(): Set<String> =
         prefs.getStringSet(KEY_GAMING_AFFECTED_PKGS, emptySet()) ?: emptySet()
 
+    // ---- Game Launcher ------------------------------------------------------
+
+    private val _launcherGames = MutableStateFlow(
+        prefs.getStringSet(KEY_LAUNCHER_GAMES, emptySet()) ?: emptySet()
+    )
+    val launcherGames: StateFlow<Set<String>> = _launcherGames.asStateFlow()
+
+    fun setLauncherGames(pkgs: Set<String>) {
+        prefs.edit().putStringSet(KEY_LAUNCHER_GAMES, pkgs).apply()
+        _launcherGames.value = pkgs
+    }
+
+    fun toggleLauncherGame(packageName: String) {
+        val current = _launcherGames.value.toMutableSet()
+        if (current.contains(packageName)) current.remove(packageName) else current.add(packageName)
+        setLauncherGames(current)
+    }
+
+    // Per-game configs
+    fun getGameConfigBoostRam(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_boost_ram", true)
+    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_boost_ram", enabled).apply()
+
+    fun getGameConfigDisableBrightness(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_disable_brightness", true)
+    fun setGameConfigDisableBrightness(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_disable_brightness", enabled).apply()
+
+    fun getGameConfigDisableRotate(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_disable_rotate", true)
+    fun setGameConfigDisableRotate(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_disable_rotate", enabled).apply()
+
+    fun getGameConfigRingtoneVol(pkg: String): Int = prefs.getInt("game_config_${pkg}_ringtone_vol", 50)
+    fun setGameConfigRingtoneVol(pkg: String, vol: Int) = prefs.edit().putInt("game_config_${pkg}_ringtone_vol", vol).apply()
+
     companion object {
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_ENABLED_MODULES = "enabled_modules"
@@ -177,5 +208,6 @@ class SettingsRepository @Inject constructor(
         private const val KEY_GAMING_WHITELIST = "gaming_mode_whitelist"
         private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
         private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"
+        private const val KEY_LAUNCHER_GAMES = "launcher_games"
     }
 }

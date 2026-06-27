@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.provider.Settings
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -203,7 +205,7 @@ class GamingModeEngine @Inject constructor(
      * 3. am kill-all
      * 4. Enable DND (if policy access is granted)
      */
-    suspend fun enableGamingMode(userWhitelist: Set<String>) {
+    suspend fun enableGamingMode(userWhitelist: Set<String>, activeGamePkg: String? = null) {
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
             _state.value = GamingModeState.Error("Shizuku not available or permission not granted")
             return
@@ -211,95 +213,151 @@ class GamingModeEngine @Inject constructor(
 
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
         
-        // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
-        try {
-            shizukuManager.executeCommand("pm trim-caches 4G")
-        } catch (e: Exception) { /* Non-critical */ }
+        val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        var finalWhitelist = userWhitelist
+        var boostRam = true
+
+        if (activeGamePkg != null) {
+            finalWhitelist = finalWhitelist + activeGamePkg
+            boostRam = settingsRepository.getGameConfigBoostRam(activeGamePkg)
+
+            // Save original ringtone volume
+            val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_RING)
+            prefs.edit().putInt("orig_ringtone_val", currentVol).apply()
+
+            // Change Ringtone volume
+            val targetVolPct = settingsRepository.getGameConfigRingtoneVol(activeGamePkg)
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)
+            val targetVol = (targetVolPct / 100f * maxVol).toInt().coerceIn(0, maxVol)
+            try {
+                audioManager.setStreamVolume(AudioManager.STREAM_RING, targetVol, 0)
+            } catch (e: Exception) {}
+
+            // Settings Overrides (auto-brightness, auto-rotate)
+            val canWrite = Settings.System.canWrite(context)
+            if (canWrite) {
+                // Brightness override
+                if (settingsRepository.getGameConfigDisableBrightness(activeGamePkg)) {
+                    val origBrightnessMode = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
+                    prefs.edit().putInt("orig_brightness_mode", origBrightnessMode).apply()
+                    Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                }
+
+                // Rotation override
+                if (settingsRepository.getGameConfigDisableRotate(activeGamePkg)) {
+                    val origRotation = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1)
+                    prefs.edit().putInt("orig_rotation_mode", origRotation).apply()
+                    Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) // Lock orientation
+                }
+            }
+        }
+
+        val isAlreadyActive = _isActive.value
+
+        if (boostRam) {
+            // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
+            try {
+                shizukuManager.executeCommand("pm trim-caches 4G")
+            } catch (e: Exception) { /* Non-critical */ }
+        }
         
         // OriginOS 6 "Final Boss" Fix: Force re-bind the Notification Listener.
         // On Vivo/Oppo, the listener can fall into a 'coma' if unused. 
         // Disabling and re-enabling it right before use wakes it up 100% of the time.
-        try {
-            val component = ComponentName(context, GamingNotificationListener::class.java)
-            context.packageManager.setComponentEnabledSetting(
-                component, 
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
-                PackageManager.DONT_KILL_APP
-            )
-            // Small delay to allow the system to process the unbind before re-binding
-            kotlinx.coroutines.delay(100)
-            context.packageManager.setComponentEnabledSetting(
-                component, 
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
-                PackageManager.DONT_KILL_APP
-            )
-        } catch (e: Exception) { /* Ignore if it fails, non-critical */ }
-
-        try {
-            // ----------------------------------------------------------------
-            // Phase 1 — OEM bloatware (using smart fallback)
-            // ----------------------------------------------------------------
-            val allSystemTargets = SAFE_TO_SUSPEND + GOOGLE_SAFE_TO_SUSPEND.filter { it !in userWhitelist }
-            val totalPhases = allSystemTargets.size + 10
-            SAFE_TO_SUSPEND.forEachIndexed { idx, pkg ->
-                _state.value = GamingModeState.Enabling(
-                    progress = idx.toFloat() / totalPhases,
-                    statusText = "Silencing ${pkg.substringAfterLast('.')}"
+        if (!isAlreadyActive) {
+            try {
+                val component = ComponentName(context, GamingNotificationListener::class.java)
+                context.packageManager.setComponentEnabledSetting(
+                    component, 
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                    PackageManager.DONT_KILL_APP
                 )
-                suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
-            }
-
-            // ----------------------------------------------------------------
-            // Phase 1.5 — Google apps (using smart fallback, respects whitelist)
-            // ----------------------------------------------------------------
-            val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in userWhitelist }
-            googleTargets.forEachIndexed { idx, pkg ->
-                _state.value = GamingModeState.Enabling(
-                    progress = (SAFE_TO_SUSPEND.size + idx).toFloat() / totalPhases,
-                    statusText = "Suspending ${pkg.substringAfterLast('.')}"
+                // Small delay to allow the system to process the unbind before re-binding
+                kotlinx.coroutines.delay(100)
+                context.packageManager.setComponentEnabledSetting(
+                    component, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                    PackageManager.DONT_KILL_APP
                 )
-                suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
-            }
+            } catch (e: Exception) { /* Ignore if it fails, non-critical */ }
+        }
 
-            // ----------------------------------------------------------------
-            // Phase 2 — User apps (using smart fallback & standby buckets)
-            // ----------------------------------------------------------------
+        try {
             val affectedPkgs = mutableSetOf<String>()
-            affectedPkgs.addAll(googleTargets)
 
-            val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
-                .filter { it.packageName !in userWhitelist }
+            if (boostRam && !isAlreadyActive) {
+                // ----------------------------------------------------------------
+                // Phase 1 — OEM bloatware (using smart fallback)
+                // ----------------------------------------------------------------
+                val allSystemTargets = SAFE_TO_SUSPEND + GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist }
+                val totalPhases = allSystemTargets.size + 10
+                SAFE_TO_SUSPEND.forEachIndexed { idx, pkg ->
+                    _state.value = GamingModeState.Enabling(
+                        progress = idx.toFloat() / totalPhases,
+                        statusText = "Silencing ${pkg.substringAfterLast('.')}"
+                    )
+                    suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
+                }
 
-            userApps.forEachIndexed { idx, app ->
-                _state.value = GamingModeState.Enabling(
-                    progress = (allSystemTargets.size + idx).toFloat() / (allSystemTargets.size + userApps.size + 2),
-                    statusText = "Suspending ${app.label}"
-                )
-                suspendOrRestrict(app.packageName, app.label)
-                
-                // Restrict Standby Bucket to minimize CPU/alarm triggers
-                try {
-                    shizukuManager.executeCommand("am set-standby-bucket ${app.packageName} restricted")
-                } catch (e: Exception) { /* Non-critical */ }
-                
-                affectedPkgs.add(app.packageName)
+                // ----------------------------------------------------------------
+                // Phase 1.5 — Google apps (using smart fallback, respects whitelist)
+                // ----------------------------------------------------------------
+                val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist }
+                googleTargets.forEachIndexed { idx, pkg ->
+                    _state.value = GamingModeState.Enabling(
+                        progress = (SAFE_TO_SUSPEND.size + idx).toFloat() / totalPhases,
+                        statusText = "Suspending ${pkg.substringAfterLast('.')}"
+                    )
+                    suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
+                }
+
+                // ----------------------------------------------------------------
+                // Phase 2 — User apps (using smart fallback & standby buckets)
+                // ----------------------------------------------------------------
+                affectedPkgs.addAll(googleTargets)
+
+                val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
+                    .filter { it.packageName !in finalWhitelist }
+
+                userApps.forEachIndexed { idx, app ->
+                    _state.value = GamingModeState.Enabling(
+                        progress = (allSystemTargets.size + idx).toFloat() / (allSystemTargets.size + userApps.size + 2),
+                        statusText = "Suspending ${app.label}"
+                    )
+                    suspendOrRestrict(app.packageName, app.label)
+                    
+                    // Restrict Standby Bucket to minimize CPU/alarm triggers
+                    try {
+                        shizukuManager.executeCommand("am set-standby-bucket ${app.packageName} restricted")
+                    } catch (e: Exception) { /* Non-critical */ }
+                    
+                    affectedPkgs.add(app.packageName)
+                }
             }
 
             // Persist the affected list so disableGamingMode restores only what we changed.
-            settingsRepository.setGamingAffectedPackages(affectedPkgs)
+            if (!isAlreadyActive) {
+                settingsRepository.setGamingAffectedPackages(affectedPkgs)
+            }
 
-            // ----------------------------------------------------------------
-            // Phase 3 — Kill cached background processes
-            // ----------------------------------------------------------------
-            _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
-            shizukuManager.executeCommand("am kill-all")
+            if (boostRam) {
+                // ----------------------------------------------------------------
+                // Phase 3 — Kill cached background processes
+                // ----------------------------------------------------------------
+                _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
+                shizukuManager.executeCommand("am kill-all")
+            }
 
             // ----------------------------------------------------------------
             // Phase 4 — Enable DND via NotificationManager policy
             // ----------------------------------------------------------------
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (nm.isNotificationPolicyAccessGranted) {
-                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+            if (!isAlreadyActive) {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (nm.isNotificationPolicyAccessGranted) {
+                    nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                }
             }
 
             // ----------------------------------------------------------------
@@ -384,6 +442,33 @@ class GamingModeEngine @Inject constructor(
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.isNotificationPolicyAccessGranted) {
                 nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            }
+
+            // Restore original settings/overrides
+            val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+            // 1. Ringtone volume
+            val origVol = prefs.getInt("orig_ringtone_val", -1)
+            if (origVol != -1) {
+                try {
+                    audioManager.setStreamVolume(AudioManager.STREAM_RING, origVol, 0)
+                } catch (e: Exception) {}
+                prefs.edit().remove("orig_ringtone_val").apply()
+            }
+
+            // 2. Settings (brightness, rotation)
+            if (Settings.System.canWrite(context)) {
+                val origMode = prefs.getInt("orig_brightness_mode", -1)
+                if (origMode != -1) {
+                    Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, origMode)
+                    prefs.edit().remove("orig_brightness_mode").apply()
+                }
+                val origRotate = prefs.getInt("orig_rotation_mode", -1)
+                if (origRotate != -1) {
+                    Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, origRotate)
+                    prefs.edit().remove("orig_rotation_mode").apply()
+                }
             }
 
         } catch (e: Exception) {

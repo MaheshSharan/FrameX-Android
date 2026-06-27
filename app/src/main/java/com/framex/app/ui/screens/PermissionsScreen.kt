@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import android.content.Intent
-import android.provider.Settings
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,7 +75,8 @@ fun PermissionsScreen(
     val context = LocalContext.current
     val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsState()
     val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
-    var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var hasOverlayPermission by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+    var hasWriteSettingsPermission by remember { mutableStateOf(android.provider.Settings.System.canWrite(context)) }
     
     fun checkUsageStats(): Boolean {
         val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
@@ -102,7 +102,8 @@ fun PermissionsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                hasOverlayPermission = Settings.canDrawOverlays(context)
+                hasOverlayPermission = android.provider.Settings.canDrawOverlays(context)
+                hasWriteSettingsPermission = android.provider.Settings.System.canWrite(context)
                 hasUsageStatsPermission = checkUsageStats()
                 hasBatteryOptDisabled = powerManager.isIgnoringBatteryOptimizations(context.packageName)
                 viewModel.refreshShizukuState()
@@ -258,7 +259,7 @@ fun PermissionsScreen(
                     } else {
                         Button(
                             onClick = {
-                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                                val intent = Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
                                 context.startActivity(intent)
                             }, 
                             modifier = Modifier.height(36.dp), 
@@ -287,7 +288,7 @@ fun PermissionsScreen(
                     }
                     Button(
                         onClick = {
-                            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                            val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
                             context.startActivity(intent)
                         }, 
                         modifier = Modifier.height(36.dp), 
@@ -322,8 +323,8 @@ fun PermissionsScreen(
                             onClick = {
                                 val pkg = context.packageName
                                 val intent = Intent(
-                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                    android.net.Uri.parse("package:$pkg")
+                                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                    Uri.parse("package:$pkg")
                                 )
                                 context.startActivity(intent)
                             },
@@ -332,6 +333,40 @@ fun PermissionsScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Disable", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 4. Modify System Settings (Write Settings)
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White.copy(0.05f)).border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp)).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(0.1f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Write System Settings", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Required to toggle auto-brightness & rotation", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (hasWriteSettingsPermission) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF10B981).copy(0.1f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                val intent = Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.height(36.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
