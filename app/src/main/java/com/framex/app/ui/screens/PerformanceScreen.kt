@@ -107,14 +107,16 @@ class PerformanceViewModel @Inject constructor(
 
     init {
         loadUserApps()
-        viewModelScope.launch {
-            val currentEnabled = settingsRepository.enabledModules.value.toMutableSet()
-            if ("cpu" !in currentEnabled || "ram" !in currentEnabled) {
-                currentEnabled.add("cpu")
-                currentEnabled.add("ram")
-                settingsRepository.setEnabledModules(currentEnabled)
-            }
-        }
+        // Keep CPU/RAM gauges on this screen live regardless of the user's saved
+        // overlay toggle — via a transient override, not by mutating their setting.
+        metricsEngine.setScreenOverrideModules(setOf("cpu", "ram"))
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Release the override so CPU/RAM polling reverts to whatever the user
+        // actually has toggled on for the overlay once this screen is left.
+        metricsEngine.setScreenOverrideModules(emptySet())
     }
 
     fun loadUserApps() {

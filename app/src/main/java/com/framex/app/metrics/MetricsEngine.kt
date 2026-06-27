@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,6 +52,19 @@ class MetricsEngine @Inject constructor(
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val moduleJobs = mutableMapOf<String, Job>()
 
+    // Transient, NOT persisted, NOT shown in the overlay toggle UI.
+    // Lets a screen (e.g. PerformanceScreen) request a monitor stay live while it's
+    // visible, without mutating the user's saved overlay module preference.
+    // The overlay (OverlayManager/AppearanceScreen) reads settingsRepository.enabledModules
+    // directly, so anything added here never affects what the overlay displays.
+    private val _screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Request that [modules] keep polling regardless of the persisted overlay toggle.
+     *  Pass emptySet() to release the request (e.g. when leaving the screen). */
+    fun setScreenOverrideModules(modules: Set<String>) {
+        _screenOverrideModules.value = modules
+    }
+
     init {
         // FPS always runs — it is the core metric and has near-zero overhead.
         engineScope.launch {
@@ -65,10 +79,17 @@ class MetricsEngine @Inject constructor(
             }
         }
 
-        // All other monitors only run while their module toggle is enabled by the user.
+        // All other monitors only run while their module toggle is enabled by the user
+        // (settingsRepository.enabledModules) OR temporarily requested by a screen
+        // (_screenOverrideModules). The overlay only ever looks at the former, so a
+        // screen override never changes what the overlay shows — only what gets measured.
         // This means zero polling happens for disabled modules — no wasted CPU, battery, or Shizuku calls.
         engineScope.launch {
-            settingsRepository.enabledModules.collect { enabled ->
+            combine(
+                settingsRepository.enabledModules,
+                _screenOverrideModules
+            ) { persisted, override -> persisted + override }
+                .collect { enabled ->
                 toggleModule("cpu", enabled) {
                     kotlinx.coroutines.coroutineScope {
                         launch {
