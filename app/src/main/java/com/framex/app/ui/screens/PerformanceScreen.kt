@@ -345,6 +345,14 @@ private fun SwipeToActivate(
         prevShowResult = showResult
     }
 
+    // Trigger action reliably on state change rather than animation finishedListener
+    LaunchedEffect(isCompleted) {
+        if (isCompleted && !hasTriggered) {
+            hasTriggered = true
+            onActivated()
+        }
+    }
+
     // Idle bounce animation (like SlideToActView's startBounceAnimation)
     val infiniteTransition = rememberInfiniteTransition(label = "bounce")
     val idleBounce by infiniteTransition.animateFloat(
@@ -371,13 +379,7 @@ private fun SwipeToActivate(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
-        label = "swipeOffset",
-        finishedListener = {
-            if (isCompleted && !hasTriggered) {
-                hasTriggered = true
-                onActivated()
-            }
-        }
+        label = "swipeOffset"
     )
 
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1603,7 +1605,9 @@ fun PerformanceScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(80.dp))
-                }
+            }
+        }
+    }
 
     // Centered Floating Success Pill at the bottom center of the screen
     AnimatedVisibility(
@@ -1996,7 +2000,5 @@ fun PerformanceScreen(
             }
         }
     }
-}
-}
 }
 }
