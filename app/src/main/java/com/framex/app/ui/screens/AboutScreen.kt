@@ -50,12 +50,12 @@ fun AboutScreen(
     } catch (e: Exception) {
         null
     }
-    val versionName = packageInfo?.versionName ?: "1.2"
+    val versionName = packageInfo?.versionName ?: "1.3"
     val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-        packageInfo?.longVersionCode ?: 3L
+        packageInfo?.longVersionCode ?: 4L
     } else {
         @Suppress("DEPRECATION")
-        packageInfo?.versionCode?.toLong() ?: 3L
+        packageInfo?.versionCode?.toLong() ?: 4L
     }
 
     Column(
