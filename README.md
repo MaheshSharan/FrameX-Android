@@ -10,7 +10,7 @@
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)](https://developer.android.com/about/versions/oreo)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.2.0)
+[![Version](https://img.shields.io/badge/version-1.3.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.3.0)
 
 ---
 
@@ -18,9 +18,9 @@
 
 FrameX shows a draggable, fully customisable overlay with live system stats on top of any app or game — including full-screen titles.
 
-**Available metrics:** FPS · CPU frequency · RAM usage · Battery temperature · Network speed · Ping
+**Available metrics:** FPS · CPU frequency · CPU core clusters · RAM usage · Battery temperature · Network speed · Ping
 
-**Performance Mode:** Optimize your device for gaming by suspending bloatware, restricting background apps, and enabling advanced Do Not Disturb.
+**Performance Mode:** Optimize your device for gaming by suspending bloatware, restricting background apps, enabling advanced Do Not Disturb, and deploying per-game display/volume configurations.
 
 ---
 
@@ -123,6 +123,7 @@ cd FrameX-Android
 | Internet | Ping measurement to google.com only |
 | Kill background processes | Used to purge cached background apps during Gaming Mode activation |
 | Access notification policy | Required to toggle Do Not Disturb mode automatically |
+| Modify system settings | Required to deploy per-game brightness, volume, and rotation overrides |
 | Foreground service (Special Use) | Ensures Gaming Mode stays active on Android 14+ |
 
 ---
