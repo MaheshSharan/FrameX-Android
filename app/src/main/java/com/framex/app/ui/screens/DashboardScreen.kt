@@ -236,8 +236,6 @@ fun DashboardScreen(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
-                val context = LocalContext.current
-                
                 if (isOverlayRunning) {
                     Button(
                         onClick = {
@@ -298,14 +296,19 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Grid Actions
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 QuickActionButton(
                     title = "Metrics",
                     subtitle = "FPS, CPU, GPU, RAM",
                     iconContainerColor = Color(0xFF6366F1).copy(alpha = 0.1f),
                     iconContentColor = Color(0xFF818CF8),
                     onClick = onNavigateToOverlayCustomization,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = { Icon(Icons.Default.DashboardCustomize, null) }
                 )
                 QuickActionButton(
@@ -314,19 +317,24 @@ fun DashboardScreen(
                     iconContainerColor = Color(0xFFF59E0B).copy(alpha = 0.1f),
                     iconContentColor = Color(0xFFFBBF24),
                     onClick = onNavigateToAppearance,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = { Icon(Icons.Default.Palette, null) }
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 QuickActionButton(
                     title = "Performance",
                     subtitle = "Game Mode · RAM Boost",
                     iconContainerColor = Color(0xFF10B981).copy(alpha = 0.1f),
                     iconContentColor = Color(0xFF34D399),
                     onClick = onNavigateToPerformance,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = { Icon(Icons.Default.Bolt, null) }
                 )
                 val isShizukuReady = isShizukuAvailable && hasShizukuPermission
@@ -336,7 +344,7 @@ fun DashboardScreen(
                     iconContainerColor = if (isShizukuReady) Color(0xFF3B82F6).copy(alpha = 0.1f) else Color.Red.copy(0.1f),
                     iconContentColor = if (isShizukuReady) Color(0xFF60A5FA) else Color.Red,
                     onClick = onNavigateToPermissions,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = { Text("ADB", color = if (isShizukuReady) Color(0xFF60A5FA) else Color.Red, fontWeight = FontWeight.Bold) }
                 )
             }
