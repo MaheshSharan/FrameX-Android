@@ -30,6 +30,9 @@ import androidx.compose.ui.draw.alpha
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -77,6 +80,19 @@ fun PermissionsScreen(
     val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
     var hasOverlayPermission by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
     var hasWriteSettingsPermission by remember { mutableStateOf(android.provider.Settings.System.canWrite(context)) }
+    fun checkNotificationPermission(): Boolean {
+        return android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    var hasNotificationPermission by remember { mutableStateOf(checkNotificationPermission()) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+    }
     
     fun checkUsageStats(): Boolean {
         val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
@@ -104,6 +120,7 @@ fun PermissionsScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasOverlayPermission = android.provider.Settings.canDrawOverlays(context)
                 hasWriteSettingsPermission = android.provider.Settings.System.canWrite(context)
+                hasNotificationPermission = checkNotificationPermission()
                 hasUsageStatsPermission = checkUsageStats()
                 hasBatteryOptDisabled = powerManager.isIgnoringBatteryOptimizations(context.packageName)
                 viewModel.refreshShizukuState()
@@ -163,7 +180,7 @@ fun PermissionsScreen(
                                 modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("A", color = Color.White, fontWeight = FontWeight.Bold) // Mock ADB icon
+                                Text("A", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -339,7 +356,42 @@ fun PermissionsScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 4. Modify System Settings (Write Settings)
+                // 4. Notifications
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White.copy(0.05f)).border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp)).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(0.1f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Notifications", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Shows overlay status and Gaming Mode recovery alerts", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (hasNotificationPermission) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF10B981).copy(0.1f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                            modifier = Modifier.height(36.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 5. Modify System Settings (Write Settings)
                 Row(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White.copy(0.05f)).border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp)).padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -403,7 +455,7 @@ fun PermissionsScreen(
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 .padding(24.dp)
         ) {
-            val isAllReady = isShizukuAvailable && hasShizukuPermission && hasOverlayPermission
+            val isAllReady = isShizukuAvailable && hasShizukuPermission && hasOverlayPermission && hasNotificationPermission
             Button(
                 onClick = onNavigateBack,
                 colors = ButtonDefaults.buttonColors(

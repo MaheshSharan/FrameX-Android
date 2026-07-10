@@ -8,9 +8,9 @@
 > **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices. Behavior on other Android skins may vary. Use this feature at your own risk.
 
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)](https://developer.android.com/about/versions/oreo)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.3.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.4.0-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.4.0)
 
 ---
 
@@ -120,7 +120,7 @@ cd FrameX-Android
 | PACKAGE_USAGE_STATS | Identify which game is in the foreground |
 | REQUEST_IGNORE_BATTERY_OPTIMIZATIONS | Survive aggressive OEM background-kill policies |
 | Receive boot completed | Auto-restart overlay after reboot if it was active |
-| Internet | Ping measurement to google.com only |
+| Internet | Ping measurement to `8.8.8.8` (Google Public DNS) only |
 | Kill background processes | Used to purge cached background apps during Gaming Mode activation |
 | Access notification policy | Required to toggle Do Not Disturb mode automatically |
 | Modify system settings | Required to deploy per-game brightness, volume, and rotation overrides |

@@ -185,6 +185,6 @@ Do **not** incentivise reviews. Against Play policy.
 
 ## Versioning
 
-- `v1.0.0` — initial release (current)
-- Plan `v1.1.0` — Diagnostics panel, additional metrics
+- `v1.4.0` — quality, privacy, release, and metric accuracy fixes (current)
+- Plan next minor release — Diagnostics panel and additional metrics
 - Tag every release: `git tag -a v1.x.x -m "description" && git push --tags`

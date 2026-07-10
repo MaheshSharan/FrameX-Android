@@ -48,7 +48,7 @@ All user preferences (overlay position, appearance settings, enabled metrics, an
 | Package usage stats | Identify which app is currently in the foreground |
 | Request ignore battery optimizations | Survive aggressive OEM background-kill policies |
 | Receive boot completed | Optionally restart the overlay after device reboot |
-| Internet | Used **only** to measure network latency (ping to google.com). No personal data or browsing data is transmitted. |
+| Internet | Used **only** to measure network latency (ping to `8.8.8.8`, Google Public DNS). No personal data or browsing data is transmitted. |
 | Kill background processes | Used to purge cached background processes during Gaming Mode activation. |
 | Access notification policy | Required to toggle Do Not Disturb mode during Gaming sessions. |
 | Foreground service (Special Use) | Ensures Gaming Mode stays active on Android 14+ devices. |

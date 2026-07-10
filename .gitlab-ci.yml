@@ -1,0 +1,31 @@
+image: ghcr.io/cirruslabs/android-sdk:34
+
+stages:
+  - verify
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+
+before_script:
+  - chmod +x ./gradlew
+
+assemble_debug:
+  stage: verify
+  script:
+    - ./gradlew --no-daemon assembleDebug
+
+lint:
+  stage: verify
+  script:
+    - ./gradlew --no-daemon lint
+
+unit_tests:
+  stage: verify
+  script:
+    - ./gradlew --no-daemon testDebugUnitTest

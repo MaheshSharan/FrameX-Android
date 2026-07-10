@@ -17,6 +17,44 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
 
+internal data class CpuTimes(val total: Long, val idle: Long)
+
+internal object CpuStatParser {
+    fun parseTotalCpuLine(lines: List<String>): CpuTimes? {
+        val parts = lines.firstOrNull()
+            ?.trim()
+            ?.split("\\s+".toRegex())
+            ?: return null
+
+        if (parts.size < 5 || parts[0] != "cpu") return null
+
+        val values = parts.drop(1).map { it.toLongOrNull() ?: return null }
+        val user = values.getOrNull(0) ?: return null
+        val nice = values.getOrNull(1) ?: return null
+        val system = values.getOrNull(2) ?: return null
+        val idle = values.getOrNull(3) ?: return null
+        val iowait = values.getOrNull(4) ?: 0L
+        val irq = values.getOrNull(5) ?: 0L
+        val softirq = values.getOrNull(6) ?: 0L
+        val steal = values.getOrNull(7) ?: 0L
+
+        return CpuTimes(
+            total = user + nice + system + idle + iowait + irq + softirq + steal,
+            idle = idle + iowait
+        )
+    }
+
+    fun calculateUsage(previous: CpuTimes, current: CpuTimes): Int? {
+        val diffTotal = current.total - previous.total
+        val diffIdle = current.idle - previous.idle
+        if (diffTotal <= 0L || diffIdle < 0L) return null
+
+        return (((diffTotal - diffIdle).toFloat() / diffTotal) * 100f)
+            .roundToInt()
+            .coerceIn(0, 100)
+    }
+}
+
 @Singleton
 class FpsMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -97,14 +135,12 @@ class CpuMonitor @Inject constructor(
     private val shizukuManager: ShizukuManager
 ) {
     data class CpuClusterState(val effMhz: Int, val perfMhz: Int, val ultraMhz: Int)
+    private data class CpuPolicy(val currentMhz: Int, val maxMhz: Int)
 
-    // Expose cluster frequency states for the 1+3+4 architecture
+    // Expose discovered CPU frequency policy groups, mapped by max clock.
     val cpuClusterUsage: Flow<CpuClusterState> = flow {
         while (true) {
-            val eff = readFreq(0)   // Cores 0-3 (Cortex-A510 Efficiency)
-            val perf = readFreq(4)  // Cores 4-6 (Cortex-A715 Performance)
-            val ultra = readFreq(7) // Core 7 (Cortex-X3 Ultra)
-            emit(CpuClusterState(eff, perf, ultra))
+            emit(readClusterState())
             delay(1000)
         }
     }
@@ -118,9 +154,8 @@ class CpuMonitor @Inject constructor(
     }
 
     // System-wide CPU utilization percentage (0-100%) parsed from /proc/stat
-    val cpuPercentageUsage: Flow<Int> = flow {
-        var lastCpuTime = 0L
-        var lastIdleTime = 0L
+    val cpuPercentageUsage: Flow<Int?> = flow {
+        var previousCpuTimes: CpuTimes? = null
         while (true) {
             try {
                 val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
@@ -143,64 +178,67 @@ class CpuMonitor @Inject constructor(
                     }
                 }
 
-                if (lines.isNotEmpty()) {
-                    val parts = lines[0].trim().split("\\s+".toRegex())
-                    if (parts.size >= 5 && parts[0] == "cpu") {
-                        val user = parts[1].toLongOrNull() ?: 0L
-                        val nice = parts[2].toLongOrNull() ?: 0L
-                        val system = parts[3].toLongOrNull() ?: 0L
-                        val idle = parts[4].toLongOrNull() ?: 0L
-                        val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0L
-                        val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0L
-                        val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0L
+                val currentCpuTimes = CpuStatParser.parseTotalCpuLine(lines)
+                val previous = previousCpuTimes
+                previousCpuTimes = currentCpuTimes
 
-                        val totalCpuTime = user + nice + system + idle + iowait + irq + softirq
-                        val idleTime = idle + iowait
-
-                        val diffTotal = totalCpuTime - lastCpuTime
-                        val diffIdle = idleTime - lastIdleTime
-
-                        lastCpuTime = totalCpuTime
-                        lastIdleTime = idleTime
-
-                        val pct = if (diffTotal > 0) {
-                            ((diffTotal - diffIdle).toFloat() / diffTotal * 100f).roundToInt().coerceIn(0, 100)
-                        } else {
-                            fallbackCpuPercentage()
-                        }
-                        emit(pct)
-                    } else {
-                        emit(fallbackCpuPercentage())
-                    }
+                if (currentCpuTimes != null && previous != null) {
+                    emit(CpuStatParser.calculateUsage(previous, currentCpuTimes))
                 } else {
-                    emit(fallbackCpuPercentage())
+                    emit(null)
                 }
             } catch (e: Exception) {
-                emit(fallbackCpuPercentage())
+                emit(null)
             }
             delay(1000)
         }
     }
 
-    private fun fallbackCpuPercentage(): Int {
-        val f0 = readFreq(0)
-        val f4 = readFreq(4)
-        val f7 = readFreq(7)
-        val maxF0 = 2000f
-        val maxF4 = 2850f
-        val maxF7 = 3250f
-        val load0 = if (f0 > 0) f0 / maxF0 else 0.15f
-        val load4 = if (f4 > 0) f4 / maxF4 else 0.05f
-        val load7 = if (f7 > 0) f7 / maxF7 else 0.02f
-        val loadCombined = (load0 * 0.4f + load4 * 0.4f + load7 * 0.2f) * 100f
-        return loadCombined.roundToInt().coerceIn(8, 95)
+    private fun readClusterState(): CpuClusterState {
+        val policies = readCpuPolicies().sortedBy { it.maxMhz }
+        return when (policies.size) {
+            0 -> CpuClusterState(0, 0, 0)
+            1 -> CpuClusterState(policies[0].currentMhz, 0, 0)
+            2 -> CpuClusterState(policies[0].currentMhz, policies[1].currentMhz, 0)
+            else -> CpuClusterState(
+                effMhz = policies.first().currentMhz,
+                perfMhz = policies[policies.lastIndex - 1].currentMhz,
+                ultraMhz = policies.last().currentMhz
+            )
+        }
+    }
+
+    private fun readCpuPolicies(): List<CpuPolicy> {
+        val policyDir = java.io.File("/sys/devices/system/cpu/cpufreq")
+        val policies = policyDir.listFiles { file -> file.isDirectory && file.name.startsWith("policy") }
+            ?.mapNotNull { policy ->
+                val current = readMhz(policy.resolve("scaling_cur_freq"))
+                val max = readMhz(policy.resolve("cpuinfo_max_freq"))
+                if (current > 0 || max > 0) CpuPolicy(current, max.coerceAtLeast(current)) else null
+            }
+            .orEmpty()
+
+        if (policies.isNotEmpty()) return policies
+
+        return java.io.File("/sys/devices/system/cpu")
+            .listFiles { file -> file.isDirectory && file.name.matches(Regex("cpu\\d+")) }
+            ?.mapNotNull { cpu ->
+                val freqDir = cpu.resolve("cpufreq")
+                val current = readMhz(freqDir.resolve("scaling_cur_freq"))
+                val max = readMhz(freqDir.resolve("cpuinfo_max_freq"))
+                if (current > 0 || max > 0) CpuPolicy(current, max.coerceAtLeast(current)) else null
+            }
+            .orEmpty()
+            .distinctBy { it.maxMhz }
     }
 
     private fun readFreq(coreIndex: Int): Int {
+        return readMhz(java.io.File("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_cur_freq"))
+    }
+
+    private fun readMhz(file: java.io.File): Int {
         return try {
-            val raw = java.io.File(
-                "/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_cur_freq"
-            ).readText().trim()
+            val raw = file.readText().trim()
             (raw.toIntOrNull() ?: 0) / 1000
         } catch (e: Exception) {
             0

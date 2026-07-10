@@ -187,20 +187,20 @@ class PerformanceViewModel @Inject constructor(
         return Pair(freed, stoppedCount)
     }
 
-    suspend fun optimizeNetwork(): Int {
-        var minPing = 999
+    suspend fun measureNetworkLatency(): Int? {
+        var minPing: Int? = null
         for (i in 1..3) {
             try {
                 val start = System.currentTimeMillis()
                 val ipAddress = java.net.InetAddress.getByName("8.8.8.8")
                 if (ipAddress.isReachable(1000)) {
-                    val delay = (System.currentTimeMillis() - start).toInt()
-                    if (delay < minPing) minPing = delay
+                    val latency = (System.currentTimeMillis() - start).toInt()
+                    minPing = minOf(minPing ?: latency, latency)
                 }
             } catch (e: Exception) {}
             delay(150)
         }
-        return if (minPing == 999) 12 else minPing
+        return minPing
     }
 
     fun enableGamingMode(context: Context) {
@@ -261,13 +261,13 @@ class PerformanceViewModel @Inject constructor(
 
 @Composable
 private fun CircularGauge(
-    percentage: Float,
+    percentage: Float?,
     label: String,
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
     val animatedProgress = animateFloatAsState(
-        targetValue = percentage / 100f,
+        targetValue = (percentage ?: 0f) / 100f,
         animationSpec = tween(1000, easing = FastOutSlowInEasing),
         label = "gauge"
     )
@@ -301,7 +301,7 @@ private fun CircularGauge(
                     )
                 }
                 Text(
-                    text = "${percentage.toInt()}%",
+                    text = percentage?.let { "${it.toInt()}%" } ?: "N/A",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
                     color = Color.White
                 )
@@ -324,6 +324,8 @@ private fun SwipeToActivate(
     accentColor: Color,
     isBusy: Boolean,
     showResult: Boolean = false,
+    busyText: String = "OPTIMIZING…",
+    resultText: String = "DONE",
     onActivated: () -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -419,8 +421,8 @@ private fun SwipeToActivate(
                 val textAlpha = ((maxDrag - animatedOffset) / maxDrag).coerceIn(0f, 1f)
                 Text(
                     text = when {
-                        isBusy -> "OPTIMIZING…"
-                        showResult -> "BOOSTED"
+                        isBusy -> busyText
+                        showResult -> resultText
                         isCompleted -> "DONE"
                         else -> text
                     },
@@ -1071,7 +1073,7 @@ fun PerformanceScreen(
                         modifier = Modifier.weight(1f)
                     )
                     CircularGauge(
-                        percentage = metricsState.cpuPercentage.toFloat(),
+                        percentage = metricsState.cpuPercentage?.toFloat(),
                         label = "CPU",
                         accentColor = Color(0xFF10B981),
                         modifier = Modifier.weight(1f)
@@ -1209,18 +1211,22 @@ fun PerformanceScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 SwipeToActivate(
-                    text = "SWIPE TO OPTIMIZE PING",
+                    text = "SWIPE TO CHECK PING",
                     icon = Icons.Default.SettingsInputAntenna,
                     accentColor = Color(0xFF10B981),
                     isBusy = isOptimizingNet,
                     showResult = showPingResult,
+                    busyText = "CHECKING…",
+                    resultText = "CHECKED",
                     onActivated = {
                         scope.launch {
                             isOptimizingNet = true
-                            val pingRes = viewModel.optimizeNetwork()
+                            val pingRes = viewModel.measureNetworkLatency()
                             isOptimizingNet = false
                             showPingResult = true
-                            showRamSuccessBanner = "Network optimized! Latency: $pingRes ms"
+                            showRamSuccessBanner = pingRes?.let {
+                                "Latency check complete: $it ms"
+                            } ?: "Latency check failed: network unreachable"
                             delay(2500)
                             showPingResult = false
                             delay(300)
@@ -1908,7 +1914,7 @@ fun PerformanceScreen(
             val phases = listOf(
                 "Muting system alerts..." to 0.15f,
                 "Clearing redundant caches..." to 0.45f,
-                "Freeing active active RAM..." to 0.7f,
+                "Freeing active RAM..." to 0.7f,
                 "Applying settings overrides..." to 0.85f,
                 "Launching game sandbox..." to 1.0f
             )

@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.sp
 data class MetricModule(
     val id: String,
     val name: String,
-    val valueMock: String,
+    val previewValue: String,
     val icon: ImageVector,
     val enabled: Boolean
 )
@@ -194,7 +194,7 @@ fun OverlayCustomizationScreen(
                                                     Icon(mod.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
                                                     Spacer(modifier = Modifier.width((8 * textScale).dp))
                                                     Text(mod.name, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
-                                                    Text(mod.valueMock, color = Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (12 * textScale).sp, fontWeight = FontWeight.Bold))
+                                                    Text(mod.previewValue, color = Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (12 * textScale).sp, fontWeight = FontWeight.Bold))
                                                 }
                                             }
                                         }
@@ -206,11 +206,11 @@ fun OverlayCustomizationScreen(
                                         ) {
                                             enabledMods.forEachIndexed { index, mod ->
                                                 if (selectedMode == "Minimal") {
-                                                    Text(mod.valueMock, color = Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (14 * textScale).sp, fontWeight = FontWeight.Bold))
+                                                    Text(mod.previewValue, color = Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (14 * textScale).sp, fontWeight = FontWeight.Bold))
                                                 } else {
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                         Text(mod.id.uppercase(), color = Color.Gray, fontFamily = fontFamily, fontSize = (10 * textScale).sp, fontWeight = FontWeight.Bold)
-                                                        Text(mod.valueMock, color = if (index == 0) accentColor else Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (16 * textScale).sp, fontWeight = FontWeight.Bold))
+                                                        Text(mod.previewValue, color = if (index == 0) accentColor else Color.White, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontSize = (16 * textScale).sp, fontWeight = FontWeight.Bold))
                                                     }
                                                 }
                                                 if (index < enabledMods.size - 1) {
@@ -250,7 +250,7 @@ fun OverlayCustomizationScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(module.name, color = Color.White, fontWeight = FontWeight.Bold)
                             Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(if(module.enabled) accentColor.copy(0.1f) else MaterialTheme.colorScheme.background).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                                Text(module.valueMock, color = if(module.enabled) accentColor else Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                Text(module.previewValue, color = if(module.enabled) accentColor else Color.Gray, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Switch(
