@@ -137,7 +137,7 @@ fun AppearanceScreen(
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color.DarkGray) // Mock background image
+                        .background(Color.DarkGray)
                 ) {
                     // Dynamic Overlay inside
                     val availableModules = listOf(

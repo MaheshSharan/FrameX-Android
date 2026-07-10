@@ -50,12 +50,12 @@ fun AboutScreen(
     } catch (e: Exception) {
         null
     }
-    val versionName = packageInfo?.versionName ?: "1.3"
+    val versionName = packageInfo?.versionName ?: "1.4.0"
     val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-        packageInfo?.longVersionCode ?: 4L
+        packageInfo?.longVersionCode ?: 5L
     } else {
         @Suppress("DEPRECATION")
-        packageInfo?.versionCode?.toLong() ?: 4L
+        packageInfo?.versionCode?.toLong() ?: 5L
     }
 
     Column(
@@ -151,7 +151,7 @@ fun AboutScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         CommitmentRow(title = "No user data collected", subtitle = "Your personal info stays on device.")
                         CommitmentRow(title = "No background tracking", subtitle = "The app sleeps when you do.")
-                        CommitmentRow(title = "Ads only on home screen", subtitle = "Unintrusive experience while you work.")
+                        CommitmentRow(title = "No ads - ever", subtitle = "FrameX is completely ad-free.")
                     }
                 }
             }

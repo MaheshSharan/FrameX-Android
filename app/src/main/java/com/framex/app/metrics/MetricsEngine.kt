@@ -16,7 +16,7 @@ import javax.inject.Singleton
 data class MetricsState(
     val fps: Int = 0,
     val cpuMhz: Int = 0,
-    val cpuPercentage: Int = 0,
+    val cpuPercentage: Int? = null,
     val cpuClusterUltraMhz: Int = 0,
     val cpuClusterPerfMhz: Int = 0,
     val cpuClusterEffMhz: Int = 0,
@@ -44,7 +44,7 @@ class MetricsEngine @Inject constructor(
     val metricsState: StateFlow<MetricsState> = _metricsState.asStateFlow()
 
     // Rolling window of the last 60 FPS readings (≈ 60 seconds at 1s poll rate).
-    // Used by the Dashboard chart to show a real sparkline instead of fake static data.
+    // Used by the Dashboard chart to show a real sparkline from recent samples.
     private val _fpsHistory = MutableStateFlow<List<Int>>(emptyList())
     val fpsHistory: StateFlow<List<Int>> = _fpsHistory.asStateFlow()
 
@@ -156,7 +156,7 @@ class MetricsEngine @Inject constructor(
             moduleJobs.remove(key)
             // Reset state field to zero so the overlay doesn't show stale data.
             _metricsState.value = when (key) {
-                "cpu"         -> _metricsState.value.copy(cpuMhz = 0, cpuPercentage = 0)
+                "cpu"         -> _metricsState.value.copy(cpuMhz = 0, cpuPercentage = null)
                 "cpu_cluster" -> _metricsState.value.copy(
                     cpuClusterEffMhz = 0,
                     cpuClusterPerfMhz = 0,
