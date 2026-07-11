@@ -107,9 +107,11 @@ class PerformanceViewModel @Inject constructor(
 
     init {
         loadUserApps()
-        // Keep CPU/RAM gauges on this screen live regardless of the user's saved
+        // Keep CPU/RAM/PING live on this screen regardless of the user's saved
         // overlay toggle — via a transient override, not by mutating their setting.
-        metricsEngine.setScreenOverrideModules(setOf("cpu", "ram"))
+        // "ping" must be included here or PingMonitor never starts polling, and
+        // the PING card reads MetricsState's default (0) forever.
+        metricsEngine.setScreenOverrideModules(setOf("cpu", "ram", "ping"))
     }
 
     override fun onCleared() {
@@ -1224,6 +1226,11 @@ fun PerformanceScreen(
                             val pingRes = viewModel.measureNetworkLatency()
                             isOptimizingNet = false
                             showPingResult = true
+                            // Reflect the real measurement on the PING card itself.
+                            // A null result means the network probe genuinely failed
+                            // to reach 8.8.8.8 — treat it the same as the live monitor's
+                            // "no signal" state (0) rather than leaving the stale value up.
+                            activeLatencyDiagnostic = pingRes ?: 0
                             showRamSuccessBanner = pingRes?.let {
                                 "Latency check complete: $it ms"
                             } ?: "Latency check failed: network unreachable"
