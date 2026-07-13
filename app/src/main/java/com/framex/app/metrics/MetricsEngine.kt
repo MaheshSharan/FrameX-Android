@@ -26,7 +26,12 @@ data class MetricsState(
     val networkRxKbps: Float = 0f,
     val networkTxKbps: Float = 0f,
     val pingMs: Int = 0,
-    val isThermalThrottling: Boolean = false
+    // Full thermal breakdown — see ThermalMonitor.ThermalState for field meaning.
+    val thermalCpuC: Float = 0f,
+    val thermalGpuC: Float = 0f,
+    val thermalNpuC: Float = 0f,
+    val thermalSkinC: Float = 0f,
+    val thermalStatus: Int = 0
 )
 
 @Singleton
@@ -47,6 +52,15 @@ class MetricsEngine @Inject constructor(
     // Used by the Dashboard chart to show a real sparkline from recent samples.
     private val _fpsHistory = MutableStateFlow<List<Int>>(emptyList())
     val fpsHistory: StateFlow<List<Int>> = _fpsHistory.asStateFlow()
+
+    // Timestamped snapshot of the full metrics state, appended every ~1s regardless
+    // of which modules are enabled for the overlay. This is the source of truth for
+    // the "what caused the frame drop" correlation graph and for session log export —
+    // both need every metric on the same timeline, not just what the user chose to
+    // display on-screen. Capped to avoid unbounded memory growth during long sessions.
+    data class MetricsSnapshot(val timestampMs: Long, val state: MetricsState)
+    private val _snapshotHistory = MutableStateFlow<List<MetricsSnapshot>>(emptyList())
+    val snapshotHistory: StateFlow<List<MetricsSnapshot>> = _snapshotHistory.asStateFlow()
 
     // SupervisorJob: one failing monitor coroutine never cancels the others.
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -76,6 +90,14 @@ class MetricsEngine @Inject constructor(
                     if (d.size > 60) d.removeFirst()
                 }
                 _fpsHistory.value = next.toList()
+
+                // Snapshot the full state at this tick for logging/correlation, capped
+                // at MAX_SNAPSHOTS (~1hr at 1s cadence) so long sessions don't grow unbounded.
+                val snapshots = ArrayDeque(_snapshotHistory.value).also { d ->
+                    d.addLast(MetricsSnapshot(System.currentTimeMillis(), _metricsState.value))
+                    if (d.size > MAX_SNAPSHOTS) d.removeFirst()
+                }
+                _snapshotHistory.value = snapshots.toList()
             }
         }
 
@@ -133,8 +155,14 @@ class MetricsEngine @Inject constructor(
                     }
                 }
                 toggleModule("thermal", enabled) {
-                    thermalMonitor.isThrottling.collect {
-                        _metricsState.value = _metricsState.value.copy(isThermalThrottling = it)
+                    thermalMonitor.thermalState.collect { t ->
+                        _metricsState.value = _metricsState.value.copy(
+                            thermalCpuC = t.cpuC,
+                            thermalGpuC = t.gpuC,
+                            thermalNpuC = t.npuC,
+                            thermalSkinC = t.skinC,
+                            thermalStatus = t.status
+                        )
                     }
                 }
                 toggleModule("ping", enabled) {
@@ -165,10 +193,19 @@ class MetricsEngine @Inject constructor(
                 "ram"     -> _metricsState.value.copy(ramUsedGb = 0f, ramTotalGb = 0f)
                 "net"     -> _metricsState.value.copy(networkRxKbps = 0f, networkTxKbps = 0f)
                 "temp"    -> _metricsState.value.copy(batteryTempC = 0f)
-                "thermal" -> _metricsState.value.copy(isThermalThrottling = false)
+                "thermal" -> _metricsState.value.copy(
+                    thermalCpuC = 0f, thermalGpuC = 0f, thermalNpuC = 0f,
+                    thermalSkinC = 0f, thermalStatus = 0
+                )
                 "ping"    -> _metricsState.value.copy(pingMs = 0)
                 else      -> _metricsState.value
             }
         }
+    }
+
+    companion object {
+        // ~1 hour of history at 1s cadence. Long enough for a full gaming session's
+        // worth of correlation data without holding unbounded memory.
+        private const val MAX_SNAPSHOTS = 3600
     }
 }

@@ -390,19 +390,94 @@ class BatteryMonitor @Inject constructor(
 
 @Singleton
 class ThermalMonitor @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val shizukuManager: ShizukuManager
 ) {
-    val isThrottling: Flow<Boolean> = flow {
+    // Full breakdown from `dumpsys thermalservice`. This is the same data source
+    // Android's own throttling decisions are based on, so it explains WHY frames
+    // drop, not just THAT they drop. Reading it needs no special permission beyond
+    // normal shell (works via Shizuku or even plain adb) since it goes through the
+    // ThermalService binder call, not raw /sys reads (which are often root-gated
+    // on OEM builds — e.g. thermal_zone*/temp is root-only on some Vivo firmware).
+    data class ThermalState(
+        val cpuC: Float = 0f,
+        val gpuC: Float = 0f,
+        val npuC: Float = 0f,
+        val skinC: Float = 0f,
+        val batteryC: Float = 0f,
+        // Android thermal status: 0=NONE 1=LIGHT 2=MODERATE 3=SEVERE 4=CRITICAL 5=EMERGENCY 6=SHUTDOWN
+        val status: Int = 0
+    ) {
+        val statusLabel: String get() = when (status) {
+            0 -> "NONE"; 1 -> "LIGHT"; 2 -> "MODERATE"; 3 -> "SEVERE"
+            4 -> "CRITICAL"; 5 -> "EMERGENCY"; 6 -> "SHUTDOWN"; else -> "?"
+        }
+    }
+
+    // "Current temperatures from HAL:" block looks like:
+    //   Temperature{mValue=62.895, mType=0, mName=CPU, mStatus=0}
+    // mType per Android's Temperature.java: 0=CPU 1=GPU 2=BATTERY 3=SKIN 5=POWER_AMPLIFIER 9=NPU
+    private val entryRegex = Regex(
+        "Temperature\\{mValue=(-?[0-9.]+),\\s*mType=(\\d+),\\s*mName=([A-Z_]+)"
+    )
+
+    val thermalState: Flow<ThermalState> = flow {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         while (true) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val status = powerManager.currentThermalStatus
-                emit(status >= PowerManager.THERMAL_STATUS_SEVERE)
+            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
+                    shizukuManager.hasPermission.value
+
+            val state = if (shizukuReady) {
+                try {
+                    val output = shizukuManager.executeCommand("dumpsys thermalservice")
+                    parseThermalService(output) ?: fallbackState(powerManager)
+                } catch (e: Exception) {
+                    fallbackState(powerManager)
+                }
             } else {
-                emit(false)
+                fallbackState(powerManager)
             }
-            delay(5000)
+            emit(state)
+            delay(1000)
         }
+    }
+
+    private fun parseThermalService(output: String): ThermalState? {
+        if (output.isBlank()) return null
+
+        // Prefer the "Current temperatures from HAL:" section (live values) over
+        // "Cached temperatures:" (may be briefly stale right after a status change).
+        val halSection = output.substringAfter("Current temperatures from HAL:", "")
+            .substringBefore("Current cooling devices")
+        val section = halSection.ifBlank { output }
+
+        var cpu = 0f; var gpu = 0f; var npu = 0f; var skin = 0f; var battery = 0f
+        var found = false
+        entryRegex.findAll(section).forEach { match ->
+            val value = match.groupValues[1].toFloatOrNull() ?: return@forEach
+            val type = match.groupValues[2].toIntOrNull() ?: return@forEach
+            found = true
+            when (type) {
+                0 -> cpu = value
+                1 -> gpu = value
+                2 -> battery = value
+                3 -> skin = value
+                9 -> npu = value
+            }
+        }
+        if (!found) return null
+
+        val status = Regex("Thermal Status:\\s*(\\d+)")
+            .find(output)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+        return ThermalState(cpuC = cpu, gpuC = gpu, npuC = npu, skinC = skin, batteryC = battery, status = status)
+    }
+
+    private fun fallbackState(powerManager: PowerManager): ThermalState {
+        val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            powerManager.currentThermalStatus
+        } else 0
+        return ThermalState(status = status)
     }
 }
 

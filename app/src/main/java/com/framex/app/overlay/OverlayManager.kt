@@ -286,6 +286,11 @@ fun OverlayContent(
         Triple("cpu_cluster", "CPU Clusters", "U:${metricsState.cpuClusterUltraMhz} P:${metricsState.cpuClusterPerfMhz} E:${metricsState.cpuClusterEffMhz}") to Icons.Default.Memory,
         Triple("ram", "RAM", String.format("%.1f GB", metricsState.ramUsedGb)) to Icons.Default.DeveloperBoard,
         Triple("temp", "TEMP", String.format("%.1f°C", metricsState.batteryTempC)) to Icons.Default.DeviceThermostat,
+        Triple(
+            "thermal",
+            "THERMAL",
+            String.format("%.0f°C %s", metricsState.thermalCpuC, thermalStatusShortLabel(metricsState.thermalStatus))
+        ) to Icons.Default.LocalFireDepartment,
         Triple("net", "NET", if (metricsState.networkRxKbps > 1024) String.format("%.1f MB/s", (metricsState.networkRxKbps + metricsState.networkTxKbps) / 1024f) else String.format("%.0f KB/s", metricsState.networkRxKbps + metricsState.networkTxKbps)) to Icons.Default.NetworkCheck
     )
     
@@ -387,6 +392,13 @@ fun OverlayContent(
             }
         }
     }
+}
+
+// Short label for the overlay's compact/minimal display — full names are used in
+// the Performance/detail screens where there's room to show "MODERATE" in full.
+private fun thermalStatusShortLabel(status: Int): String = when (status) {
+    0 -> "OK"; 1 -> "OK"; 2 -> "WARM"; 3 -> "HOT"
+    4 -> "CRIT"; 5, 6 -> "!!!"; else -> "?"
 }
 
 private class OverlayLifecycleOwner : SavedStateRegistryOwner, ViewModelStoreOwner {

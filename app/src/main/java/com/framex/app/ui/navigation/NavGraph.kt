@@ -13,6 +13,7 @@ import com.framex.app.ui.screens.OverlayCustomizationScreen
 import com.framex.app.ui.screens.PerformanceScreen
 import com.framex.app.ui.screens.PermissionsScreen
 import com.framex.app.ui.screens.SplashScreen
+import com.framex.app.ui.screens.ThermalDiagnosticsScreen
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
@@ -23,6 +24,7 @@ sealed class Screen(val route: String) {
     object Permissions : Screen("permissions")
     object About : Screen("about")
     object Performance : Screen("performance")
+    object ThermalDiagnostics : Screen("thermal_diagnostics")
 }
 
 @Composable
@@ -51,7 +53,8 @@ fun FrameXNavGraph(
                 onNavigateToOverlayCustomization = { navController.navigate(Screen.OverlayCustomization.route) },
                 onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) },
                 onNavigateToAbout = { navController.navigate(Screen.About.route) },
-                onNavigateToPerformance = { navController.navigate(Screen.Performance.route) }
+                onNavigateToPerformance = { navController.navigate(Screen.Performance.route) },
+                onNavigateToThermalDiagnostics = { navController.navigate(Screen.ThermalDiagnostics.route) }
             )
         }
         composable(Screen.Appearance.route) {
@@ -68,6 +71,9 @@ fun FrameXNavGraph(
         }
         composable(Screen.Performance.route) {
             PerformanceScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.ThermalDiagnostics.route) {
+            ThermalDiagnosticsScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }
