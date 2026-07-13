@@ -111,10 +111,15 @@ class FpsMonitor @Inject constructor(
                             ?.toInt()
                             ?: 0
 
-                        // "missedFrameCount" is SurfaceFlinger's own tally of frames that
-                        // missed their intended present deadline within this window — the
-                        // direct signal for stutter/jank independent of the FPS mean.
-                        val janky = Regex("missedFrameCount\\s*=\\s*([0-9]+)")
+                        // The real SurfaceFlinger --timestats field is "missedFrames"
+                        // (confirmed against AOSP source: TimeStatsHelper.cpp formats it as
+                        // "missedFrames = %d\n"). An earlier version of this code looked for
+                        // "missedFrameCount", which does not exist in the actual dump — that
+                        // typo is why jankyFrames always read 0. missedFrames is SurfaceFlinger's
+                        // own count of frames that missed their intended present deadline in
+                        // this accumulation window — the direct stutter signal, independent of
+                        // whatever the window's averageFPS mean happens to be.
+                        val janky = Regex("missedFrames\\s*=\\s*([0-9]+)")
                             .find(output)
                             ?.groupValues?.get(1)
                             ?.toIntOrNull()
