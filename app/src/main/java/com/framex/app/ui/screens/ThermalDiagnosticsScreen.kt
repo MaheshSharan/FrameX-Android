@@ -60,15 +60,16 @@ class ThermalDiagnosticsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
-        // "thermal" must be forced on here or ThermalMonitor never polls and every
-        // reading on this screen stays at 0 — same override pattern PerformanceScreen
-        // uses for cpu/ram/ping. This does NOT touch the user's saved overlay toggles.
-        metricsEngine.setScreenOverrideModules(setOf("thermal"))
+        // Force "thermal" and "temp" on for this screen — "temp" (battery) previously
+        // wasn't forced here, so BATTERY read 0 unless the user separately had it
+        // toggled on their overlay. Uses a distinct requester key so it can't collide
+        // with SessionLogger's own override when a recording is also active.
+        metricsEngine.setScreenOverrideModules(setOf("thermal", "temp"), requesterKey = "thermal_diagnostics_screen")
     }
 
     override fun onCleared() {
         super.onCleared()
-        metricsEngine.setScreenOverrideModules(emptySet())
+        metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "thermal_diagnostics_screen")
     }
 
     fun toggleRecording() {
@@ -186,6 +187,15 @@ fun ThermalDiagnosticsScreen(
                     ReadingCard("SKIN", String.format("%.1f°C", metricsState.thermalSkinC), Modifier.weight(1f))
                     ReadingCard("BATTERY", String.format("%.1f°C", metricsState.batteryTempC), Modifier.weight(1f))
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ReadingCard("JANKY FRAMES", "${metricsState.jankyFrames}", Modifier.weight(1f))
+                    ReadingCard(
+                        "TOP PROCESS",
+                        metricsState.topProcessName?.let { "$it (${String.format("%.0f", metricsState.topProcessCpuPercent)}%)" } ?: "—",
+                        Modifier.weight(1f)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("FPS vs Thermal — last 60s", style = MaterialTheme.typography.titleSmall, color = Color.White)
@@ -291,7 +301,14 @@ private fun ReadingCard(label: String, value: String, modifier: Modifier = Modif
     ) {
         Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))
-        Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text(
+            value,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
     }
 }
 

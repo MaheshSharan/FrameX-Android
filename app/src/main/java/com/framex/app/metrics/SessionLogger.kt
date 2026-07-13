@@ -40,12 +40,20 @@ class SessionLogger @Inject constructor(
     private val _lastExportedFile = MutableStateFlow<File?>(null)
     val lastExportedFile: StateFlow<File?> = _lastExportedFile.asStateFlow()
 
+    // Recording needs every diagnostic signal on the timeline, not just whatever the
+    // user happened to enable on their overlay — so it force-enables the full set via
+    // MetricsEngine's screen-override mechanism (additive, never touches the user's
+    // saved overlay toggles) for the duration of the recording only.
+    private val recordingModules = setOf("thermal", "temp", "cpu", "cpu_cluster", "ram", "top_process")
+
     fun startRecording() {
         recordingStartIndex = metricsEngine.snapshotHistory.value.size
+        metricsEngine.setScreenOverrideModules(recordingModules, requesterKey = "session_logger")
         _isRecording.value = true
     }
 
     fun stopRecording() {
+        metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "session_logger")
         _isRecording.value = false
     }
 
@@ -63,18 +71,20 @@ class SessionLogger @Inject constructor(
 
         file.bufferedWriter().use { writer ->
             writer.write(
-                "timestamp,fps,cpu_mhz,cpu_percent,cpu_cluster_eff_mhz,cpu_cluster_perf_mhz,cpu_cluster_ultra_mhz," +
+                "timestamp,fps,janky_frames,cpu_mhz,cpu_percent,cpu_cluster_eff_mhz,cpu_cluster_perf_mhz,cpu_cluster_ultra_mhz," +
                     "ram_used_gb,ram_total_gb,battery_temp_c,network_rx_kbps,network_tx_kbps,ping_ms," +
-                    "thermal_cpu_c,thermal_gpu_c,thermal_npu_c,thermal_skin_c,thermal_status\n"
+                    "thermal_cpu_c,thermal_gpu_c,thermal_npu_c,thermal_skin_c,thermal_status," +
+                    "top_process,top_process_cpu_percent\n"
             )
             val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             for (snap in window) {
                 val s = snap.state
                 writer.write(
-                    "${fmt.format(snap.timestampMs)},${s.fps},${s.cpuMhz},${s.cpuPercentage ?: ""}," +
+                    "${fmt.format(snap.timestampMs)},${s.fps},${s.jankyFrames},${s.cpuMhz},${s.cpuPercentage ?: ""}," +
                         "${s.cpuClusterEffMhz},${s.cpuClusterPerfMhz},${s.cpuClusterUltraMhz}," +
                         "${s.ramUsedGb},${s.ramTotalGb},${s.batteryTempC},${s.networkRxKbps},${s.networkTxKbps},${s.pingMs}," +
-                        "${s.thermalCpuC},${s.thermalGpuC},${s.thermalNpuC},${s.thermalSkinC},${s.thermalStatus}\n"
+                        "${s.thermalCpuC},${s.thermalGpuC},${s.thermalNpuC},${s.thermalSkinC},${s.thermalStatus}," +
+                        "${s.topProcessName ?: ""},${s.topProcessCpuPercent}\n"
                 )
             }
         }

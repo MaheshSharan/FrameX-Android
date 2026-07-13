@@ -60,6 +60,13 @@ class FpsMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager
 ) {
+    // fps: rolling averageFPS (existing behavior, unchanged).
+    // jankyFrames: frames counted as janky in the CURRENT accumulation window from
+    // the same `--timestats -dump` call — explains "FPS reads fine but feels laggy":
+    // averageFPS is a mean over the window, so irregular/stuttering frame delivery
+    // can still average out to a normal-looking number while jankyFrames stays high.
+    data class FpsState(val fps: Int, val jankyFrames: Int)
+
     // Exact approach decoded from PerfStats smali (OverlayService$FPSMonitor.smali):
     //
     // TIMING (from smali constants 0xbb8=3000, 0x3e8=1000):
@@ -74,7 +81,7 @@ class FpsMonitor @Inject constructor(
     //
     // HOLD LAST KNOWN: if a dump returns 0 (e.g. right after clear), keep showing
     //   the last real value instead of flashing 0. PerfStats does the same via Handler.
-    val framesPerSecond: Flow<Int> = flow {
+    val fpsState: Flow<FpsState> = flow {
         var initialized = false
         var lastKnownFps = 0
 
@@ -104,9 +111,18 @@ class FpsMonitor @Inject constructor(
                             ?.toInt()
                             ?: 0
 
+                        // "missedFrameCount" is SurfaceFlinger's own tally of frames that
+                        // missed their intended present deadline within this window — the
+                        // direct signal for stutter/jank independent of the FPS mean.
+                        val janky = Regex("missedFrameCount\\s*=\\s*([0-9]+)")
+                            .find(output)
+                            ?.groupValues?.get(1)
+                            ?.toIntOrNull()
+                            ?: 0
+
                         // Step 2: show result — hold last known if dump returned nothing
                         if (parsed > 0) lastKnownFps = parsed
-                        emit(lastKnownFps)
+                        emit(FpsState(lastKnownFps, janky))
 
                         // Step 3: PerfStats exact clear logic (smali: rem-long % 3000 < 1000).
                         // Only clear during the first 1000ms of each 3000ms wall-clock cycle.
@@ -118,12 +134,12 @@ class FpsMonitor @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    emit(lastKnownFps) // hold last known; never flash 0 on transient error
+                    emit(FpsState(lastKnownFps, 0)) // hold last known; never flash 0 on transient error
                 }
             } else {
                 initialized = false
                 lastKnownFps = 0
-                emit(0)
+                emit(FpsState(0, 0))
             }
             delay(1000)
         }
@@ -522,5 +538,51 @@ class PingMonitor @Inject constructor(
         } catch (e: Exception) {
             ""
         }
+    }
+}
+
+@Singleton
+class TopProcessMonitor @Inject constructor(
+    private val shizukuManager: ShizukuManager
+) {
+    // Answers "which process was busy at the moment FPS dropped" — a temperature
+    // graph only shows thermal was NOT the cause; this is what actually names the
+    // culprit (a vendor daemon, a sync job, etc.) when a drop isn't thermal.
+    data class TopProcess(val name: String, val cpuPercent: Float)
+
+    // `dumpsys cpuinfo` header lines look like:
+    //   23% 1234/com.example.app: 15% user + 8% kernel
+    // The leading percentage is that process's share of a single core's capacity,
+    // already sorted busiest-first by the system service — no extra sorting needed.
+    private val lineRegex = Regex("^\\s*([0-9.]+)%\\s+\\d+/([^:]+):")
+
+    val topProcess: Flow<TopProcess?> = flow {
+        while (true) {
+            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
+                    shizukuManager.hasPermission.value
+
+            val result = if (shizukuReady) {
+                try {
+                    parseTop(shizukuManager.executeCommand("dumpsys cpuinfo"))
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+
+            emit(result)
+            delay(1000)
+        }
+    }
+
+    private fun parseTop(output: String): TopProcess? {
+        for (line in output.lineSequence()) {
+            val match = lineRegex.find(line) ?: continue
+            val pct = match.groupValues[1].toFloatOrNull() ?: continue
+            val name = match.groupValues[2].trim()
+            // Skip the aggregate "TOTAL" line — we want the top real process.
+            if (name.equals("TOTAL", ignoreCase = true)) continue
+            return TopProcess(name, pct)
+        }
+        return null
     }
 }
