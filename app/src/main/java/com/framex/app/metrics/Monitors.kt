@@ -60,6 +60,13 @@ class FpsMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager
 ) {
+    // fps: rolling averageFPS (existing behavior, unchanged).
+    // jankyFrames: frames counted as janky in the CURRENT accumulation window from
+    // the same `--timestats -dump` call — explains "FPS reads fine but feels laggy":
+    // averageFPS is a mean over the window, so irregular/stuttering frame delivery
+    // can still average out to a normal-looking number while jankyFrames stays high.
+    data class FpsState(val fps: Int, val jankyFrames: Int)
+
     // Exact approach decoded from PerfStats smali (OverlayService$FPSMonitor.smali):
     //
     // TIMING (from smali constants 0xbb8=3000, 0x3e8=1000):
@@ -74,7 +81,7 @@ class FpsMonitor @Inject constructor(
     //
     // HOLD LAST KNOWN: if a dump returns 0 (e.g. right after clear), keep showing
     //   the last real value instead of flashing 0. PerfStats does the same via Handler.
-    val framesPerSecond: Flow<Int> = flow {
+    val fpsState: Flow<FpsState> = flow {
         var initialized = false
         var lastKnownFps = 0
 
@@ -104,9 +111,23 @@ class FpsMonitor @Inject constructor(
                             ?.toInt()
                             ?: 0
 
+                        // The real SurfaceFlinger --timestats field is "missedFrames"
+                        // (confirmed against AOSP source: TimeStatsHelper.cpp formats it as
+                        // "missedFrames = %d\n"). An earlier version of this code looked for
+                        // "missedFrameCount", which does not exist in the actual dump — that
+                        // typo is why jankyFrames always read 0. missedFrames is SurfaceFlinger's
+                        // own count of frames that missed their intended present deadline in
+                        // this accumulation window — the direct stutter signal, independent of
+                        // whatever the window's averageFPS mean happens to be.
+                        val janky = Regex("missedFrames\\s*=\\s*([0-9]+)")
+                            .find(output)
+                            ?.groupValues?.get(1)
+                            ?.toIntOrNull()
+                            ?: 0
+
                         // Step 2: show result — hold last known if dump returned nothing
                         if (parsed > 0) lastKnownFps = parsed
-                        emit(lastKnownFps)
+                        emit(FpsState(lastKnownFps, janky))
 
                         // Step 3: PerfStats exact clear logic (smali: rem-long % 3000 < 1000).
                         // Only clear during the first 1000ms of each 3000ms wall-clock cycle.
@@ -118,12 +139,12 @@ class FpsMonitor @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    emit(lastKnownFps) // hold last known; never flash 0 on transient error
+                    emit(FpsState(lastKnownFps, 0)) // hold last known; never flash 0 on transient error
                 }
             } else {
                 initialized = false
                 lastKnownFps = 0
-                emit(0)
+                emit(FpsState(0, 0))
             }
             delay(1000)
         }
@@ -390,19 +411,94 @@ class BatteryMonitor @Inject constructor(
 
 @Singleton
 class ThermalMonitor @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val shizukuManager: ShizukuManager
 ) {
-    val isThrottling: Flow<Boolean> = flow {
+    // Full breakdown from `dumpsys thermalservice`. This is the same data source
+    // Android's own throttling decisions are based on, so it explains WHY frames
+    // drop, not just THAT they drop. Reading it needs no special permission beyond
+    // normal shell (works via Shizuku or even plain adb) since it goes through the
+    // ThermalService binder call, not raw /sys reads (which are often root-gated
+    // on OEM builds — e.g. thermal_zone*/temp is root-only on some Vivo firmware).
+    data class ThermalState(
+        val cpuC: Float = 0f,
+        val gpuC: Float = 0f,
+        val npuC: Float = 0f,
+        val skinC: Float = 0f,
+        val batteryC: Float = 0f,
+        // Android thermal status: 0=NONE 1=LIGHT 2=MODERATE 3=SEVERE 4=CRITICAL 5=EMERGENCY 6=SHUTDOWN
+        val status: Int = 0
+    ) {
+        val statusLabel: String get() = when (status) {
+            0 -> "NONE"; 1 -> "LIGHT"; 2 -> "MODERATE"; 3 -> "SEVERE"
+            4 -> "CRITICAL"; 5 -> "EMERGENCY"; 6 -> "SHUTDOWN"; else -> "?"
+        }
+    }
+
+    // "Current temperatures from HAL:" block looks like:
+    //   Temperature{mValue=62.895, mType=0, mName=CPU, mStatus=0}
+    // mType per Android's Temperature.java: 0=CPU 1=GPU 2=BATTERY 3=SKIN 5=POWER_AMPLIFIER 9=NPU
+    private val entryRegex = Regex(
+        "Temperature\\{mValue=(-?[0-9.]+),\\s*mType=(\\d+),\\s*mName=([A-Z_]+)"
+    )
+
+    val thermalState: Flow<ThermalState> = flow {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         while (true) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val status = powerManager.currentThermalStatus
-                emit(status >= PowerManager.THERMAL_STATUS_SEVERE)
+            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
+                    shizukuManager.hasPermission.value
+
+            val state = if (shizukuReady) {
+                try {
+                    val output = shizukuManager.executeCommand("dumpsys thermalservice")
+                    parseThermalService(output) ?: fallbackState(powerManager)
+                } catch (e: Exception) {
+                    fallbackState(powerManager)
+                }
             } else {
-                emit(false)
+                fallbackState(powerManager)
             }
-            delay(5000)
+            emit(state)
+            delay(1000)
         }
+    }
+
+    private fun parseThermalService(output: String): ThermalState? {
+        if (output.isBlank()) return null
+
+        // Prefer the "Current temperatures from HAL:" section (live values) over
+        // "Cached temperatures:" (may be briefly stale right after a status change).
+        val halSection = output.substringAfter("Current temperatures from HAL:", "")
+            .substringBefore("Current cooling devices")
+        val section = halSection.ifBlank { output }
+
+        var cpu = 0f; var gpu = 0f; var npu = 0f; var skin = 0f; var battery = 0f
+        var found = false
+        entryRegex.findAll(section).forEach { match ->
+            val value = match.groupValues[1].toFloatOrNull() ?: return@forEach
+            val type = match.groupValues[2].toIntOrNull() ?: return@forEach
+            found = true
+            when (type) {
+                0 -> cpu = value
+                1 -> gpu = value
+                2 -> battery = value
+                3 -> skin = value
+                9 -> npu = value
+            }
+        }
+        if (!found) return null
+
+        val status = Regex("Thermal Status:\\s*(\\d+)")
+            .find(output)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+        return ThermalState(cpuC = cpu, gpuC = gpu, npuC = npu, skinC = skin, batteryC = battery, status = status)
+    }
+
+    private fun fallbackState(powerManager: PowerManager): ThermalState {
+        val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            powerManager.currentThermalStatus
+        } else 0
+        return ThermalState(status = status)
     }
 }
 
@@ -447,5 +543,51 @@ class PingMonitor @Inject constructor(
         } catch (e: Exception) {
             ""
         }
+    }
+}
+
+@Singleton
+class TopProcessMonitor @Inject constructor(
+    private val shizukuManager: ShizukuManager
+) {
+    // Answers "which process was busy at the moment FPS dropped" — a temperature
+    // graph only shows thermal was NOT the cause; this is what actually names the
+    // culprit (a vendor daemon, a sync job, etc.) when a drop isn't thermal.
+    data class TopProcess(val name: String, val cpuPercent: Float)
+
+    // `dumpsys cpuinfo` header lines look like:
+    //   23% 1234/com.example.app: 15% user + 8% kernel
+    // The leading percentage is that process's share of a single core's capacity,
+    // already sorted busiest-first by the system service — no extra sorting needed.
+    private val lineRegex = Regex("^\\s*([0-9.]+)%\\s+\\d+/([^:]+):")
+
+    val topProcess: Flow<TopProcess?> = flow {
+        while (true) {
+            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
+                    shizukuManager.hasPermission.value
+
+            val result = if (shizukuReady) {
+                try {
+                    parseTop(shizukuManager.executeCommand("dumpsys cpuinfo"))
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+
+            emit(result)
+            delay(1000)
+        }
+    }
+
+    private fun parseTop(output: String): TopProcess? {
+        for (line in output.lineSequence()) {
+            val match = lineRegex.find(line) ?: continue
+            val pct = match.groupValues[1].toFloatOrNull() ?: continue
+            val name = match.groupValues[2].trim()
+            // Skip the aggregate "TOTAL" line — we want the top real process.
+            if (name.equals("TOTAL", ignoreCase = true)) continue
+            return TopProcess(name, pct)
+        }
+        return null
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DashboardCustomize
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -61,6 +62,7 @@ fun DashboardScreen(
     onNavigateToPermissions: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToPerformance: () -> Unit,
+    onNavigateToThermalDiagnostics: () -> Unit,
     viewModel: PermissionsViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
     dashboardViewModel: DashboardViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
@@ -346,6 +348,24 @@ fun DashboardScreen(
                     onClick = onNavigateToPermissions,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = { Text("ADB", color = if (isShizukuReady) Color(0xFF60A5FA) else Color.Red, fontWeight = FontWeight.Bold) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                QuickActionButton(
+                    title = "Thermal Diagnostics",
+                    subtitle = "Find what's causing frame drops",
+                    iconContainerColor = Color(0xFFEF4444).copy(alpha = 0.1f),
+                    iconContentColor = Color(0xFFF87171),
+                    onClick = onNavigateToThermalDiagnostics,
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                    icon = { Icon(Icons.Default.LocalFireDepartment, null) }
                 )
             }
 

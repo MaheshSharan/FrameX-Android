@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Speed
@@ -95,6 +96,7 @@ fun OverlayCustomizationScreen(
                 MetricModule("cpu_cluster", "CPU Clusters", "U: 2.8G | P: 2.2G | E: 1.6G", Icons.Default.Memory, savedModules.contains("cpu_cluster")),
                 MetricModule("ram", "RAM Usage", "4.2 GB", Icons.Default.DeveloperBoard, savedModules.contains("ram")),
                 MetricModule("temp", "Battery Temp", "38°C", Icons.Default.DeviceThermostat, savedModules.contains("temp")),
+                MetricModule("thermal", "Thermal Monitor", "CPU 63°C · MODERATE", Icons.Default.LocalFireDepartment, savedModules.contains("thermal")),
                 MetricModule("net", "Network Speed", "1.2 MB", Icons.Default.NetworkCheck, savedModules.contains("net"))
             )
         )

@@ -111,14 +111,14 @@ class PerformanceViewModel @Inject constructor(
         // overlay toggle — via a transient override, not by mutating their setting.
         // "ping" must be included here or PingMonitor never starts polling, and
         // the PING card reads MetricsState's default (0) forever.
-        metricsEngine.setScreenOverrideModules(setOf("cpu", "ram", "ping"))
+        metricsEngine.setScreenOverrideModules(setOf("cpu", "ram", "ping"), requesterKey = "performance_screen")
     }
 
     override fun onCleared() {
         super.onCleared()
         // Release the override so CPU/RAM polling reverts to whatever the user
         // actually has toggled on for the overlay once this screen is left.
-        metricsEngine.setScreenOverrideModules(emptySet())
+        metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "performance_screen")
     }
 
     fun loadUserApps() {
