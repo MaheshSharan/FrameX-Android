@@ -11,11 +11,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DeveloperBoard
-import androidx.compose.material.icons.filled.DeviceThermostat
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +35,7 @@ class AppearanceViewModel @Inject constructor(
 ) : ViewModel() {
     val overlayMode = settingsRepository.overlayMode
     val enabledModules = settingsRepository.enabledModules
+    val moduleOrder = settingsRepository.moduleOrder
     val overlayOpacity = settingsRepository.overlayOpacity
     val overlayTextSize = settingsRepository.overlayTextSize
     val overlayUseMonospace = settingsRepository.overlayUseMonospace
@@ -76,6 +72,7 @@ fun AppearanceScreen(
     val savedTextColorIndex by viewModel.overlayTextColorIndex.collectAsState()
     val mode by viewModel.overlayMode.collectAsState()
     val enabledModules by viewModel.enabledModules.collectAsState()
+    val moduleOrder by viewModel.moduleOrder.collectAsState()
     
     val context = LocalContext.current
 
@@ -139,16 +136,14 @@ fun AppearanceScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.DarkGray)
                 ) {
-                    // Dynamic Overlay inside
-                    val availableModules = listOf(
-                        Triple("fps", "FPS", "120") to Icons.Default.Speed,
-                        Triple("cpu", "CPU", "34%") to Icons.Default.Memory,
-                        Triple("ram", "RAM", "4.2 GB") to Icons.Default.DeveloperBoard,
-                        Triple("temp", "TEMP", "38°C") to Icons.Default.DeviceThermostat,
-                        Triple("net", "NET", "1.2 MB") to Icons.Default.NetworkCheck
-                    )
-                    
-                    val activeList = availableModules.filter { enabledModules.contains(it.first.first) }
+                    // Dynamic Overlay inside — ordered per the user's Overlay Config
+                    // customization so this preview always matches the real overlay.
+                    val activeList = com.framex.app.metrics.resolveMetricModuleOrder(moduleOrder)
+                        .filter { enabledModules.contains(it.storageKey) }
+                        .map { id ->
+                            val info = com.framex.app.metrics.METRIC_MODULE_REGISTRY.getValue(id)
+                            Triple(id.storageKey, info.overlayShortLabel, info.previewSampleValue) to info.icon
+                        }
                     val accentColor = colors[selectedColorIndex]
                     val fontFamily = if (useMonospace) androidx.compose.ui.text.font.FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
                     val textScale = when(selectedTextSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }

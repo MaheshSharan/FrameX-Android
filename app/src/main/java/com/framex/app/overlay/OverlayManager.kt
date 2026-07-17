@@ -32,15 +32,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.framex.app.metrics.METRIC_MODULE_REGISTRY
+import com.framex.app.metrics.metricValueFor
+import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.ui.theme.FrameXTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -70,6 +70,7 @@ class OverlayManager @Inject constructor(
                 FrameXTheme {
                     val mode by settingsRepository.overlayMode.collectAsState()
                     val enabledModules by settingsRepository.enabledModules.collectAsState()
+                    val moduleOrder by settingsRepository.moduleOrder.collectAsState()
                     val opacity by settingsRepository.overlayOpacity.collectAsState()
                     val textSize by settingsRepository.overlayTextSize.collectAsState()
                     val useMonospace by settingsRepository.overlayUseMonospace.collectAsState()
@@ -82,6 +83,7 @@ class OverlayManager @Inject constructor(
                     OverlayContent(
                         mode = mode,
                         enabledModules = enabledModules,
+                        moduleOrder = moduleOrder,
                         opacity = opacity,
                         textSize = textSize,
                         useMonospace = useMonospace,
@@ -268,6 +270,7 @@ class OverlayManager @Inject constructor(
 fun OverlayContent(
     mode: String,
     enabledModules: Set<String>,
+    moduleOrder: List<String>,
     opacity: Float,
     textSize: Int,
     useMonospace: Boolean,
@@ -280,21 +283,14 @@ fun OverlayContent(
     onDragEnd: () -> Unit = {},
     onModeToggle: () -> Unit = {}
 ) {
-    val availableModules = listOf(
-        Triple("fps", "FPS", "${metricsState.fps}") to Icons.Default.Speed,
-        Triple("cpu", "CPU", "${metricsState.cpuMhz} MHz") to Icons.Default.Memory,
-        Triple("cpu_cluster", "CPU Clusters", "U:${metricsState.cpuClusterUltraMhz} P:${metricsState.cpuClusterPerfMhz} E:${metricsState.cpuClusterEffMhz}") to Icons.Default.Memory,
-        Triple("ram", "RAM", String.format("%.1f GB", metricsState.ramUsedGb)) to Icons.Default.DeveloperBoard,
-        Triple("temp", "TEMP", String.format("%.1f°C", metricsState.batteryTempC)) to Icons.Default.DeviceThermostat,
-        Triple(
-            "thermal",
-            "THERMAL",
-            String.format("%.0f°C %s", metricsState.thermalCpuC, thermalStatusShortLabel(metricsState.thermalStatus))
-        ) to Icons.Default.LocalFireDepartment,
-        Triple("net", "NET", if (metricsState.networkRxKbps > 1024) String.format("%.1f MB/s", (metricsState.networkRxKbps + metricsState.networkTxKbps) / 1024f) else String.format("%.0f KB/s", metricsState.networkRxKbps + metricsState.networkTxKbps)) to Icons.Default.NetworkCheck
-    )
-    
-    val activeList = availableModules.filter { enabledModules.contains(it.first.first) }
+    // Ordered per the user's Overlay Config customization (falls back to canonical order
+    // for first-run users, or for any module introduced since they last customized it).
+    val activeList = resolveMetricModuleOrder(moduleOrder)
+        .filter { enabledModules.contains(it.storageKey) }
+        .map { id ->
+            val info = METRIC_MODULE_REGISTRY.getValue(id)
+            Triple(id.storageKey, info.overlayShortLabel, metricValueFor(id, metricsState)) to info.icon
+        }
     
     val colors = listOf(
         MaterialTheme.colorScheme.primary,
@@ -392,13 +388,6 @@ fun OverlayContent(
             }
         }
     }
-}
-
-// Short label for the overlay's compact/minimal display — full names are used in
-// the Performance/detail screens where there's room to show "MODERATE" in full.
-private fun thermalStatusShortLabel(status: Int): String = when (status) {
-    0 -> "OK"; 1 -> "OK"; 2 -> "WARM"; 3 -> "HOT"
-    4 -> "CRIT"; 5, 6 -> "!!!"; else -> "?"
 }
 
 private class OverlayLifecycleOwner : SavedStateRegistryOwner, ViewModelStoreOwner {
