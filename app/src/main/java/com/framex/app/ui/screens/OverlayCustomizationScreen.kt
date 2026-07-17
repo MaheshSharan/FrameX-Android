@@ -71,7 +71,7 @@ class OverlayCustomizationViewModel @Inject constructor(
     val useMonospace = settingsRepository.overlayUseMonospace
     val colorIndex = settingsRepository.overlayColorIndex
 
-    fun saveSettings(mode: String, orderedModules: List<ModuleRowState>) {
+    internal fun saveSettings(mode: String, orderedModules: List<ModuleRowState>) {
         settingsRepository.setOverlayMode(mode)
         settingsRepository.setEnabledModules(orderedModules.filter { it.enabled }.map { it.id.storageKey }.toSet())
         settingsRepository.setModuleOrder(orderedModules.map { it.id.storageKey })
