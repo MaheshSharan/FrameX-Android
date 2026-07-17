@@ -57,7 +57,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 /** Editable row state for one metric module: identity plus whether it's shown in the overlay. */
-private data class ModuleRowState(val id: MetricModuleId, val enabled: Boolean)
+internal data class ModuleRowState(val id: MetricModuleId, val enabled: Boolean)
 
 @HiltViewModel
 class OverlayCustomizationViewModel @Inject constructor(
