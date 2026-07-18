@@ -101,7 +101,11 @@ fun OverlayCustomizationScreen(
     val fontFamily = if (useMonospace) FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
     val textScale = when (textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
 
-    val savedOrderIds = remember(savedModuleOrder) { resolveMetricModuleOrder(savedModuleOrder) }
+    val savedOrderIds = remember(savedModuleOrder) {
+        val resolved = resolveMetricModuleOrder(savedModuleOrder)
+        val withoutFps = resolved.filter { it != MetricModuleId.FPS }
+        listOf(MetricModuleId.FPS) + withoutFps
+    }
 
     var modules by remember(savedModules, savedModuleOrder) {
         mutableStateOf(
@@ -176,6 +180,7 @@ fun OverlayCustomizationScreen(
                 key = { it.id.storageKey },
                 itemHeight = MODULE_ROW_HEIGHT,
                 itemSpacing = MODULE_ROW_SPACING,
+                minReorderIndex = 1,
                 onMove = { from, to ->
                     modules = modules.toMutableList().apply { add(to, removeAt(from)) }
                 },

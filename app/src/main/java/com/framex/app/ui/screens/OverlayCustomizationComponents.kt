@@ -195,7 +195,7 @@ internal fun ModuleRow(
     module: ModuleRowState,
     accentColor: Color,
     isDragging: Boolean,
-    dragHandleModifier: Modifier,
+    dragHandleModifier: Modifier?,
     onEnabledChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -240,11 +240,16 @@ internal fun ModuleRow(
             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
         )
         Spacer(modifier = Modifier.width(16.dp))
-        Icon(
-            Icons.Default.DragIndicator,
-            contentDescription = "Drag to reorder",
-            tint = Color.Gray,
-            modifier = dragHandleModifier
-        )
+        if (dragHandleModifier != null) {
+            Icon(
+                Icons.Default.DragIndicator,
+                contentDescription = "Drag to reorder",
+                tint = Color.Gray,
+                modifier = dragHandleModifier
+            )
+        } else {
+            Spacer(modifier = Modifier.size(24.dp))
+        }
     }
 }
+

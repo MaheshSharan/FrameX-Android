@@ -1,5 +1,6 @@
 package com.framex.app.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -8,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,12 +34,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Content-space distance from the viewport edge, in px, that triggers autoscroll while held. */
 private const val AUTO_SCROLL_EDGE_ZONE_PX = 150f
-
-/** Autoscroll speed in px per tick while a held row sits inside the edge zone. */
-private const val AUTO_SCROLL_SPEED_PX = 14f
 
 /** How often the autoscroll loop advances while active, in milliseconds. */
 private const val AUTO_SCROLL_TICK_MS = 16L
@@ -45,25 +46,18 @@ private const val AUTO_SCROLL_TICK_MS = 16L
 private val DRAG_HANDLE_TOUCH_PADDING = 8.dp
 
 /**
- * Drives a handle-triggered drag-to-reorder gesture for a [LazyColumn] of uniform-height rows.
- *
- * Deliberately avoids reading [LazyListState.layoutInfo]'s per-item info mid-gesture: that data
- * reflects the *previous* layout pass and lags behind rapid pointer events, which is what
- * previously caused the drag to compute swap targets against stale positions — producing
- * overlapping rows, growing gaps, and the drag appearing to "let go" mid-motion. Instead, because
- * every row has the same [itemHeightPx], a row's position is pure arithmetic
- * (`index * itemHeightPx`), so the entire gesture is tracked as an accumulated content-space
- * offset — correct regardless of what LazyColumn's virtualization or recomposition timing is
- * doing, and correct even when the target row isn't currently rendered (e.g. dragging the top
- * row down past several screens' worth of content).
+ * Tracks the drag gesture parameters and calculates slot indexes and offsets Authoritatively,
+ * factoring in both item height and item spacing to prevent drift and visual jumping.
  */
 private class UniformReorderState(
     private val lazyListState: LazyListState,
     private val coroutineScope: CoroutineScope,
     private val itemCount: () -> Int,
     private val itemHeightPx: Float,
+    private val itemSpacingPx: Float,
     private val topContentPaddingPx: Float,
-    private val onMove: (from: Int, to: Int) -> Unit
+    private val minReorderIndex: Int,
+    private val onMoveState: State<(from: Int, to: Int) -> Unit>
 ) {
     /** Index of the row currently being dragged, or null when no drag is in progress. */
     var draggingIndex by mutableStateOf<Int?>(null)
@@ -80,20 +74,35 @@ private class UniformReorderState(
     /** Authoritative content-space Y (unaffected by scroll) of the dragged row's center. */
     private var draggedCenterContentSpace = 0f
 
-    private var autoScrollDirection = 0
+    private var autoScrollSpeed = 0f
     private var autoScrollJob: Job? = null
 
+    private val slotHeightPx: Float
+        get() = itemHeightPx + itemSpacingPx
+
     fun onDragStart(index: Int) {
+        if (index < minReorderIndex) return
         draggingIndex = index
-        draggedCenterContentSpace = (index + 0.5f) * itemHeightPx
+        draggedCenterContentSpace = topContentPaddingPx + index * slotHeightPx + itemHeightPx / 2
         dragOffsetPx = 0f
+        autoScrollSpeed = 0f
     }
 
     fun onDrag(deltaY: Float) {
         if (draggingIndex == null) return
         draggedCenterContentSpace += deltaY
+        
+        // Clamp draggedCenterContentSpace within valid bounds of the list to prevent card from flying off-screen
+        val count = itemCount()
+        if (count > 0) {
+            val minIndex = minReorderIndex.coerceIn(0, count - 1)
+            val minCenter = topContentPaddingPx + minIndex * slotHeightPx + itemHeightPx / 2
+            val maxCenter = topContentPaddingPx + (count - 1) * slotHeightPx + itemHeightPx / 2
+            draggedCenterContentSpace = draggedCenterContentSpace.coerceIn(minCenter, maxCenter)
+        }
+
         recomputeSlotAndOffset()
-        recomputeAutoScrollDirection()
+        recomputeAutoScrollSpeed()
         ensureAutoScrollLoopRunning()
     }
 
@@ -104,54 +113,75 @@ private class UniformReorderState(
         draggingIndex = null
         dragOffsetPx = 0f
         draggedCenterContentSpace = 0f
-        autoScrollDirection = 0
+        autoScrollSpeed = 0f
     }
 
     private fun recomputeSlotAndOffset() {
         val current = draggingIndex ?: return
-        val targetIndex = (draggedCenterContentSpace / itemHeightPx)
-            .toInt()
-            .coerceIn(0, (itemCount() - 1).coerceAtLeast(0))
+        val count = itemCount()
+        if (count == 0) return
+
+        val minIndex = minReorderIndex.coerceIn(0, count - 1)
+        val targetIndex = ((draggedCenterContentSpace - topContentPaddingPx - itemHeightPx / 2) / slotHeightPx)
+            .roundToInt()
+            .coerceIn(minIndex, count - 1)
 
         if (targetIndex != current) {
-            onMove(current, targetIndex)
+            onMoveState.value(current, targetIndex)
             draggingIndex = targetIndex
         }
 
         val settledIndex = draggingIndex ?: return
-        dragOffsetPx = draggedCenterContentSpace - (settledIndex + 0.5f) * itemHeightPx
+        val naturalCenter = topContentPaddingPx + settledIndex * slotHeightPx + itemHeightPx / 2
+        dragOffsetPx = draggedCenterContentSpace - naturalCenter
     }
 
-    private fun currentScrollOffsetPx(): Float =
-        lazyListState.firstVisibleItemIndex * itemHeightPx + lazyListState.firstVisibleItemScrollOffset
+    private fun currentScrollOffsetPx(): Float {
+        val firstIndex = lazyListState.firstVisibleItemIndex
+        val firstOffset = lazyListState.firstVisibleItemScrollOffset
+        return if (firstIndex == 0) {
+            firstOffset.toFloat()
+        } else {
+            topContentPaddingPx + firstIndex * slotHeightPx + firstOffset
+        }
+    }
 
-    private fun recomputeAutoScrollDirection() {
-        val viewportY = draggedCenterContentSpace - currentScrollOffsetPx() + topContentPaddingPx
+    private fun recomputeAutoScrollSpeed() {
+        val viewportY = draggedCenterContentSpace - currentScrollOffsetPx()
         val viewportHeight = lazyListState.layoutInfo.viewportSize.height.toFloat()
 
-        autoScrollDirection = when {
-            viewportY < AUTO_SCROLL_EDGE_ZONE_PX && lazyListState.canScrollBackward -> -1
-            viewportY > viewportHeight - AUTO_SCROLL_EDGE_ZONE_PX && lazyListState.canScrollForward -> 1
-            else -> 0
+        autoScrollSpeed = when {
+            viewportY < AUTO_SCROLL_EDGE_ZONE_PX && lazyListState.canScrollBackward -> {
+                val ratio = (AUTO_SCROLL_EDGE_ZONE_PX - viewportY) / AUTO_SCROLL_EDGE_ZONE_PX
+                val speed = 3f + (22f * ratio.coerceIn(0f, 1f))
+                -speed
+            }
+            viewportY > viewportHeight - AUTO_SCROLL_EDGE_ZONE_PX && lazyListState.canScrollForward -> {
+                val distFromEdge = viewportY - (viewportHeight - AUTO_SCROLL_EDGE_ZONE_PX)
+                val ratio = distFromEdge / AUTO_SCROLL_EDGE_ZONE_PX
+                val speed = 3f + (22f * ratio.coerceIn(0f, 1f))
+                speed
+            }
+            else -> 0f
         }
     }
 
     /**
-     * Autoscroll must keep running while the finger is held stationary near an edge — pointer
-     * events only fire on movement, so this uses its own repeating loop rather than piggybacking
-     * on [onDrag]. Started lazily on first need and left running (cheaply idling) for the rest of
-     * the drag; [onDragEnd] is the only thing that cancels it.
+     * Autoscroll runs dynamically based on proportional speed. Swapping continues as list scrolls.
      */
     private fun ensureAutoScrollLoopRunning() {
         if (autoScrollJob?.isActive == true) return
         autoScrollJob = coroutineScope.launch {
             while (isActive && draggingIndex != null) {
-                if (autoScrollDirection != 0) {
-                    val delta = AUTO_SCROLL_SPEED_PX * autoScrollDirection
-                    lazyListState.scrollBy(delta)
-                    draggedCenterContentSpace += delta
-                    recomputeSlotAndOffset()
-                    recomputeAutoScrollDirection()
+                if (autoScrollSpeed != 0f) {
+                    val consumed = lazyListState.scrollBy(autoScrollSpeed)
+                    if (consumed != 0f) {
+                        draggedCenterContentSpace += consumed
+                        recomputeSlotAndOffset()
+                        recomputeAutoScrollSpeed()
+                    } else {
+                        autoScrollSpeed = 0f
+                    }
                 }
                 delay(AUTO_SCROLL_TICK_MS)
             }
@@ -161,21 +191,9 @@ private class UniformReorderState(
 
 /**
  * A [LazyColumn] of fixed-height rows that can be reordered by dragging a designated handle.
- * [itemContent] receives the drag-handle [Modifier] plus whether that specific row is the one
- * currently being dragged — apply "held" styling (border/elevation/etc.) based on that flag.
- * This component owns all positioning itself (tracking the dragged row under the finger and
- * elevating it above its neighbors), so [itemContent] never has to think about offsets.
- *
- * @param items the current, externally-owned list. Never mutated directly here — reordering is
- *   reported through [onMove], and the caller must apply it before the next recomposition.
- * @param key stable identity per item, so Compose preserves row state (including this
- *   component's own gesture-detection coroutine) across reorders instead of disposing it.
- * @param itemHeight the exact height every row renders at. This is a hard requirement, not a
- *   hint — content taller than this is clipped, because the drag math assumes every row occupies
- *   precisely this many pixels; see [UniformReorderState].
- * @param itemSpacing vertical gap below each row.
- * @param onMove called with (fromIndex, toIndex) whenever the drag crosses into a new slot.
+ * Includes placement animations for non-dragged rows and is fully spacing-aware.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <T> ReorderableList(
     items: List<T>,
@@ -185,22 +203,28 @@ fun <T> ReorderableList(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     itemSpacing: Dp = 0.dp,
-    itemContent: @Composable (item: T, dragHandleModifier: Modifier, isDragging: Boolean) -> Unit
+    minReorderIndex: Int = 0,
+    itemContent: @Composable LazyItemScope.(item: T, dragHandleModifier: Modifier?, isDragging: Boolean) -> Unit
 ) {
     val density = LocalDensity.current
     val itemHeightPx = with(density) { itemHeight.toPx() }
+    val itemSpacingPx = with(density) { itemSpacing.toPx() }
     val topContentPaddingPx = with(density) { contentPadding.calculateTopPadding().toPx() }
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    val reorderState = remember(lazyListState, coroutineScope, itemHeightPx, topContentPaddingPx) {
+    val onMoveState = rememberUpdatedState(onMove)
+
+    val reorderState = remember(lazyListState, coroutineScope, itemHeightPx, itemSpacingPx, topContentPaddingPx, minReorderIndex) {
         UniformReorderState(
             lazyListState = lazyListState,
             coroutineScope = coroutineScope,
             itemCount = { items.size },
             itemHeightPx = itemHeightPx,
+            itemSpacingPx = itemSpacingPx,
             topContentPaddingPx = topContentPaddingPx,
-            onMove = onMove
+            minReorderIndex = minReorderIndex,
+            onMoveState = onMoveState
         )
     }
 
@@ -210,29 +234,34 @@ fun <T> ReorderableList(
         contentPadding = contentPadding
     ) {
         itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
-            // pointerInput is keyed by the item's stable identity (not its index) so the
-            // gesture-detection coroutine survives reorders instead of restarting — which means
-            // a plain captured `index` would go stale the moment this row moves. rememberUpdatedState
-            // keeps onDragStart reading whatever index this row currently holds when a new drag begins.
             val latestIndex = rememberUpdatedState(index)
             val isDragging = reorderState.draggingIndex == index
             val offsetPx = if (isDragging) reorderState.dragOffsetPx else 0f
 
-            val handleModifier = Modifier
-                .padding(DRAG_HANDLE_TOUCH_PADDING)
-                .pointerInput(key(item)) {
-                    detectDragGestures(
-                        onDragStart = { reorderState.onDragStart(latestIndex.value) },
-                        onDragEnd = { reorderState.onDragEnd() },
-                        onDragCancel = { reorderState.onDragEnd() },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            reorderState.onDrag(dragAmount.y)
-                        }
-                    )
-                }
+            val handleModifier = if (index >= minReorderIndex) {
+                Modifier
+                    .padding(DRAG_HANDLE_TOUCH_PADDING)
+                    .pointerInput(key(item)) {
+                        detectDragGestures(
+                            onDragStart = { reorderState.onDragStart(latestIndex.value) },
+                            onDragEnd = { reorderState.onDragEnd() },
+                            onDragCancel = { reorderState.onDragEnd() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                reorderState.onDrag(dragAmount.y)
+                            }
+                        )
+                    }
+            } else {
+                null
+            }
 
-            Box(modifier = Modifier.padding(bottom = itemSpacing)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = itemSpacing)
+                    .then(if (isDragging) Modifier else Modifier.animateItemPlacement())
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
