@@ -33,10 +33,17 @@ data class MetricsState(
     val thermalNpuC: Float = 0f,
     val thermalSkinC: Float = 0f,
     val thermalStatus: Int = 0,
+    val thermalReadStatus: MetricReadStatus = MetricReadStatus.Loading,
+    val hasThermalCpu: Boolean = false,
+    val hasThermalGpu: Boolean = false,
+    val hasThermalNpu: Boolean = false,
+    val hasThermalSkin: Boolean = false,
+    val hasThermalBattery: Boolean = false,
     // Busiest process at this tick (see TopProcessMonitor) — names the likely
     // culprit when a frame drop isn't explained by thermal or frequency alone.
     val topProcessName: String? = null,
-    val topProcessCpuPercent: Float = 0f
+    val topProcessCpuPercent: Float = 0f,
+    val topProcessReadStatus: MetricReadStatus = MetricReadStatus.Loading
 )
 
 @Singleton
@@ -176,7 +183,13 @@ class MetricsEngine @Inject constructor(
                             thermalGpuC = t.gpuC,
                             thermalNpuC = t.npuC,
                             thermalSkinC = t.skinC,
-                            thermalStatus = t.status
+                            thermalStatus = t.status,
+                            thermalReadStatus = t.readStatus,
+                            hasThermalCpu = t.hasCpu,
+                            hasThermalGpu = t.hasGpu,
+                            hasThermalNpu = t.hasNpu,
+                            hasThermalSkin = t.hasSkin,
+                            hasThermalBattery = t.hasBattery
                         )
                     }
                 }
@@ -188,8 +201,9 @@ class MetricsEngine @Inject constructor(
                 toggleModule("top_process", enabled) {
                     topProcessMonitor.topProcess.collect { top ->
                         _metricsState.value = _metricsState.value.copy(
-                            topProcessName = top?.name,
-                            topProcessCpuPercent = top?.cpuPercent ?: 0f
+                            topProcessName = if (top.readStatus == MetricReadStatus.Ok) top.name else null,
+                            topProcessCpuPercent = top.cpuPercent,
+                            topProcessReadStatus = top.readStatus
                         )
                     }
                 }
@@ -218,10 +232,16 @@ class MetricsEngine @Inject constructor(
                 "temp"    -> _metricsState.value.copy(batteryTempC = 0f)
                 "thermal" -> _metricsState.value.copy(
                     thermalCpuC = 0f, thermalGpuC = 0f, thermalNpuC = 0f,
-                    thermalSkinC = 0f, thermalStatus = 0
+                    thermalSkinC = 0f, thermalStatus = 0,
+                    thermalReadStatus = MetricReadStatus.Loading,
+                    hasThermalCpu = false, hasThermalGpu = false, hasThermalNpu = false,
+                    hasThermalSkin = false, hasThermalBattery = false
                 )
                 "ping"    -> _metricsState.value.copy(pingMs = 0)
-                "top_process" -> _metricsState.value.copy(topProcessName = null, topProcessCpuPercent = 0f)
+                "top_process" -> _metricsState.value.copy(
+                    topProcessName = null, topProcessCpuPercent = 0f,
+                    topProcessReadStatus = MetricReadStatus.Loading
+                )
                 else      -> _metricsState.value
             }
         }

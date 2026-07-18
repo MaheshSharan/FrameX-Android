@@ -1,7 +1,9 @@
 package com.framex.app.ui.screens
 
 import android.content.Intent
+import android.os.Build
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,17 +25,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.framex.app.metrics.MetricReadStatus
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.MetricsState
 import com.framex.app.metrics.SessionLogger
+import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -47,7 +53,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ThermalDiagnosticsViewModel @Inject constructor(
     private val metricsEngine: MetricsEngine,
-    private val sessionLogger: SessionLogger
+    private val sessionLogger: SessionLogger,
+    private val shizukuManager: ShizukuManager
 ) : ViewModel() {
 
     val metricsState = metricsEngine.metricsState
@@ -59,12 +66,20 @@ class ThermalDiagnosticsViewModel @Inject constructor(
     val isRecording = sessionLogger.isRecording
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isShizukuAvailable = shizukuManager.isShizukuAvailable
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val hasShizukuPermission = shizukuManager.hasPermission
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
-        // Force "thermal" and "temp" on for this screen — "temp" (battery) previously
-        // wasn't forced here, so BATTERY read 0 unless the user separately had it
-        // toggled on their overlay. Uses a distinct requester key so it can't collide
+        // Force "thermal", "temp", and "top_process" on for this screen.
+        // Uses a distinct requester key so it can't collide
         // with SessionLogger's own override when a recording is also active.
-        metricsEngine.setScreenOverrideModules(setOf("thermal", "temp"), requesterKey = "thermal_diagnostics_screen")
+        metricsEngine.setScreenOverrideModules(
+            setOf("thermal", "temp", "top_process"),
+            requesterKey = "thermal_diagnostics_screen"
+        )
     }
 
     override fun onCleared() {
@@ -80,7 +95,18 @@ class ThermalDiagnosticsViewModel @Inject constructor(
         }
     }
 
-    fun recordedSampleCount(): Int = sessionLogger.currentRecordingCount()
+    fun recordedSampleCount(snapshots: List<MetricsEngine.MetricsSnapshot>): Int {
+        val startIndex = sessionLogger.recordingStartIndex
+        return (snapshots.size - startIndex).coerceAtLeast(0)
+    }
+
+    fun requestShizukuPermission() {
+        shizukuManager.requestPermission()
+    }
+
+    fun refreshShizukuState() {
+        shizukuManager.refreshState()
+    }
 
     fun exportAndShare(onReady: (Intent) -> Unit, onEmpty: () -> Unit) {
         viewModelScope.launch {
@@ -105,9 +131,47 @@ private fun thermalStatusLabel(status: Int): String = when (status) {
 
 private fun thermalStatusColor(status: Int): Color = when {
     status <= 1 -> Color(0xFF34D399) // green — none/light
-    status == 2 -> Color(0xFFFBBF24) // amber — moderate (this is what tripped at your 40.6°C skin reading)
+    status == 2 -> Color(0xFFFBBF24) // amber — moderate
     status == 3 -> Color(0xFFF97316) // orange — severe
     else -> Color(0xFFEF4444)        // red — critical and above
+}
+
+private fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricReadStatus): String {
+    return when (readStatus) {
+        MetricReadStatus.NoShizuku -> "Needs Shizuku"
+        MetricReadStatus.EmptyOutput -> "Unavailable"
+        MetricReadStatus.ParseFailed -> "Parse Failed"
+        MetricReadStatus.Loading -> "Waiting..."
+        else -> {
+            if (present) {
+                String.format(java.util.Locale.US, "%.1f°C", value)
+            } else {
+                "Unavailable"
+            }
+        }
+    }
+}
+
+private fun getBatteryDisplayValue(tempC: Float): String {
+    return if (tempC <= 0f) "Unavailable" else String.format(java.util.Locale.US, "%.1f°C", tempC)
+}
+
+private fun getTopProcessDisplayValue(name: String?, percent: Float, readStatus: MetricReadStatus): String {
+    return when (readStatus) {
+        MetricReadStatus.NoShizuku -> "Needs Shizuku"
+        MetricReadStatus.EmptyOutput -> "Unavailable"
+        MetricReadStatus.ParseFailed -> "Parse Failed"
+        MetricReadStatus.Loading -> "Waiting..."
+        MetricReadStatus.NoData -> "No process data"
+        MetricReadStatus.Ok -> {
+            if (name != null) {
+                "$name (${String.format(java.util.Locale.US, "%.0f", percent)}%)"
+            } else {
+                "—"
+            }
+        }
+        else -> "—"
+    }
 }
 
 @Composable
@@ -118,8 +182,21 @@ fun ThermalDiagnosticsScreen(
     val metricsState by viewModel.metricsState.collectAsState()
     val snapshotHistory by viewModel.snapshotHistory.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsState()
+    val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+
+    // Re-check Shizuku state on resume
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshShizukuState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Last 60 snapshots (~60s at 1s cadence) drive the correlation graph — same
     // window size as the Dashboard's FPS sparkline, so the two feel consistent.
@@ -147,6 +224,64 @@ fun ThermalDiagnosticsScreen(
                     .padding(horizontal = 24.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
+                // Shizuku CTA Banner
+                if (!isShizukuAvailable || !hasShizukuPermission) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = if (!isShizukuAvailable) "Shizuku Service Not Running" else "Shizuku Authorization Required",
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (!isShizukuAvailable) {
+                                    "Start Shizuku via wireless debugging or adb to view active CPU/GPU thermal sensors and top processes."
+                                } else {
+                                    "Authorize FrameX in the Shizuku app to read system thermal stats and CPU dumps."
+                                },
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                        if (intent != null) {
+                                            context.startActivity(intent)
+                                        } else {
+                                            Toast.makeText(context, "Shizuku app not found", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f), contentColor = Color.White),
+                                    modifier = Modifier.height(36.dp),
+                                    shape = CircleShape
+                                ) {
+                                    Text("Open Shizuku", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                if (isShizukuAvailable && !hasShizukuPermission) {
+                                    Button(
+                                        onClick = { viewModel.requestShizukuPermission() },
+                                        modifier = Modifier.height(36.dp),
+                                        shape = CircleShape
+                                    ) {
+                                        Text("Grant Permission", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Current status banner — the single most useful glance value.
                 val status = metricsState.thermalStatus
                 Row(
@@ -166,9 +301,18 @@ fun ThermalDiagnosticsScreen(
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
+                        val statusText = when (status) {
+                            0 -> "NONE — no elevated thermal status reported"
+                            1 -> "LIGHT — slight temperature increase"
+                            2 -> "MODERATE — performance may be slightly throttled"
+                            3 -> "SEVERE — throttling is active to reduce heat"
+                            4 -> "CRITICAL — severe throttling active"
+                            5 -> "EMERGENCY — critical safety limits reached"
+                            6 -> "SHUTDOWN — device shutting down due to heat"
+                            else -> "UNKNOWN thermal status"
+                        }
                         Text(
-                            if (status >= 2) "Android is actively throttling performance right now"
-                            else "No throttling active",
+                            statusText,
                             color = Color.Gray,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -179,25 +323,30 @@ fun ThermalDiagnosticsScreen(
 
                 // Readings grid
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ReadingCard("CPU", String.format("%.1f°C", metricsState.thermalCpuC), Modifier.weight(1f))
-                    ReadingCard("GPU", String.format("%.1f°C", metricsState.thermalGpuC), Modifier.weight(1f))
+                    ReadingCard("CPU", getThermalDisplayValue(metricsState.thermalCpuC, metricsState.hasThermalCpu, metricsState.thermalReadStatus), Modifier.weight(1f))
+                    ReadingCard("GPU", getThermalDisplayValue(metricsState.thermalGpuC, metricsState.hasThermalGpu, metricsState.thermalReadStatus), Modifier.weight(1f))
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ReadingCard("SKIN", String.format("%.1f°C", metricsState.thermalSkinC), Modifier.weight(1f))
-                    ReadingCard("BATTERY", String.format("%.1f°C", metricsState.batteryTempC), Modifier.weight(1f))
+                    ReadingCard("SKIN", getThermalDisplayValue(metricsState.thermalSkinC, metricsState.hasThermalSkin, metricsState.thermalReadStatus), Modifier.weight(1f))
+                    ReadingCard("NPU", getThermalDisplayValue(metricsState.thermalNpuC, metricsState.hasThermalNpu, metricsState.thermalReadStatus), Modifier.weight(1f))
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ReadingCard("BATTERY", getBatteryDisplayValue(metricsState.batteryTempC), Modifier.weight(1f))
                     ReadingCard("JANKY FRAMES", "${metricsState.jankyFrames}", Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
                     ReadingCard(
                         "TOP PROCESS",
-                        metricsState.topProcessName?.let { "$it (${String.format("%.0f", metricsState.topProcessCpuPercent)}%)" } ?: "—",
-                        Modifier.weight(1f)
+                        getTopProcessDisplayValue(metricsState.topProcessName, metricsState.topProcessCpuPercent, metricsState.topProcessReadStatus),
+                        Modifier.fillMaxWidth()
                     )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
+
                 Text("FPS vs Thermal — last 60s", style = MaterialTheme.typography.titleSmall, color = Color.White)
                 Text(
                     "Look for the moment FPS drops and check what moved at the same second below.",
@@ -234,8 +383,8 @@ fun ThermalDiagnosticsScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val count = viewModel.recordedSampleCount(snapshotHistory)
                 if (isRecording) {
-                    val count = viewModel.recordedSampleCount()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -247,6 +396,20 @@ fun ThermalDiagnosticsScreen(
                         Icon(Icons.Default.FiberManualRecord, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Recording — ${count}s captured", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                } else if (count > 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF34D399).copy(alpha = 0.1f))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.FiberManualRecord, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Last Session — ${count}s ready to export", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -322,37 +485,64 @@ private fun CorrelationGraph(
     snapshots: List<MetricsEngine.MetricsSnapshot>,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
-        if (snapshots.size < 2) return@Canvas
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (snapshots.size < 2) {
+            Text("Collecting samples...", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            val hasCpu = snapshots.any { it.state.hasThermalCpu }
+            val hasSkin = snapshots.any { it.state.hasThermalSkin }
 
-        val maxFps = (snapshots.maxOfOrNull { it.state.fps } ?: 1).coerceAtLeast(1)
-        val maxTemp = (snapshots.maxOfOrNull { maxOf(it.state.thermalCpuC, it.state.thermalSkinC) } ?: 1f).coerceAtLeast(1f)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val maxFps = (snapshots.maxOfOrNull { it.state.fps } ?: 1).coerceAtLeast(1)
+                
+                // Only count valid thermal readings when finding max temperature
+                val cpuTemps = if (hasCpu) snapshots.map { it.state.thermalCpuC } else emptyList()
+                val skinTemps = if (hasSkin) snapshots.map { it.state.thermalSkinC } else emptyList()
+                
+                val maxTemp = (cpuTemps + skinTemps).maxOrNull()?.coerceAtLeast(1f) ?: 100f
 
-        val stepX = size.width / (snapshots.size - 1).coerceAtLeast(1)
+                val stepX = size.width / (snapshots.size - 1).coerceAtLeast(1)
 
-        fun pointsFor(values: List<Float>, max: Float): List<Offset> =
-            values.mapIndexed { i, v ->
-                Offset(i * stepX, size.height - (v / max) * size.height)
+                fun pointsFor(values: List<Float>, max: Float): List<Offset> =
+                    values.mapIndexed { i, v ->
+                        Offset(i * stepX, size.height - (v / max) * size.height)
+                    }
+
+                val fpsPoints = pointsFor(snapshots.map { it.state.fps.toFloat() }, maxFps.toFloat())
+                
+                fun drawLine(points: List<Offset>, color: Color) {
+                    for (i in 0 until points.size - 1) {
+                        drawLine(
+                            color = color,
+                            start = points[i],
+                            end = points[i + 1],
+                            strokeWidth = 3f,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
+                if (hasCpu) {
+                    val cpuPoints = pointsFor(cpuTemps, maxTemp)
+                    drawLine(cpuPoints, Color(0xFFEF4444).copy(alpha = 0.8f))
+                }
+                if (hasSkin) {
+                    val skinPoints = pointsFor(skinTemps, maxTemp)
+                    drawLine(skinPoints, Color(0xFFFBBF24).copy(alpha = 0.8f))
+                }
+                drawLine(fpsPoints, Color(0xFF60A5FA))
             }
-
-        val fpsPoints = pointsFor(snapshots.map { it.state.fps.toFloat() }, maxFps.toFloat())
-        val cpuPoints = pointsFor(snapshots.map { it.state.thermalCpuC }, maxTemp)
-        val skinPoints = pointsFor(snapshots.map { it.state.thermalSkinC }, maxTemp)
-
-        fun drawLine(points: List<Offset>, color: Color) {
-            for (i in 0 until points.size - 1) {
-                drawLine(
-                    color = color,
-                    start = points[i],
-                    end = points[i + 1],
-                    strokeWidth = 3f,
-                    cap = StrokeCap.Round
-                )
+            
+            if (!hasCpu && !hasSkin) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Thermal series unavailable", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
-
-        drawLine(cpuPoints, Color(0xFFEF4444).copy(alpha = 0.8f))
-        drawLine(skinPoints, Color(0xFFFBBF24).copy(alpha = 0.8f))
-        drawLine(fpsPoints, Color(0xFF60A5FA))
     }
 }

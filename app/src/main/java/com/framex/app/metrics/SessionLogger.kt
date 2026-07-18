@@ -35,7 +35,8 @@ class SessionLogger @Inject constructor(
     // Snapshot index (into metricsEngine.snapshotHistory) marking where this
     // recording session started, so exporting doesn't include earlier history
     // that predates the user pressing "Start".
-    private var recordingStartIndex = 0
+    private var _recordingStartIndex = 0
+    val recordingStartIndex: Int get() = _recordingStartIndex
 
     private val _lastExportedFile = MutableStateFlow<File?>(null)
     val lastExportedFile: StateFlow<File?> = _lastExportedFile.asStateFlow()
@@ -47,7 +48,7 @@ class SessionLogger @Inject constructor(
     private val recordingModules = setOf("thermal", "temp", "cpu", "cpu_cluster", "ram", "top_process")
 
     fun startRecording() {
-        recordingStartIndex = metricsEngine.snapshotHistory.value.size
+        _recordingStartIndex = metricsEngine.snapshotHistory.value.size
         metricsEngine.setScreenOverrideModules(recordingModules, requesterKey = "session_logger")
         _isRecording.value = true
     }
@@ -60,10 +61,10 @@ class SessionLogger @Inject constructor(
     /** Writes the recorded window (start → now) to a CSV in app-private storage
      *  and returns a content:// URI ready to hand to a share Intent. Returns null
      *  if there's nothing to export. */
-    fun exportToFile(): File? {
+    suspend fun exportToFile(): File? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val all = metricsEngine.snapshotHistory.value
-        val window = if (recordingStartIndex in all.indices) all.subList(recordingStartIndex, all.size) else all
-        if (window.isEmpty()) return null
+        val window = if (_recordingStartIndex in all.indices) all.subList(_recordingStartIndex, all.size) else all
+        if (window.isEmpty()) return@withContext null
 
         val dir = File(context.filesDir, "session_logs").apply { mkdirs() }
         val name = "framex_session_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())}.csv"
@@ -90,7 +91,7 @@ class SessionLogger @Inject constructor(
         }
 
         _lastExportedFile.value = file
-        return file
+        file
     }
 
     /** Builds a share Intent for the given file via FileProvider. Caller starts it
@@ -110,6 +111,6 @@ class SessionLogger @Inject constructor(
     fun currentRecordingCount(): Int {
         if (!_isRecording.value) return 0
         val all = metricsEngine.snapshotHistory.value
-        return (all.size - recordingStartIndex).coerceAtLeast(0)
+        return (all.size - _recordingStartIndex).coerceAtLeast(0)
     }
 }
