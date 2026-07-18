@@ -24,6 +24,21 @@ class SettingsRepository @Inject constructor(
     )
     val enabledModules: StateFlow<Set<String>> = _enabledModules.asStateFlow()
 
+    // Display order of metric modules (both enabled and disabled), as module storage keys.
+    // Stored as a single delimited string rather than a StringSet — SharedPreferences'
+    // StringSet has no guaranteed iteration order, which would silently discard any
+    // ordering the user set up via drag-and-drop in Overlay Config. Empty when the user
+    // has never customized ordering; callers fall back to the canonical default order
+    // (see MetricModule.kt's resolveMetricModuleOrder).
+    private val _moduleOrder = MutableStateFlow(loadModuleOrder())
+    val moduleOrder: StateFlow<List<String>> = _moduleOrder.asStateFlow()
+
+    private fun loadModuleOrder(): List<String> =
+        prefs.getString(KEY_MODULE_ORDER, null)
+            ?.split(MODULE_ORDER_DELIMITER)
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
     private val _overlayOpacity = MutableStateFlow(prefs.getFloat(KEY_OVERLAY_OPACITY, 0.75f))
     val overlayOpacity: StateFlow<Float> = _overlayOpacity.asStateFlow()
 
@@ -66,6 +81,11 @@ class SettingsRepository @Inject constructor(
     fun setEnabledModules(modules: Set<String>) {
         prefs.edit().putStringSet(KEY_ENABLED_MODULES, modules).apply()
         _enabledModules.value = modules
+    }
+
+    fun setModuleOrder(order: List<String>) {
+        prefs.edit().putString(KEY_MODULE_ORDER, order.joinToString(MODULE_ORDER_DELIMITER)).apply()
+        _moduleOrder.value = order
     }
 
     fun setOverlayOpacity(opacity: Float) {
@@ -193,6 +213,8 @@ class SettingsRepository @Inject constructor(
     companion object {
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_ENABLED_MODULES = "enabled_modules"
+        private const val KEY_MODULE_ORDER = "module_order"
+        private const val MODULE_ORDER_DELIMITER = ","
         private const val KEY_OVERLAY_OPACITY = "overlay_opacity"
         private const val KEY_OVERLAY_TEXT_SIZE = "overlay_text_size"
         private const val KEY_OVERLAY_USE_MONOSPACE = "overlay_use_monospace"
