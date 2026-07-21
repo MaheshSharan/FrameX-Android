@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,7 +87,7 @@ class MetricsEngine @Inject constructor(
     // The overlay (OverlayManager/AppearanceScreen) reads settingsRepository.enabledModules
     // directly, so anything added here never affects what the overlay displays.
     private val _screenOverrideRequests = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
-    private val screenOverrideModules = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    private val screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
 
     /** Request that [modules] keep polling regardless of the persisted overlay toggle,
      *  under [requesterKey] so unrelated requesters don't clobber each other.
@@ -135,7 +136,7 @@ class MetricsEngine @Inject constructor(
             ) { persisted, override -> persisted + override }
                 .collect { enabled ->
                 toggleModule("cpu", enabled) {
-                    kotlinx.coroutines.coroutineScope {
+                    coroutineScope {
                         launch {
                             cpuMonitor.cpuUsage.collect {
                                 _metricsState.value = _metricsState.value.copy(cpuMhz = it)

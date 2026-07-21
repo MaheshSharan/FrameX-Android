@@ -289,52 +289,21 @@ class GamingModeEngine @Inject constructor(
 
             if (boostRam && !isAlreadyActive) {
                 // ----------------------------------------------------------------
-                // Phase 1 — OEM bloatware (using smart fallback)
-                // ----------------------------------------------------------------
-                val allSystemTargets = SAFE_TO_SUSPEND + GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist }
-                val totalPhases = allSystemTargets.size + 10
-                SAFE_TO_SUSPEND.forEachIndexed { idx, pkg ->
-                    _state.value = GamingModeState.Enabling(
-                        progress = idx.toFloat() / totalPhases,
-                        statusText = "Silencing ${pkg.substringAfterLast('.')}"
-                    )
-                    suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
-                }
-
-                // ----------------------------------------------------------------
-                // Phase 1.5 — Google apps (using smart fallback, respects whitelist)
+                // Phase 1 & 2 — Batch Suspend OEM, Google, and User Apps
                 // ----------------------------------------------------------------
                 val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist }
-                googleTargets.forEachIndexed { idx, pkg ->
-                    _state.value = GamingModeState.Enabling(
-                        progress = (SAFE_TO_SUSPEND.size + idx).toFloat() / totalPhases,
-                        statusText = "Suspending ${pkg.substringAfterLast('.')}"
-                    )
-                    suspendOrRestrict(pkg, pkg.substringAfterLast('.'))
-                }
-
-                // ----------------------------------------------------------------
-                // Phase 2 — User apps (using smart fallback & standby buckets)
-                // ----------------------------------------------------------------
-                affectedPkgs.addAll(googleTargets)
-
                 val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
                     .filter { it.packageName !in finalWhitelist }
+                val userTargets = userApps.map { it.packageName }
 
-                userApps.forEachIndexed { idx, app ->
-                    _state.value = GamingModeState.Enabling(
-                        progress = (allSystemTargets.size + idx).toFloat() / (allSystemTargets.size + userApps.size + 2),
-                        statusText = "Suspending ${app.label}"
-                    )
-                    suspendOrRestrict(app.packageName, app.label)
-                    
-                    // Restrict Standby Bucket to minimize CPU/alarm triggers
-                    try {
-                        shizukuManager.executeCommand("am set-standby-bucket ${app.packageName} restricted")
-                    } catch (e: Exception) { /* Non-critical */ }
-                    
-                    affectedPkgs.add(app.packageName)
-                }
+                val allTargets = (SAFE_TO_SUSPEND + googleTargets + userTargets).distinct()
+
+                _state.value = GamingModeState.Enabling(0.5f, "Suspending ${allTargets.size} background apps…")
+                shizukuManager.suspendPackages(allTargets, true)
+                shizukuManager.setAppOpMode(allTargets, 70, 1)
+
+                affectedPkgs.addAll(googleTargets)
+                affectedPkgs.addAll(userTargets)
             }
 
             // Persist the affected list so disableGamingMode restores only what we changed.
@@ -374,35 +343,7 @@ class GamingModeEngine @Inject constructor(
         }
     }
 
-    /**
-     * Attempts to fully suspend an app (gray icon). If the system blocks it
-     * (SecurityException on Android 16 system apps), it falls back to
-     * aggressive process killing and AppOps background restrictions.
-     */
-    private suspend fun suspendOrRestrict(packageName: String, label: String) {
-        // Step 1: Try pm suspend (the most effective state)
-        val suspendResult = shizukuManager.executeCommand("pm suspend --user 0 $packageName")
-        
-        // Step 2: Check if it was blocked by security policies
-        val isBlocked = suspendResult.contains("SecurityException", ignoreCase = true) ||
-                       suspendResult.contains("Error", ignoreCase = true) ||
-                       suspendResult.contains("restricted", ignoreCase = true)
 
-        if (isBlocked) {
-            // Step 3: Fallback — Kill and neuter the app via AppOps
-            shizukuManager.executeCommand("am force-stop $packageName")
-            shizukuManager.executeCommand("cmd appops set $packageName RUN_IN_BACKGROUND ignore")
-            shizukuManager.executeCommand("cmd appops set $packageName RUN_ANY_IN_BACKGROUND ignore")
-            shizukuManager.executeCommand("cmd appops set $packageName START_FOREGROUND ignore")
-            shizukuManager.executeCommand("cmd appops set $packageName WAKE_LOCK ignore")
-        } else {
-            // Even if suspended successfully, we still apply AppOps as a backup layer
-            shizukuManager.executeCommand("cmd appops set $packageName RUN_IN_BACKGROUND ignore")
-            shizukuManager.executeCommand("cmd appops set $packageName RUN_ANY_IN_BACKGROUND ignore")
-            shizukuManager.executeCommand("cmd appops set $packageName WAKE_LOCK ignore")
-            shizukuManager.executeCommand("am force-stop $packageName")
-        }
-    }
 
     /**
      * Full Gaming Mode deactivation sequence.
@@ -415,27 +356,12 @@ class GamingModeEngine @Inject constructor(
         _state.value = GamingModeState.Disabling
 
         try {
-            // Unsuspend all OEM packages and restore AppOps
-            SAFE_TO_SUSPEND.forEach { pkg ->
-                shizukuManager.executeCommand("pm unsuspend --user 0 $pkg")
-                shizukuManager.executeCommand("cmd appops set $pkg RUN_IN_BACKGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg RUN_ANY_IN_BACKGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg START_FOREGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg WAKE_LOCK allow")
-            }
+            // Unsuspend all OEM packages and user packages in a single batched IPC call
+            val affectedUserPkgs = settingsRepository.getGamingAffectedPackages()
+            val allToUnsuspend = (SAFE_TO_SUSPEND + affectedUserPkgs).distinct()
 
-            // Unsuspend + restore AppOps + Standby Bucket for user packages we actually changed
-            val affected = settingsRepository.getGamingAffectedPackages()
-            affected.forEach { pkg ->
-                shizukuManager.executeCommand("pm unsuspend --user 0 $pkg")
-                shizukuManager.executeCommand("cmd appops set $pkg RUN_IN_BACKGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg RUN_ANY_IN_BACKGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg START_FOREGROUND allow")
-                shizukuManager.executeCommand("cmd appops set $pkg WAKE_LOCK allow")
-                try {
-                    shizukuManager.executeCommand("am set-standby-bucket $pkg active")
-                } catch (e: Exception) { /* Non-critical */ }
-            }
+            shizukuManager.suspendPackages(allToUnsuspend, false)
+            shizukuManager.setAppOpMode(allToUnsuspend, 70, 0)
             settingsRepository.setGamingAffectedPackages(emptySet())
 
             // Restore DND

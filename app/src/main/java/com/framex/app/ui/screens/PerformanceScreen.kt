@@ -190,15 +190,27 @@ class PerformanceViewModel @Inject constructor(
     }
 
     suspend fun measureNetworkLatency(): Int? {
+        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            try {
+                val output = shizukuManager.executeCommand("ping -c 1 8.8.8.8")
+                if (output.contains("time=")) {
+                    val pingMs = output.split("time=").getOrNull(1)
+                        ?.split(" ")?.getOrNull(0)
+                        ?.toFloatOrNull()
+                        ?.toInt()
+                    if (pingMs != null && pingMs > 0) return pingMs
+                }
+            } catch (e: Exception) {}
+        }
         var minPing: Int? = null
         for (i in 1..3) {
             try {
                 val start = System.currentTimeMillis()
-                val ipAddress = java.net.InetAddress.getByName("8.8.8.8")
-                if (ipAddress.isReachable(1000)) {
-                    val latency = (System.currentTimeMillis() - start).toInt()
-                    minPing = minOf(minPing ?: latency, latency)
-                }
+                val socket = java.net.Socket()
+                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), 1000)
+                val latency = (System.currentTimeMillis() - start).toInt()
+                socket.close()
+                minPing = minOf(minPing ?: latency, latency)
             } catch (e: Exception) {}
             delay(150)
         }
