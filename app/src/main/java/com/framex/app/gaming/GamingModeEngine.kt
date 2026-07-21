@@ -45,7 +45,8 @@ class GamingModeEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
-    private val esportsOptimizationEngine: EsportsOptimizationEngine
+    private val esportsOptimizationEngine: EsportsOptimizationEngine,
+    private val oemPackageResolver: OemPackageResolver
 ) {
 
     // ---- Public state -------------------------------------------------------
@@ -61,41 +62,8 @@ class GamingModeEngine @Inject constructor(
         internal const val RECOVERY_NOTIFICATION_ID = 3
     }
 
-    // ---- Package hit-lists (extracted from Vivo T3 Ultra dump) -----------
-
-    val SAFE_TO_SUSPEND = listOf(
-        // App Stores & Updaters
-        "com.vivo.appstore",
-        "com.bbk.updater",
-        "com.vivo.website",
-        "com.vivo.cardstore",
-
-        // UI Bloat & Background Polling
-        "com.vivo.assistant",
-        "com.vivo.hiboard",            // Jovi / Minus-one screen
-        "com.vivo.globalsearch",
-        "com.vivo.magazine",           // Lockscreen magazine
-        "com.bbk.theme",               // Theme store background sync
-        "com.vivo.theme.effect",
-        "com.vivo.video.floating",
-
-        // Widgets & Syncers
-        "com.vivo.weather",
-        "com.vivo.weather.provider",
-        "com.vivo.healthwidget",
-        "com.vivo.stepcount",
-        "com.vivo.exhealth",
-        "com.bbk.cloud",               // Vivo Cloud sync
-
-        // Secondary Vivo Services
-        "com.vivo.imanager",           // Vivo cleaner (FrameX replaces it)
-        "com.vivo.safecenter",         // Vivo security
-        "com.vivo.xspace",
-        "com.vivo.doubleinstance",     // App clone daemon
-        "com.vivo.musicwidgetmix",
-        "com.vivo.smartshot",
-        "com.vivo.nps"                 // Net Promoter Score / Analytics
-    )
+    val SAFE_TO_SUSPEND: List<String>
+        get() = oemPackageResolver.getOemPackagesToSuspend()
 
     val GOOGLE_SAFE_TO_SUSPEND = listOf(
         // Google user-facing apps — safe to freeze during gaming

@@ -127,6 +127,7 @@ class GamingModeService : Service() {
         const val CHANNEL_ID = "framex_gaming_channel"
         const val NOTIFICATION_ID = 2
         const val ACTION_STOP = "com.framex.app.ACTION_STOP_GAMING_MODE"
+        const val EXTRA_LAUNCHED_GAME_PKG = "extra_launched_game_pkg"
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
