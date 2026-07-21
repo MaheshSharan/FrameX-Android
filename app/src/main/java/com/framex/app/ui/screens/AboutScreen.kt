@@ -172,19 +172,19 @@ fun AboutScreen(
                     LegalListItem(
                         icon = Icons.Default.Policy,
                         title = "Privacy Policy",
-                        url = "https://github.com/MaheshSharan/FrameX/blob/main/PRIVACY.md"
+                        url = "https://maheshsharan.github.io/FrameX-Android/privacy-policy"
                     )
                     HorizontalDivider(color = Color.White.copy(0.05f))
                     LegalListItem(
                         icon = Icons.Default.Code,
-                        title = "Open-source Licenses",
-                        url = "https://github.com/MaheshSharan/FrameX/blob/main/LICENSES.md"
+                        title = "Open-source License",
+                        url = "https://github.com/MaheshSharan/FrameX-Android/blob/main/LICENSE"
                     )
                     HorizontalDivider(color = Color.White.copy(0.05f))
                     LegalListItem(
                         icon = Icons.Default.Gavel,
-                        title = "Terms of Service",
-                        url = "https://github.com/MaheshSharan/FrameX/blob/main/TERMS.md"
+                        title = "Known Limitations",
+                        url = "https://github.com/MaheshSharan/FrameX-Android/blob/main/KNOWN_LIMITATIONS.md"
                     )
                 }
             }
