@@ -43,7 +43,7 @@ class AppearanceViewModel @Inject constructor(
     val overlayBgColorIndex = settingsRepository.overlayBgColorIndex
     val overlayBorderColorIndex = settingsRepository.overlayBorderColorIndex
     val overlayTextColorIndex = settingsRepository.overlayTextColorIndex
-    
+
     fun saveSettings(
         opacity: Float, textSize: Int, useMonospace: Boolean, colorIndex: Int,
         bgColorIndex: Int, borderColorIndex: Int, textColorIndex: Int
