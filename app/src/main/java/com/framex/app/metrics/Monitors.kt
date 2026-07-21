@@ -374,33 +374,16 @@ class NetworkMonitor @Inject constructor() {
 
 @Singleton
 class BatteryMonitor @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager
+    @ApplicationContext private val context: Context
 ) {
     val batteryTemp: Flow<Float> = flow {
         while (true) {
-            val temp = if (shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value) {
-                // Exact PerfStats command: "dumpsys battery | grep temperature"
-                // Output line: "  temperature: 280"  → strip non-digits → 280 ÷ 10 = 28.0°C
-                try {
-                    val output = shizukuManager.executeCommand(
-                        "dumpsys battery | grep temperature"
-                    )
-                    val digits = output.replace(Regex("\\D"), "")
-                    if (digits.isNotEmpty()) digits.toInt() / 10.0f else fallbackTemp(context)
-                } catch (e: Exception) {
-                    fallbackTemp(context)
-                }
-            } else {
-                fallbackTemp(context)
-            }
-            emit(temp)
+            emit(readBatteryTemp(context))
             delay(5000)
         }
     }
 
-    private fun fallbackTemp(context: Context): Float {
+    private fun readBatteryTemp(context: Context): Float {
         val intent = context.registerReceiver(
             null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         )
@@ -445,7 +428,7 @@ class ThermalMonitor @Inject constructor(
 
             val state = if (shizukuReady) {
                 try {
-                    val output = shizukuManager.executeCommand("dumpsys thermalservice")
+                    val output = shizukuManager.getThermalTemperatures()
                     if (output.isBlank()) {
                         consecutiveFailures++
                         if (consecutiveFailures <= 3 && lastGoodState != null) {
@@ -527,9 +510,8 @@ class PingMonitor @Inject constructor(
     private val shizukuManager: ShizukuManager
 ) {
     companion object {
-        // ICMP echo has near-zero cost, but Shizuku shell round-trips + the child
-        // "ping" process still cost a bit of CPU/battery. 20s keeps the reading
-        // fresh without polling faster than a human perceives latency changing.
+        // ICMP echo has near-zero cost, but child "ping" process still costs a bit of CPU/battery.
+        // 20s keeps the reading fresh without polling faster than a human perceives latency changing.
         private const val POLL_INTERVAL_MS = 20_000L
     }
 
@@ -539,10 +521,10 @@ class PingMonitor @Inject constructor(
                 try {
                     shizukuManager.executeCommand("ping -c 1 8.8.8.8")
                 } catch (e: Exception) {
-                    fallbackPing()
+                    executePing()
                 }
             } else {
-                fallbackPing()
+                executePing()
             }
 
             val pingMs = if (output.contains("time=")) {
@@ -556,7 +538,7 @@ class PingMonitor @Inject constructor(
         }
     }
 
-    private fun fallbackPing(): String {
+    private fun executePing(): String {
         return try {
             val process = Runtime.getRuntime().exec("ping -c 1 8.8.8.8")
             process.inputStream.bufferedReader().use { it.readText() }

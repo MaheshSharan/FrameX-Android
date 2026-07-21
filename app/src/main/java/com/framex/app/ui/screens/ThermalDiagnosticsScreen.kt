@@ -27,7 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,6 +42,8 @@ import com.framex.app.metrics.MetricReadStatus
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.MetricsState
 import com.framex.app.metrics.SessionLogger
+import com.framex.app.metrics.ThermalSeverity
+import kotlin.math.roundToInt
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,17 +129,7 @@ class ThermalDiagnosticsViewModel @Inject constructor(
 // Screen
 // ---------------------------------------------------------------------------
 
-private fun thermalStatusLabel(status: Int): String = when (status) {
-    0 -> "NONE"; 1 -> "LIGHT"; 2 -> "MODERATE"; 3 -> "SEVERE"
-    4 -> "CRITICAL"; 5 -> "EMERGENCY"; 6 -> "SHUTDOWN"; else -> "UNKNOWN"
-}
 
-private fun thermalStatusColor(status: Int): Color = when {
-    status <= 1 -> Color(0xFF34D399) // green — none/light
-    status == 2 -> Color(0xFFFBBF24) // amber — moderate
-    status == 3 -> Color(0xFFF97316) // orange — severe
-    else -> Color(0xFFEF4444)        // red — critical and above
-}
 
 private fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricReadStatus): String {
     return when (readStatus) {
@@ -283,36 +278,26 @@ fun ThermalDiagnosticsScreen(
                 }
 
                 // Current status banner — the single most useful glance value.
-                val status = metricsState.thermalStatus
+                val severity = ThermalSeverity.fromStatus(metricsState.thermalStatus)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(thermalStatusColor(status).copy(alpha = 0.12f))
-                        .border(1.dp, thermalStatusColor(status).copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                        .background(severity.color.copy(alpha = 0.12f))
+                        .border(1.dp, severity.color.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(thermalStatusColor(status)))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(severity.color))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            "Thermal Status: ${thermalStatusLabel(status)}",
+                            "Thermal Status: ${severity.label}",
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
-                        val statusText = when (status) {
-                            0 -> "NONE — no elevated thermal status reported"
-                            1 -> "LIGHT — slight temperature increase"
-                            2 -> "MODERATE — performance may be slightly throttled"
-                            3 -> "SEVERE — throttling is active to reduce heat"
-                            4 -> "CRITICAL — severe throttling active"
-                            5 -> "EMERGENCY — critical safety limits reached"
-                            6 -> "SHUTDOWN — device shutting down due to heat"
-                            else -> "UNKNOWN thermal status"
-                        }
                         Text(
-                            statusText,
+                            severity.description,
                             color = Color.Gray,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -489,28 +474,90 @@ private fun CorrelationGraph(
         if (snapshots.size < 2) {
             Text("Collecting samples...", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
         } else {
+            val textMeasurer = rememberTextMeasurer()
             val hasCpu = snapshots.any { it.state.hasThermalCpu }
             val hasSkin = snapshots.any { it.state.hasThermalSkin }
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val maxFps = (snapshots.maxOfOrNull { it.state.fps } ?: 1).coerceAtLeast(1)
+                val maxFps = (snapshots.maxOfOrNull { it.state.fps } ?: 60).coerceAtLeast(30)
                 
-                // Only count valid thermal readings when finding max temperature
                 val cpuTemps = if (hasCpu) snapshots.map { it.state.thermalCpuC } else emptyList()
                 val skinTemps = if (hasSkin) snapshots.map { it.state.thermalSkinC } else emptyList()
-                
-                val maxTemp = (cpuTemps + skinTemps).maxOrNull()?.coerceAtLeast(1f) ?: 100f
+                val maxTemp = (cpuTemps + skinTemps).maxOrNull()?.coerceAtLeast(40f) ?: 80f
 
-                val stepX = size.width / (snapshots.size - 1).coerceAtLeast(1)
+                val leftPadding = 32.dp.toPx()
+                val rightPadding = 32.dp.toPx()
+                val bottomPadding = 20.dp.toPx()
+                val topPadding = 12.dp.toPx()
+
+                val graphWidth = size.width - leftPadding - rightPadding
+                val graphHeight = size.height - topPadding - bottomPadding
+
+                if (graphWidth <= 0f || graphHeight <= 0f) return@Canvas
+
+                val gridSteps = 3
+                val labelStyle = TextStyle(
+                    color = Color.Gray,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                // 1. Draw Gridlines and Y-axis tick labels
+                for (i in 0..gridSteps) {
+                    val ratio = i.toFloat() / gridSteps
+                    val y = topPadding + graphHeight * (1f - ratio)
+
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.08f),
+                        start = Offset(leftPadding, y),
+                        end = Offset(leftPadding + graphWidth, y),
+                        strokeWidth = 1f
+                    )
+
+                    // FPS Y-axis label (left)
+                    val fpsVal = (maxFps * ratio).toInt()
+                    val fpsLayout = textMeasurer.measure("$fpsVal", labelStyle)
+                    drawText(
+                        textLayoutResult = fpsLayout,
+                        topLeft = Offset(leftPadding - fpsLayout.size.width - 4.dp.toPx(), y - fpsLayout.size.height / 2f)
+                    )
+
+                    // Temperature Y-axis label (right)
+                    val tempVal = (maxTemp * ratio).toInt()
+                    val tempLayout = textMeasurer.measure("${tempVal}°", labelStyle)
+                    drawText(
+                        textLayoutResult = tempLayout,
+                        topLeft = Offset(leftPadding + graphWidth + 4.dp.toPx(), y - tempLayout.size.height / 2f)
+                    )
+                }
+
+                // 2. Draw X-axis time labels
+                val timeLabels = listOf("60s ago", "45s", "30s", "15s", "now")
+                for (i in timeLabels.indices) {
+                    val ratio = i.toFloat() / (timeLabels.size - 1)
+                    val x = leftPadding + graphWidth * ratio
+                    val labelLayout = textMeasurer.measure(timeLabels[i], labelStyle)
+                    val labelX = (x - labelLayout.size.width / 2f).coerceIn(0f, size.width - labelLayout.size.width)
+                    drawText(
+                        textLayoutResult = labelLayout,
+                        topLeft = Offset(labelX, size.height - bottomPadding + 4.dp.toPx())
+                    )
+                }
+
+                // 3. Draw Data Lines
+                val stepX = graphWidth / (snapshots.size - 1).coerceAtLeast(1)
 
                 fun pointsFor(values: List<Float>, max: Float): List<Offset> =
                     values.mapIndexed { i, v ->
-                        Offset(i * stepX, size.height - (v / max) * size.height)
+                        Offset(
+                            leftPadding + i * stepX,
+                            topPadding + graphHeight - (v / max).coerceIn(0f, 1f) * graphHeight
+                        )
                     }
 
                 val fpsPoints = pointsFor(snapshots.map { it.state.fps.toFloat() }, maxFps.toFloat())
-                
-                fun drawLine(points: List<Offset>, color: Color) {
+
+                fun drawPolyline(points: List<Offset>, color: Color) {
                     for (i in 0 until points.size - 1) {
                         drawLine(
                             color = color,
@@ -524,13 +571,13 @@ private fun CorrelationGraph(
 
                 if (hasCpu) {
                     val cpuPoints = pointsFor(cpuTemps, maxTemp)
-                    drawLine(cpuPoints, Color(0xFFEF4444).copy(alpha = 0.8f))
+                    drawPolyline(cpuPoints, Color(0xFFEF4444).copy(alpha = 0.8f))
                 }
                 if (hasSkin) {
                     val skinPoints = pointsFor(skinTemps, maxTemp)
-                    drawLine(skinPoints, Color(0xFFFBBF24).copy(alpha = 0.8f))
+                    drawPolyline(skinPoints, Color(0xFFFBBF24).copy(alpha = 0.8f))
                 }
-                drawLine(fpsPoints, Color(0xFF60A5FA))
+                drawPolyline(fpsPoints, Color(0xFF60A5FA))
             }
             
             if (!hasCpu && !hasSkin) {

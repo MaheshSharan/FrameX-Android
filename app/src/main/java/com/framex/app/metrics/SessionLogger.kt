@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -61,7 +63,7 @@ class SessionLogger @Inject constructor(
     /** Writes the recorded window (start → now) to a CSV in app-private storage
      *  and returns a content:// URI ready to hand to a share Intent. Returns null
      *  if there's nothing to export. */
-    suspend fun exportToFile(): File? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    suspend fun exportToFile(): File? = withContext(Dispatchers.IO) {
         val all = metricsEngine.snapshotHistory.value
         val window = if (_recordingStartIndex in all.indices) all.subList(_recordingStartIndex, all.size) else all
         if (window.isEmpty()) return@withContext null

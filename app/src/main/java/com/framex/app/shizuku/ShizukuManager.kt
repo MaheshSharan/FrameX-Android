@@ -112,7 +112,6 @@ class ShizukuManager @Inject constructor() {
         return commandMutex.withLock {
             val runner = commandRunner
             if (runner == null) {
-                // Connection was lost or not yet established — trigger reconnect for next call.
                 connectUserService()
                 return@withLock ""
             }
@@ -123,6 +122,60 @@ class ShizukuManager @Inject constructor() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 ""
+            }
+        }
+    }
+
+    suspend fun getThermalTemperatures(): String {
+        if (!_isShizukuAvailable.value || !_hasPermission.value) return ""
+        return commandMutex.withLock {
+            val runner = commandRunner ?: run {
+                connectUserService()
+                return@withLock ""
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.getThermalTemperatures()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                ""
+            }
+        }
+    }
+
+    suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): Int {
+        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) return 0
+        return commandMutex.withLock {
+            val runner = commandRunner ?: run {
+                connectUserService()
+                return@withLock 0
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.suspendPackages(packageNames.toTypedArray(), suspended)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
+            }
+        }
+    }
+
+    suspend fun setAppOpMode(packageNames: List<String>, opCode: Int, mode: Int): Int {
+        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) return 0
+        return commandMutex.withLock {
+            val runner = commandRunner ?: run {
+                connectUserService()
+                return@withLock 0
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.setAppOpMode(packageNames.toTypedArray(), opCode, mode)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
             }
         }
     }
