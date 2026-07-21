@@ -28,6 +28,9 @@ class EsportsOptimizationEngine @Inject constructor(
         activeGameUid = uid
         val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
 
+        // 0. RAM Cache Pre-Trimming
+        shizukuManager.executeCommand("pm trim-caches 4G")
+
         // 1. CPU Priority & Memory Lock (Android 16 Verified)
         if (settingsRepository.cpuPriorityLock.value) {
             shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
@@ -46,13 +49,14 @@ class EsportsOptimizationEngine @Inject constructor(
             shizukuManager.executeCommand("setprop persist.sys.performance.mode 1")
         }
 
-        // 4. Per-App Refresh Rate Lock
+        // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Override
         if (settingsRepository.refreshRateLock.value) {
             val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
             initialMinRefreshRate = shizukuManager.executeCommand("settings get system min_refresh_rate")
             shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
             shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
             if (isVivo) {
+                shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} $packageName")
                 shizukuManager.executeCommand("settings put system vivo_screen_refresh_rate_mode ${maxHz.toInt()}")
             }
         }
@@ -74,8 +78,11 @@ class EsportsOptimizationEngine @Inject constructor(
         val pkg = activeGamePackage
         val uid = activeGameUid
 
-        if (pkg != null && settingsRepository.cpuPriorityLock.value) {
-            shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $pkg adaptive_bucket")
+        if (pkg != null) {
+            shizukuManager.executeCommand("cmd game reset $pkg")
+            if (settingsRepository.cpuPriorityLock.value) {
+                shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $pkg adaptive_bucket")
+            }
         }
 
         if (uid != null && settingsRepository.networkFirewall.value) {
