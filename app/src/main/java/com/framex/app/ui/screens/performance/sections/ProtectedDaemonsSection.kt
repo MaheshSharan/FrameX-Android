@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun ProtectedDaemonsSection(daemonsList: List<String>) {
+    if (daemonsList.isEmpty()) return
+
     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
         Text(
             "PROTECTED GAMING DAEMONS",

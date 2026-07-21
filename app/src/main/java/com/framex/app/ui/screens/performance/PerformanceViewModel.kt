@@ -28,7 +28,8 @@ class PerformanceViewModel @Inject constructor(
     private val gamingModeEngine: GamingModeEngine,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
-    private val metricsEngine: com.framex.app.metrics.MetricsEngine
+    private val metricsEngine: com.framex.app.metrics.MetricsEngine,
+    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager
 ) : ViewModel() {
 
     val gamingModeState = gamingModeEngine.state
@@ -229,5 +230,6 @@ class PerformanceViewModel @Inject constructor(
 
     val safeToSuspendList: List<String> get() = gamingModeEngine.SAFE_TO_SUSPEND
     val googleSafeToSuspendList: List<String> get() = gamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
-    val gamingDaemonsList: List<String> get() = gamingModeEngine.GAMING_DAEMONS
+    val gamingDaemonsList: List<String>
+        get() = if (deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value) gamingModeEngine.GAMING_DAEMONS else emptyList()
 }

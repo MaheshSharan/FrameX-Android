@@ -45,7 +45,7 @@ class OemPackageResolver @Inject constructor(
     )
 
     fun getOemPackagesToSuspend(): List<String> {
-        val isVivoEnabled = deviceDiagnosticManager.isVivoOrIqoo() || settingsRepository.vivoOptEnabled.value
+        val isVivoEnabled = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
         return if (isVivoEnabled) {
             VIVO_SAFE_TO_SUSPEND
         } else {
