@@ -210,6 +210,56 @@ class SettingsRepository @Inject constructor(
     fun getGameConfigRingtoneVol(pkg: String): Int = prefs.getInt("game_config_${pkg}_ringtone_vol", 50)
     fun setGameConfigRingtoneVol(pkg: String, vol: Int) = prefs.edit().putInt("game_config_${pkg}_ringtone_vol", vol).apply()
 
+    // ---- Esports Optimizations ----------------------------------------------
+
+    private val _vivoOptEnabled = MutableStateFlow(prefs.getBoolean(KEY_VIVO_OPT_ENABLED, false))
+    val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
+
+    private val _cpuPriorityLock = MutableStateFlow(prefs.getBoolean(KEY_CPU_PRIORITY_LOCK, true))
+    val cpuPriorityLock: StateFlow<Boolean> = _cpuPriorityLock.asStateFlow()
+
+    private val _networkFirewall = MutableStateFlow(prefs.getBoolean(KEY_NETWORK_FIREWALL, true))
+    val networkFirewall: StateFlow<Boolean> = _networkFirewall.asStateFlow()
+
+    private val _refreshRateLock = MutableStateFlow(prefs.getBoolean(KEY_REFRESH_RATE_LOCK, true))
+    val refreshRateLock: StateFlow<Boolean> = _refreshRateLock.asStateFlow()
+
+    private val _touchBoost = MutableStateFlow(prefs.getBoolean(KEY_TOUCH_BOOST, true))
+    val touchBoost: StateFlow<Boolean> = _touchBoost.asStateFlow()
+
+    private val _framePacingOverlay = MutableStateFlow(prefs.getBoolean(KEY_FRAME_PACING_OVERLAY, false))
+    val framePacingOverlay: StateFlow<Boolean> = _framePacingOverlay.asStateFlow()
+
+    fun setVivoOptEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_VIVO_OPT_ENABLED, enabled).apply()
+        _vivoOptEnabled.value = enabled
+    }
+
+    fun setCpuPriorityLock(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CPU_PRIORITY_LOCK, enabled).apply()
+        _cpuPriorityLock.value = enabled
+    }
+
+    fun setNetworkFirewall(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NETWORK_FIREWALL, enabled).apply()
+        _networkFirewall.value = enabled
+    }
+
+    fun setRefreshRateLock(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_REFRESH_RATE_LOCK, enabled).apply()
+        _refreshRateLock.value = enabled
+    }
+
+    fun setTouchBoost(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TOUCH_BOOST, enabled).apply()
+        _touchBoost.value = enabled
+    }
+
+    fun setFramePacingOverlay(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FRAME_PACING_OVERLAY, enabled).apply()
+        _framePacingOverlay.value = enabled
+    }
+
     companion object {
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_ENABLED_MODULES = "enabled_modules"
@@ -231,5 +281,11 @@ class SettingsRepository @Inject constructor(
         private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
         private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"
         private const val KEY_LAUNCHER_GAMES = "launcher_games"
+        private const val KEY_VIVO_OPT_ENABLED = "esports_vivo_opt_enabled"
+        private const val KEY_CPU_PRIORITY_LOCK = "esports_cpu_priority_lock"
+        private const val KEY_NETWORK_FIREWALL = "esports_network_firewall"
+        private const val KEY_REFRESH_RATE_LOCK = "esports_refresh_rate_lock"
+        private const val KEY_TOUCH_BOOST = "esports_touch_boost"
+        private const val KEY_FRAME_PACING_OVERLAY = "esports_frame_pacing_overlay"
     }
 }

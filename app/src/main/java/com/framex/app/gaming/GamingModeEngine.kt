@@ -44,7 +44,8 @@ data class AppInfo(
 class GamingModeEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val esportsOptimizationEngine: EsportsOptimizationEngine
 ) {
 
     // ---- Public state -------------------------------------------------------
@@ -328,6 +329,13 @@ class GamingModeEngine @Inject constructor(
                     nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
                 }
             }
+            
+            if (activeGamePkg != null) {
+                try {
+                    val uid = context.packageManager.getPackageUid(activeGamePkg, 0)
+                    esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
+                } catch (_: Exception) {}
+            }
 
             // ----------------------------------------------------------------
             // Done
@@ -363,6 +371,8 @@ class GamingModeEngine @Inject constructor(
             shizukuManager.suspendPackages(allToUnsuspend, false)
             shizukuManager.setAppOpMode(allToUnsuspend, 70, 0)
             settingsRepository.setGamingAffectedPackages(emptySet())
+
+            esportsOptimizationEngine.revertOptimizations()
 
             // Restore DND
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

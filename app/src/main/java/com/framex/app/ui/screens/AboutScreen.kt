@@ -33,9 +33,31 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
 
+import androidx.compose.runtime.*
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import com.framex.app.device.DeviceDiagnosticManager
+import com.framex.app.repository.SettingsRepository
+import com.framex.app.ui.components.VivoDiagnosticDialog
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
+@HiltViewModel
+class AboutViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+    val deviceDiagnosticManager: DeviceDiagnosticManager
+) : ViewModel() {
+    val vivoOptEnabled = settingsRepository.vivoOptEnabled
+
+    fun setVivoOptEnabled(enabled: Boolean) {
+        settingsRepository.setVivoOptEnabled(enabled)
+    }
+}
+
 @Composable
 fun AboutScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    viewModel: AboutViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val accentColor = MaterialTheme.colorScheme.primary
@@ -135,6 +157,59 @@ fun AboutScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+
+            // Hardware Optimization Card (Vivo / iQOO Diagnostic)
+            val isVivoOptActive by viewModel.vivoOptEnabled.collectAsState()
+            var showVivoDiagModal by remember { mutableStateOf(false) }
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Hardware Optimizations", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(24.dp))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Vivo / iQOO Hardware Optimizations", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Enable OriginOS / FuntouchOS OEM power governor overrides and touch boost.", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = isVivoOptActive,
+                            onCheckedChange = { checked ->
+                                if (checked) {
+                                    showVivoDiagModal = true
+                                } else {
+                                    viewModel.setVivoOptEnabled(false)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (showVivoDiagModal) {
+                val isVivoDevice = viewModel.deviceDiagnosticManager.isVivoOrIqoo()
+                val modelInfo = viewModel.deviceDiagnosticManager.getDeviceModelInfo()
+                VivoDiagnosticDialog(
+                    isVivoOrIqoo = isVivoDevice,
+                    deviceModelInfo = modelInfo,
+                    onDismiss = { showVivoDiagModal = false },
+                    onConfirmEnable = { viewModel.setVivoOptEnabled(true) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Privacy Card
             Column(modifier = Modifier.fillMaxWidth()) {

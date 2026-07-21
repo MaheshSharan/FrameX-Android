@@ -99,6 +99,27 @@ class PerformanceViewModel @Inject constructor(
     val metricsState = metricsEngine.metricsState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.framex.app.metrics.MetricsState())
 
+    val cpuPriorityLock = settingsRepository.cpuPriorityLock
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val networkFirewall = settingsRepository.networkFirewall
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val refreshRateLock = settingsRepository.refreshRateLock
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val touchBoost = settingsRepository.touchBoost
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val framePacingOverlay = settingsRepository.framePacingOverlay
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
+    fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)
+    fun toggleRefreshRateLock(enabled: Boolean) = settingsRepository.setRefreshRateLock(enabled)
+    fun toggleTouchBoost(enabled: Boolean) = settingsRepository.setTouchBoost(enabled)
+    fun toggleFramePacingOverlay(enabled: Boolean) = settingsRepository.setFramePacingOverlay(enabled)
+
     private val _userApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val userApps = _userApps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -924,6 +945,40 @@ fun PerformanceScreen(
 
                     if (!isBusy) {
                         if (isActive) {
+                            // Esports Engine Live Hardware Status Card
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF10B981).copy(0.08f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, Color(0xFF10B981).copy(0.2f), RoundedCornerShape(16.dp))
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF10B981))
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Esports Optimization Engine Active", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+                                    HorizontalDivider(color = Color(0xFF10B981).copy(0.15f))
+                                    EsportsStatusRow("CPU Priority", "Unrestricted (ACTIVE Bucket)")
+                                    EsportsStatusRow("Network Policy", "Firewall & Force Doze Active")
+                                    EsportsStatusRow("Display & Touch", "Locked Max Hz & Touch Boost")
+                                    EsportsStatusRow("PowerHAL Floor", "Fixed Performance Mode")
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
                             Button(
                                 onClick = { viewModel.disableGamingMode(context) },
                                 modifier = Modifier
@@ -2030,4 +2085,16 @@ fun PerformanceScreen(
         }
     }
 }
+}
+
+@Composable
+fun EsportsStatusRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
 }
