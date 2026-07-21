@@ -140,6 +140,12 @@ cd FrameX-Android
 
 ---
 
+## Known Limitations
+
+A small number of metrics depend on data some device vendors don't expose. See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for confirmed cases and affected devices.
+
+---
+
 ## Credits
 
 - [Shizuku](https://github.com/RikkaApps/Shizuku) by [RikkaW](https://github.com/RikkaApps) — the privileged API bridge that makes rootless system access possible. FrameX would not exist without it.
