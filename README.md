@@ -10,7 +10,7 @@
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)](https://developer.android.com/about/versions/oreo)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.2-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.2)
+[![Version](https://img.shields.io/badge/version-1.5.3-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.3)
 
 ---
 
