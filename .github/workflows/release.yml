@@ -24,7 +24,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Decode Release Keystore
-        if: "${{ secrets.KEYSTORE_BASE64 != '' }}"
+        if: secrets.KEYSTORE_BASE64 != ''
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
 
       - name: Build Release APK
@@ -40,4 +40,3 @@ jobs:
           files: app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
