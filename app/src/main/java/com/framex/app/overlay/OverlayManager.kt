@@ -167,7 +167,7 @@ class OverlayManager @Inject constructor(
                         try {
                             windowManager.updateViewLayout(view, params)
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            com.framex.app.utils.FrameXLog.e("Failed to update window layout on drag", e)
                         }
                     }
                 }
@@ -192,20 +192,18 @@ class OverlayManager @Inject constructor(
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            // RGBA_8888 gives an explicit 8-bit alpha channel — more reliable than TRANSLUCENT
-            // on MediaTek / vivo OEM ROMs for accurate opacity rendering.
             android.graphics.PixelFormat.RGBA_8888
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = if (savedX == -1) 100 else savedX
-            y = if (savedY == -1) 100 else savedY
+            x = if (savedX == -1) DEFAULT_OVERLAY_POSITION_X else savedX
+            y = if (savedY == -1) DEFAULT_OVERLAY_POSITION_Y else savedY
         }
 
         try {
             windowManager.addView(composeView, windowParams)
-            android.util.Log.d("FrameX_Overlay", "Overlay successfully added to WindowManager.")
+            com.framex.app.utils.FrameXLog.d("Overlay successfully added to WindowManager.")
         } catch (e: Exception) {
-            android.util.Log.e("FrameX_Overlay", "Failed to add overlay to WindowManager: ${e.message}", e)
+            com.framex.app.utils.FrameXLog.e("Failed to add overlay to WindowManager: ${e.message}", e)
         }
     }
 
@@ -245,7 +243,7 @@ class OverlayManager @Inject constructor(
                     try {
                         windowManager.updateViewLayout(view, params)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        com.framex.app.utils.FrameXLog.e("Failed to update window layout on orientation change", e)
                     }
                 }
             }
@@ -263,6 +261,11 @@ class OverlayManager @Inject constructor(
             display.getSize(size)
         }
         return size
+    }
+
+    companion object {
+        private const val DEFAULT_OVERLAY_POSITION_X = 100
+        private const val DEFAULT_OVERLAY_POSITION_Y = 100
     }
 }
 
@@ -283,58 +286,20 @@ fun OverlayContent(
     onDragEnd: () -> Unit = {},
     onModeToggle: () -> Unit = {}
 ) {
-    // Ordered per the user's Overlay Config customization (falls back to canonical order
-    // for first-run users, or for any module introduced since they last customized it).
-    val activeList = resolveMetricModuleOrder(moduleOrder)
-        .filter { enabledModules.contains(it.storageKey) }
-        .map { id ->
-            val info = METRIC_MODULE_REGISTRY.getValue(id)
-            Triple(id.storageKey, info.overlayShortLabel, metricValueFor(id, metricsState)) to info.icon
-        }
-    
-    val colors = listOf(
-        MaterialTheme.colorScheme.primary,
-        Color(0xFF60A5FA),
-        Color(0xFF34D399),
-        Color(0xFF2DD4BF),
-        Color(0xFFA78BFA),
-        Color(0xFFFBBF24)
-    )
-    val accentColor = colors[colorIndex]
-    val fontFamily = if (useMonospace) androidx.compose.ui.text.font.FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
-    val textScale = when(textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
-
-    // Background: chosen base color with opacity applied (Transparent ignores opacity slider).
-    val bgColors = listOf(Color.Black, Color(0xFF0D1117), Color(0xFF1C1C1E), Color.Transparent)
-    val bgBase = bgColors.getOrElse(bgColorIndex) { Color.Black }
-    val effectiveBg = if (bgBase == Color.Transparent) Color.Transparent else bgBase.copy(alpha = opacity)
-
-    // Border color: Accent / None / White-Subtle / Ghost
-    val effectiveBorderColor = when (borderColorIndex) {
-        1 -> Color.Transparent
-        2 -> Color.White.copy(alpha = 0.2f)
-        3 -> Color.White.copy(alpha = 0.05f)
-        else -> accentColor
-    }
-    val effectiveBorderWidth = if (borderColorIndex == 1) 0.dp else 1.dp
-
-    // Metric value text color: White / Accent / Silver / Auto-FPS coloring
-    val autoFpsColor = when {
-        metricsState.fps >= 60 -> Color(0xFF22C55E)
-        metricsState.fps >= 30 -> Color(0xFFFBBF24)
-        else -> Color(0xFFEF4444)
-    }
-    val textValueColor = when (textColorIndex) {
-        1 -> accentColor
-        2 -> Color(0xFFCBD5E1)
-        3 -> autoFpsColor
-        else -> Color.White
-    }
-
-    Box(
+    com.framex.app.ui.components.OverlayPreviewContent(
+        mode = mode,
+        enabledModules = enabledModules,
+        moduleOrder = moduleOrder,
+        opacity = opacity,
+        textSize = textSize,
+        useMonospace = useMonospace,
+        colorIndex = colorIndex,
+        bgColorIndex = bgColorIndex,
+        borderColorIndex = borderColorIndex,
+        textColorIndex = textColorIndex,
+        metricsState = metricsState,
         modifier = Modifier
             .pointerInput(Unit) {
-                // Drag to reposition. onDragEnd fires when finger lifts — persists the position.
                 detectDragGestures(
                     onDragEnd = { onDragEnd() }
                 ) { change, dragAmount ->
@@ -343,51 +308,9 @@ fun OverlayContent(
                 }
             }
             .pointerInput(Unit) {
-                // Long-press (stationary ≥500ms) cycles the overlay display mode.
-                // Does not conflict with drag since drag requires movement; this requires stillness.
                 detectTapGestures(onLongPress = { onModeToggle() })
             }
-            .clip(RoundedCornerShape(8.dp))
-            .background(effectiveBg)
-            .border(effectiveBorderWidth, effectiveBorderColor, RoundedCornerShape(8.dp))
-            .padding(if (mode == "Minimal") (4 * textScale).dp else (8 * textScale).dp)
-    ) {
-        if (mode == "Expanded") {
-            Column(verticalArrangement = Arrangement.spacedBy((8 * textScale).dp)) {
-                activeList.forEach { (info, icon) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
-                        Spacer(modifier = Modifier.width((8 * textScale).dp))
-                        Text(info.second, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
-                        Text(info.third, color = textValueColor, fontSize = (12 * textScale).sp, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                    }
-                }
-            }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy((12 * textScale).dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = (4 * textScale).dp)
-            ) {
-                activeList.forEachIndexed { index, (info, _) ->
-                    if (mode == "Minimal") {
-                        Text(info.third, color = textValueColor, fontFamily = fontFamily, fontSize = (14 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                    } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(info.second, color = Color.Gray, fontFamily = fontFamily, fontSize = (10 * textScale).sp, fontWeight = FontWeight.Bold)
-                            Text(info.third, color = textValueColor, fontFamily = fontFamily, fontSize = (16 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                        }
-                    }
-                    if (index < activeList.size - 1) {
-                        Box(modifier = Modifier.width(1.dp).height(if (mode == "Minimal") (12 * textScale).dp else (24 * textScale).dp).background(Color.DarkGray))
-                    }
-                }
-                if (activeList.isEmpty()) {
-                    Text("No modules", color = Color.Gray, fontFamily = fontFamily, fontSize = (12 * textScale).sp)
-                }
-            }
-        }
-    }
+    )
 }
 
 private class OverlayLifecycleOwner : SavedStateRegistryOwner, ViewModelStoreOwner {

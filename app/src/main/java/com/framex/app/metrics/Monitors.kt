@@ -260,10 +260,14 @@ class CpuMonitor @Inject constructor(
     private fun readMhz(file: java.io.File): Int {
         return try {
             val raw = file.readText().trim()
-            (raw.toIntOrNull() ?: 0) / 1000
+            (raw.toIntOrNull() ?: 0) / KHZ_TO_MHZ
         } catch (e: Exception) {
             0
         }
+    }
+
+    companion object {
+        private const val KHZ_TO_MHZ = 1000
     }
 }
 
@@ -379,7 +383,7 @@ class BatteryMonitor @Inject constructor(
     val batteryTemp: Flow<Float> = flow {
         while (true) {
             emit(readBatteryTemp(context))
-            delay(5000)
+            delay(BATTERY_POLL_INTERVAL_MS)
         }
     }
 
@@ -389,6 +393,10 @@ class BatteryMonitor @Inject constructor(
         )
         val raw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
         return raw / 10.0f
+    }
+
+    companion object {
+        private const val BATTERY_POLL_INTERVAL_MS = 5000L
     }
 }
 
@@ -543,6 +551,7 @@ class PingMonitor @Inject constructor(
             val process = Runtime.getRuntime().exec("ping -c 1 8.8.8.8")
             process.inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("executePing failed", e)
             ""
         }
     }

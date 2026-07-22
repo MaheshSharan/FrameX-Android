@@ -202,7 +202,9 @@ class GamingModeEngine @Inject constructor(
             val targetVol = (targetVolPct / 100f * maxVol).toInt().coerceIn(0, maxVol)
             try {
                 audioManager.setStreamVolume(AudioManager.STREAM_RING, targetVol, 0)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Failed to set ringtone volume", e)
+            }
 
             // Settings Overrides (auto-brightness, auto-rotate)
             val canWrite = Settings.System.canWrite(context)
@@ -229,7 +231,9 @@ class GamingModeEngine @Inject constructor(
             // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
             try {
                 shizukuManager.executeCommand("pm trim-caches 4G")
-            } catch (e: Exception) { /* Non-critical */ }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Deep cache purge failed", e)
+            }
         }
         
         // OriginOS 6 "Final Boss" Fix: Force re-bind the Notification Listener.
@@ -250,7 +254,9 @@ class GamingModeEngine @Inject constructor(
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP
                 )
-            } catch (e: Exception) { /* Ignore if it fails, non-critical */ }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Notification listener reset failed", e)
+            }
         }
 
         try {
@@ -302,7 +308,9 @@ class GamingModeEngine @Inject constructor(
                 try {
                     val uid = context.packageManager.getPackageUid(activeGamePkg, 0)
                     esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    com.framex.app.utils.FrameXLog.w("Esports optimization failed for $activeGamePkg", e)
+                }
             }
 
             // ----------------------------------------------------------------
@@ -357,7 +365,9 @@ class GamingModeEngine @Inject constructor(
             if (origVol != -1) {
                 try {
                     audioManager.setStreamVolume(AudioManager.STREAM_RING, origVol, 0)
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    com.framex.app.utils.FrameXLog.w("Failed to restore ringtone volume", e)
+                }
                 prefs.edit().remove("orig_ringtone_val").apply()
             }
 
@@ -376,7 +386,7 @@ class GamingModeEngine @Inject constructor(
             }
 
         } catch (e: Exception) {
-            // Always transition to Idle even on partial failure
+            com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e)
         }
 
         settingsRepository.setGamingModeActive(false)

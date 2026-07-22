@@ -19,7 +19,7 @@ class CommandRunnerService(private val context: Context) : ICommandRunner.Stub()
             process.waitFor()
             output.toString().trim()
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
             "Error executing command: ${e.message}"
         }
     }

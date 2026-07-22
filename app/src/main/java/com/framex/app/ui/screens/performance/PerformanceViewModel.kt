@@ -118,8 +118,6 @@ class PerformanceViewModel @Inject constructor(
     fun getGameConfigRingtoneVol(pkg: String): Int = settingsRepository.getGameConfigRingtoneVol(pkg)
     fun setGameConfigRingtoneVol(pkg: String, vol: Int) = settingsRepository.setGameConfigRingtoneVol(pkg, vol)
 
-    fun canWriteSettings(context: Context): Boolean = android.provider.Settings.System.canWrite(context)
-
     suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> {
         val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memInfoBefore = ActivityManager.MemoryInfo()
@@ -138,10 +136,14 @@ class PerformanceViewModel @Inject constructor(
                     try {
                         shizukuManager.executeCommand("am force-stop ${app.packageName}")
                         stoppedCount++
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        com.framex.app.utils.FrameXLog.w("Failed to force-stop ${app.packageName}", e)
+                    }
                 }
                 shizukuManager.executeCommand("am kill-all")
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Error during manual RAM boost via Shizuku", e)
+            }
         }
         System.gc()
 
@@ -149,7 +151,7 @@ class PerformanceViewModel @Inject constructor(
         am.getMemoryInfo(memInfoAfter)
         val availAfter = memInfoAfter.availMem
 
-        val freed = ((availAfter - availBefore) / (1024L * 1024L)).coerceAtLeast(0L)
+        val freed = ((availAfter - availBefore) / BYTES_TO_MB).coerceAtLeast(0L)
         return Pair(freed, stoppedCount)
     }
 
@@ -164,19 +166,23 @@ class PerformanceViewModel @Inject constructor(
                         ?.toInt()
                     if (pingMs != null && pingMs > 0) return pingMs
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Shizuku ping check failed, falling back to socket probe", e)
+            }
         }
         var minPing: Int? = null
         for (i in 1..3) {
             try {
                 val start = System.currentTimeMillis()
                 val socket = java.net.Socket()
-                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), 1000)
+                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), SOCKET_TIMEOUT_MS)
                 val latency = (System.currentTimeMillis() - start).toInt()
                 socket.close()
                 minPing = minOf(minPing ?: latency, latency)
-            } catch (e: Exception) {}
-            delay(150)
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Socket ping probe iteration $i failed", e)
+            }
+            delay(RETRY_DELAY_MS)
         }
         return minPing
     }
@@ -232,4 +238,10 @@ class PerformanceViewModel @Inject constructor(
     val googleSafeToSuspendList: List<String> get() = gamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
     val gamingDaemonsList: List<String>
         get() = if (deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value) gamingModeEngine.GAMING_DAEMONS else emptyList()
+
+    companion object {
+        private const val BYTES_TO_MB = 1024L * 1024L
+        private const val SOCKET_TIMEOUT_MS = 1000
+        private const val RETRY_DELAY_MS = 150L
+    }
 }

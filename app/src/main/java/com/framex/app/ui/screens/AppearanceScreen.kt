@@ -138,80 +138,19 @@ fun AppearanceScreen(
                 ) {
                     // Dynamic Overlay inside — ordered per the user's Overlay Config
                     // customization so this preview always matches the real overlay.
-                    val activeList = com.framex.app.metrics.resolveMetricModuleOrder(moduleOrder)
-                        .filter { enabledModules.contains(it.storageKey) }
-                        .map { id ->
-                            val info = com.framex.app.metrics.METRIC_MODULE_REGISTRY.getValue(id)
-                            Triple(id.storageKey, info.overlayShortLabel, info.previewSampleValue) to info.icon
-                        }
-                    val accentColor = colors[selectedColorIndex]
-                    val fontFamily = if (useMonospace) androidx.compose.ui.text.font.FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
-                    val textScale = when(selectedTextSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
-
-                    // Mirror OverlayContent logic so what you see in preview == what you get on overlay
-                    val previewBgColors = listOf(Color.Black, Color(0xFF0D1117), Color(0xFF1C1C1E), Color.Transparent)
-                    val previewBgBase = previewBgColors.getOrElse(selectedBgColorIndex) { Color.Black }
-                    val previewBg = if (previewBgBase == Color.Transparent) Color.Transparent else previewBgBase.copy(alpha = opacity)
-                    val previewBorderColor = when (selectedBorderColorIndex) {
-                        1 -> Color.Transparent
-                        2 -> Color.White.copy(alpha = 0.2f)
-                        3 -> Color.White.copy(alpha = 0.05f)
-                        else -> accentColor
-                    }
-                    val previewBorderWidth = if (selectedBorderColorIndex == 1) 0.dp else 1.dp
-                    val previewTextValueColor = when (selectedTextColorIndex) {
-                        1 -> accentColor
-                        2 -> Color(0xFFCBD5E1)
-                        else -> Color.White
-                    }
-                    
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(previewBg)
-                                .border(previewBorderWidth, previewBorderColor, RoundedCornerShape(8.dp))
-                                .padding(if (mode == "Minimal") (4 * textScale).dp else (8 * textScale).dp)
-                        ) {
-                            if (mode == "Expanded") {
-                                Column(verticalArrangement = Arrangement.spacedBy((8 * textScale).dp)) {
-                                    activeList.forEach { pair ->
-                                        val info = pair.first
-                                        val icon = pair.second
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            androidx.compose.material3.Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
-                                            Spacer(modifier = Modifier.width((8 * textScale).dp))
-                                            Text(info.second, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
-                                            Text(info.third, color = previewTextValueColor, fontSize = (12 * textScale).sp, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                                        }
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy((12 * textScale).dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = (4 * textScale).dp)
-                                ) {
-                                    activeList.forEachIndexed { index, pair ->
-                                        val info = pair.first
-                                        if (mode == "Minimal") {
-                                            Text(info.third, color = previewTextValueColor, fontFamily = fontFamily, fontSize = (14 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                                        } else {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text(info.second, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, fontWeight = FontWeight.Bold)
-                                                Text(info.third, color = previewTextValueColor, fontFamily = fontFamily, fontSize = (16 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                                            }
-                                        }
-                                        if (index < activeList.size - 1) {
-                                            Box(modifier = Modifier.width(1.dp).height(if (mode == "Minimal") (12 * textScale).dp else (24 * textScale).dp).background(Color.DarkGray))
-                                        }
-                                    }
-                                    if (activeList.isEmpty()) {
-                                        Text("No active metrics", color = Color.Gray, fontSize = (12 * textScale).sp, fontFamily = fontFamily)
-                                    }
-                                }
-                            }
-                        }
+                        com.framex.app.ui.components.OverlayPreviewContent(
+                            mode = mode,
+                            enabledModules = enabledModules,
+                            moduleOrder = moduleOrder,
+                            opacity = opacity,
+                            textSize = selectedTextSize,
+                            useMonospace = useMonospace,
+                            colorIndex = selectedColorIndex,
+                            bgColorIndex = selectedBgColorIndex,
+                            borderColorIndex = selectedBorderColorIndex,
+                            textColorIndex = selectedTextColorIndex
+                        )
                     }
                 }
                 

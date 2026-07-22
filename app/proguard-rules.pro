@@ -5,3 +5,9 @@
 
 -dontwarn rikka.shizuku.**
 -dontwarn moe.shizuku.**
+
+# Strip verbose, debug, and info logs from release builds
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}

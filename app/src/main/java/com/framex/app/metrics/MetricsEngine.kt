@@ -107,10 +107,10 @@ class MetricsEngine @Inject constructor(
         engineScope.launch {
             fpsMonitor.fpsState.collect { state ->
                 _metricsState.value = _metricsState.value.copy(fps = state.fps, jankyFrames = state.jankyFrames)
-                // Append to rolling history, capped at 60 entries.
+                // Append to rolling history, capped at MAX_FPS_HISTORY_SIZE entries.
                 val next = ArrayDeque(_fpsHistory.value).also { d ->
                     d.addLast(state.fps)
-                    if (d.size > 60) d.removeFirst()
+                    if (d.size > MAX_FPS_HISTORY_SIZE) d.removeFirst()
                 }
                 _fpsHistory.value = next.toList()
 
@@ -249,6 +249,7 @@ class MetricsEngine @Inject constructor(
     }
 
     companion object {
+        private const val MAX_FPS_HISTORY_SIZE = 60
         // ~1 hour of history at 1s cadence. Long enough for a full gaming session's
         // worth of correlation data without holding unbounded memory.
         private const val MAX_SNAPSHOTS = 3600

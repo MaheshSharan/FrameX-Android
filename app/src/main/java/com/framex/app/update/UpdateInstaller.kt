@@ -167,7 +167,7 @@ class UpdateInstaller @Inject constructor(
                     ).show()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("Failed to copy APK to MediaStore/Downloads", e)
             }
         }
 
@@ -191,7 +191,7 @@ class UpdateInstaller @Inject constructor(
                 }
                 context.startActivity(uninstallIntent)
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("Failed to launch uninstaller intent", e)
             }
         }
     }

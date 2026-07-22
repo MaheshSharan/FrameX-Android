@@ -62,7 +62,7 @@ class ShizukuManager @Inject constructor() {
                 if (_hasPermission.value) connectUserService()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.framex.app.utils.FrameXLog.e("Shizuku init error", e)
             _isShizukuAvailable.value = false
         }
     }
@@ -77,7 +77,7 @@ class ShizukuManager @Inject constructor() {
                 _hasPermission.value = false
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.framex.app.utils.FrameXLog.e("Shizuku refreshState error", e)
             _isShizukuAvailable.value = false
             _hasPermission.value = false
         }
@@ -108,10 +108,14 @@ class ShizukuManager @Inject constructor() {
     }
 
     suspend fun executeCommand(command: String): String {
-        if (!_isShizukuAvailable.value || !_hasPermission.value) return ""
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            com.framex.app.utils.FrameXLog.w("executeCommand called when Shizuku is unavailable or permitted")
+            return ""
+        }
         return commandMutex.withLock {
             val runner = commandRunner
             if (runner == null) {
+                com.framex.app.utils.FrameXLog.w("CommandRunner service null, attempting reconnect")
                 connectUserService()
                 return@withLock ""
             }
@@ -120,16 +124,20 @@ class ShizukuManager @Inject constructor() {
                     runner.executeCommand(command)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("executeCommand failed: $command", e)
                 ""
             }
         }
     }
 
     suspend fun getThermalTemperatures(): String {
-        if (!_isShizukuAvailable.value || !_hasPermission.value) return ""
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            com.framex.app.utils.FrameXLog.w("getThermalTemperatures called when Shizuku is unavailable")
+            return ""
+        }
         return commandMutex.withLock {
             val runner = commandRunner ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner service null in getThermalTemperatures")
                 connectUserService()
                 return@withLock ""
             }
@@ -138,16 +146,20 @@ class ShizukuManager @Inject constructor() {
                     runner.getThermalTemperatures()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("getThermalTemperatures failed", e)
                 ""
             }
         }
     }
 
     suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): Int {
-        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) return 0
+        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
+            com.framex.app.utils.FrameXLog.w("suspendPackages skipped: Shizuku unavailable/unpermitted or package list empty")
+            return 0
+        }
         return commandMutex.withLock {
             val runner = commandRunner ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner service null in suspendPackages")
                 connectUserService()
                 return@withLock 0
             }
@@ -156,16 +168,20 @@ class ShizukuManager @Inject constructor() {
                     runner.suspendPackages(packageNames.toTypedArray(), suspended)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("suspendPackages failed", e)
                 0
             }
         }
     }
 
     suspend fun setAppOpMode(packageNames: List<String>, opCode: Int, mode: Int): Int {
-        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) return 0
+        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
+            com.framex.app.utils.FrameXLog.w("setAppOpMode skipped: Shizuku unavailable/unpermitted or package list empty")
+            return 0
+        }
         return commandMutex.withLock {
             val runner = commandRunner ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner service null in setAppOpMode")
                 connectUserService()
                 return@withLock 0
             }
@@ -174,14 +190,13 @@ class ShizukuManager @Inject constructor() {
                     runner.setAppOpMode(packageNames.toTypedArray(), opCode, mode)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                com.framex.app.utils.FrameXLog.e("setAppOpMode failed", e)
                 0
             }
         }
     }
 
     private fun connectUserService() {
-        // Both commandRunner and isConnecting must be clear before attempting a new bind.
         if (commandRunner != null || isConnecting) return
         isConnecting = true
         val args = Shizuku.UserServiceArgs(
@@ -195,7 +210,6 @@ class ShizukuManager @Inject constructor() {
             override fun onServiceDisconnected(name: ComponentName?) {
                 commandRunner = null
                 isConnecting = false
-                // Auto-reconnect if Shizuku is still alive.
                 if (_isShizukuAvailable.value && _hasPermission.value) {
                     connectUserService()
                 }
@@ -205,7 +219,7 @@ class ShizukuManager @Inject constructor() {
         try {
             Shizuku.bindUserService(args, connection)
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.framex.app.utils.FrameXLog.e("bindUserService failed", e)
             isConnecting = false
         }
     }
@@ -218,7 +232,7 @@ class ShizukuManager @Inject constructor() {
         try {
             Shizuku.unbindUserService(args, conn, false)
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.framex.app.utils.FrameXLog.e("unbindUserService failed", e)
         }
         userServiceConnection = null
         commandRunner = null
