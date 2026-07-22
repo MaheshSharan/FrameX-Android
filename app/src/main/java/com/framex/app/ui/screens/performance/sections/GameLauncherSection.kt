@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,12 +23,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import androidx.compose.ui.viewinterop.AndroidView
 import com.framex.app.gaming.AppInfo
 
 @Composable
@@ -37,9 +37,11 @@ fun GameLauncherSection(
     onGameConfigClicked: (String) -> Unit
 ) {
     val context = LocalContext.current
-    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+    Column {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -60,6 +62,7 @@ fun GameLauncherSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
                     .height(120.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(0.02f))
@@ -70,75 +73,70 @@ fun GameLauncherSection(
             }
         } else {
             val userAppsMap = remember(userApps) { userApps.associateBy { it.packageName } }
-            val rows = remember(launcherGames) { launcherGames.toList().chunked(3) }
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                rows.forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            
+            // Replaced chunked grid with LazyRow to eliminate forced spacer weights
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(launcherGames.toList(), key = { it }) { pkg ->
+                    val app = userAppsMap[pkg] ?: AppInfo(pkg, pkg.substringAfterLast('.'))
+                    Card(
+                        modifier = Modifier.clickable { onGameConfigClicked(pkg) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, Color.White.copy(0.04f))
                     ) {
-                        row.forEach { pkg ->
-                            val app = userAppsMap[pkg] ?: AppInfo(pkg, pkg.substringAfterLast('.'))
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { onGameConfigClicked(pkg) },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = BorderStroke(1.dp, Color.White.copy(0.04f))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = app.packageName) {
+                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val drawable = context.packageManager.getApplicationIcon(app.packageName)
+                                        drawable.toBitmap().asImageBitmap()
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                            }
+                            val currentBitmap = iconBitmap
+                            if (currentBitmap != null) {
+                                Image(
+                                    bitmap = currentBitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = app.packageName) {
-                                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                val drawable = context.packageManager.getApplicationIcon(app.packageName)
-                                                drawable.toBitmap().asImageBitmap()
-                                            } catch (e: Exception) {
-                                                null
-                                            }
-                                        }
-                                    }
-                                    val currentBitmap = iconBitmap
-                                    if (currentBitmap != null) {
-                                        Image(
-                                            bitmap = currentBitmap,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                app.label.take(2).uppercase(),
-                                                color = Color.White.copy(0.8f),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 18.sp
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = app.label,
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        app.label.take(2).uppercase(),
+                                        color = Color.White.copy(0.8f),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
                                     )
                                 }
                             }
-                        }
-                        repeat(3 - row.size) {
-                            Spacer(modifier = Modifier.weight(1f))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = app.label,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -151,6 +149,7 @@ fun GameLauncherSection(
             onClick = onAddGameClicked,
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 24.dp)
                 .height(52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
