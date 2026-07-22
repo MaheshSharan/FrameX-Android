@@ -260,6 +260,14 @@ class SettingsRepository @Inject constructor(
         _framePacingOverlay.value = enabled
     }
 
+    private val _autoUpdateCheckEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE_CHECK_ENABLED, true))
+    val autoUpdateCheckEnabled: StateFlow<Boolean> = _autoUpdateCheckEnabled.asStateFlow()
+
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_UPDATE_CHECK_ENABLED, enabled).apply()
+        _autoUpdateCheckEnabled.value = enabled
+    }
+
     companion object {
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_ENABLED_MODULES = "enabled_modules"
@@ -287,5 +295,6 @@ class SettingsRepository @Inject constructor(
         private const val KEY_REFRESH_RATE_LOCK = "esports_refresh_rate_lock"
         private const val KEY_TOUCH_BOOST = "esports_touch_boost"
         private const val KEY_FRAME_PACING_OVERLAY = "esports_frame_pacing_overlay"
+        private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
     }
 }

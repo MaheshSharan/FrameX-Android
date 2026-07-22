@@ -40,17 +40,25 @@ import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.ui.components.VivoDiagnosticDialog
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AboutViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    val deviceDiagnosticManager: DeviceDiagnosticManager
+    val deviceDiagnosticManager: DeviceDiagnosticManager,
+    val updateRepository: com.framex.app.update.UpdateRepository,
+    val updateInstaller: com.framex.app.update.UpdateInstaller
 ) : ViewModel() {
     val vivoOptEnabled = settingsRepository.vivoOptEnabled
+    val autoUpdateCheckEnabled = settingsRepository.autoUpdateCheckEnabled
 
     fun setVivoOptEnabled(enabled: Boolean) {
         settingsRepository.setVivoOptEnabled(enabled)
+    }
+
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) {
+        settingsRepository.setAutoUpdateCheckEnabled(enabled)
     }
 }
 
@@ -61,6 +69,14 @@ fun AboutScreen(
 ) {
     val context = LocalContext.current
     val accentColor = MaterialTheme.colorScheme.primary
+    val scope = rememberCoroutineScope()
+
+    val autoUpdateEnabled by viewModel.autoUpdateCheckEnabled.collectAsState()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfoState by remember { mutableStateOf<com.framex.app.update.AppUpdateInfo?>(null) }
+    var downloadState by remember { mutableStateOf<com.framex.app.update.DownloadState>(com.framex.app.update.DownloadState.Idle) }
+    var signatureErrorMessage by remember { mutableStateOf<String?>(null) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val packageInfo = try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -72,12 +88,12 @@ fun AboutScreen(
     } catch (e: Exception) {
         null
     }
-    val versionName = packageInfo?.versionName ?: "1.4.0"
+    val versionName = packageInfo?.versionName ?: "1.5.3"
     val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-        packageInfo?.longVersionCode ?: 5L
+        packageInfo?.longVersionCode ?: 9L
     } else {
         @Suppress("DEPRECATION")
-        packageInfo?.versionCode?.toLong() ?: 5L
+        packageInfo?.versionCode?.toLong() ?: 9L
     }
 
     Column(
@@ -105,7 +121,7 @@ fun AboutScreen(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f).padding(end = 48.dp) // Balance the back button
+                modifier = Modifier.weight(1f).padding(end = 48.dp)
             )
         }
 
@@ -156,7 +172,96 @@ fun AboutScreen(
                 Text("Contact Developer", color = Color.White, fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // App Updates Card
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Application Updates", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(24.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Auto-check for updates", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Check GitHub releases automatically on app startup.", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = autoUpdateEnabled,
+                                onCheckedChange = { checked ->
+                                    viewModel.setAutoUpdateCheckEnabled(checked)
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = Color.White.copy(0.06f),
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = statusMessage ?: "Current Version: v$versionName",
+                                fontSize = 12.sp,
+                                color = if (statusMessage != null) accentColor else Color.Gray,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Button(
+                                onClick = {
+                                    isCheckingUpdate = true
+                                    statusMessage = "Checking GitHub..."
+                                    scope.launch {
+                                        val result = viewModel.updateRepository.checkForUpdates()
+                                        isCheckingUpdate = false
+                                        result.onSuccess { info ->
+                                            if (info.isUpdateAvailable) {
+                                                updateInfoState = info
+                                                statusMessage = "Update available: v${info.versionName}"
+                                            } else {
+                                                statusMessage = "FrameX is up to date (v$versionName)"
+                                            }
+                                        }.onFailure { err ->
+                                            statusMessage = err.localizedMessage ?: "Check failed"
+                                        }
+                                    }
+                                },
+                                enabled = !isCheckingUpdate,
+                                colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(0.15f), contentColor = accentColor),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.height(40.dp)
+                            ) {
+                                if (isCheckingUpdate) {
+                                    CircularProgressIndicator(
+                                        color = accentColor,
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text("Check for Updates", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Hardware Optimization Card (Vivo / iQOO Diagnostic)
             val isVivoOptActive by viewModel.vivoOptEnabled.collectAsState()
@@ -206,6 +311,82 @@ fun AboutScreen(
                     deviceModelInfo = modelInfo,
                     onDismiss = { showVivoDiagModal = false },
                     onConfirmEnable = { viewModel.setVivoOptEnabled(true) }
+                )
+            }
+
+    var downloadedApkFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    LaunchedEffect(Unit) {
+        com.framex.app.update.UpdateInstallerBus.installEvents.collect { result ->
+            when (result) {
+                is com.framex.app.update.InstallResult.SignatureMismatch -> {
+                    signatureErrorMessage = result.errorMessage
+                    updateInfoState = null
+                }
+                is com.framex.app.update.InstallResult.PermissionRequired -> {
+                    viewModel.updateInstaller.openUnknownAppSourcesSettings()
+                }
+                else -> {}
+            }
+        }
+    }
+
+            // Update Dialog
+            updateInfoState?.let { info ->
+                com.framex.app.ui.components.UpdateDialog(
+                    updateInfo = info,
+                    downloadState = downloadState,
+                    onDownloadAndInstallClicked = {
+                        if (!viewModel.updateInstaller.canInstallPackages()) {
+                            viewModel.updateInstaller.openUnknownAppSourcesSettings()
+                            statusMessage = "Please allow unknown app installation, then tap Download & Install again."
+                        } else {
+                            scope.launch {
+                                viewModel.updateRepository.downloadUpdateApk(info.downloadUrl, info.versionName)
+                                    .collect { state ->
+                                        downloadState = state
+                                        if (state is com.framex.app.update.DownloadState.Completed) {
+                                            downloadedApkFile = state.apkFile
+                                            viewModel.updateInstaller.installApk(state.apkFile) { installRes ->
+                                                when (installRes) {
+                                                    is com.framex.app.update.InstallResult.PermissionRequired -> {
+                                                        viewModel.updateInstaller.openUnknownAppSourcesSettings()
+                                                    }
+                                                    is com.framex.app.update.InstallResult.SignatureMismatch -> {
+                                                        signatureErrorMessage = installRes.errorMessage
+                                                        updateInfoState = null
+                                                    }
+                                                    else -> {}
+                                                }
+                                            }
+                                        }
+                                    }
+                            }
+                        }
+                    },
+                    onRemindLaterClicked = {
+                        updateInfoState = null
+                        downloadState = com.framex.app.update.DownloadState.Idle
+                    }
+                )
+            }
+
+            // Signature Mismatch Dialog
+            signatureErrorMessage?.let { msg ->
+                com.framex.app.ui.components.SignatureMismatchDialog(
+                    errorMessage = msg,
+                    onUninstallClicked = {
+                        scope.launch {
+                            val targetVer = updateInfoState?.versionName ?: "1.5.3"
+                            viewModel.updateInstaller.handleSignatureMismatch(downloadedApkFile, targetVer) {
+                                signatureErrorMessage = null
+                                updateInfoState = null
+                            }
+                        }
+                    },
+                    onDismiss = {
+                        signatureErrorMessage = null
+                    }
                 )
             }
 
