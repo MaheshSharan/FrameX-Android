@@ -7,10 +7,23 @@
 > [!IMPORTANT]
 > **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices. For Vivo/iQOO devices, enable the **Vivo Optimization** toggle in Settings (About) first to unlock maximum gaming performance and bypass dynamic thermal downclocking. Behavior on other Android skins may vary. Use this feature at your own risk.
 
-[![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)](https://developer.android.com/about/versions/oreo)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-blue.svg?logo=kotlin)](https://kotlinlang.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.3-orange.svg)](https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.3)
+<p align="center">
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
+    <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
+  </a>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.3">
+    <img src="https://img.shields.io/badge/Version-1.5.3-orange?style=for-the-badge&logo=github" alt="Version"/>
+  </a>
+  <a href="https://developer.android.com/about/versions/oreo">
+    <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>
+  </a>
+  <a href="https://kotlinlang.org">
+    <img src="https://img.shields.io/badge/Kotlin-1.9-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin"/>
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License"/>
+  </a>
+</p>
 
 ---
 
