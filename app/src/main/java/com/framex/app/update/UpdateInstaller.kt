@@ -43,9 +43,9 @@ class UpdateInstaller @Inject constructor(
         apkFile: File,
         onResult: (InstallResult) -> Unit
     ) = withContext(Dispatchers.IO) {
-        if (!apkFile.exists()) {
+        if (!apkFile.exists() || apkFile.length() <= 0L) {
             withContext(Dispatchers.Main) {
-                onResult(InstallResult.Failed("APK file does not exist"))
+                onResult(InstallResult.Failed("APK file is missing or corrupted (0 bytes)"))
             }
             return@withContext
         }

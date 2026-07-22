@@ -24,6 +24,9 @@ class OverlayService : Service() {
     @Inject
     lateinit var overlayManager: OverlayManager
 
+    @Inject
+    lateinit var settingsRepository: com.framex.app.repository.SettingsRepository
+
     private var wakeLock: PowerManager.WakeLock? = null
 
     // Only hold the wake lock while the screen is actually on. Holding it for the entire
@@ -57,8 +60,7 @@ class OverlayService : Service() {
         super.onCreate()
         _isRunning.value = true
         // Persist the running state so BootReceiver can auto-restart after reboot.
-        getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-            .edit().putBoolean("overlay_was_running", true).apply()
+        settingsRepository.setOverlayWasRunning(true)
         createNotificationChannel()
         // MEDIA_PLAYBACK is the universally accepted, permission-free type for overlay services.
         // Combined with DATA_SYNC in the manifest so game-boost managers on MediaTek/Snapdragon
@@ -102,8 +104,7 @@ class OverlayService : Service() {
         super.onDestroy()
         _isRunning.value = false
         // Clear the running flag so BootReceiver does not restart an intentionally stopped service.
-        getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-            .edit().putBoolean("overlay_was_running", false).apply()
+        settingsRepository.setOverlayWasRunning(false)
         overlayManager.hideOverlay()
         runCatching { unregisterReceiver(screenStateReceiver) }
         releaseWakeLock()

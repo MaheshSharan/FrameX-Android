@@ -104,22 +104,14 @@ class FpsMonitor @Inject constructor(
                             "dumpsys SurfaceFlinger --timestats -dump"
                         )
 
-                        val parsed = Regex("averageFPS\\s*=\\s*([0-9.]+)")
+                        val parsed = FPS_REGEX
                             .find(output)
                             ?.groupValues?.get(1)
                             ?.toFloatOrNull()
                             ?.toInt()
                             ?: 0
 
-                        // The real SurfaceFlinger --timestats field is "missedFrames"
-                        // (confirmed against AOSP source: TimeStatsHelper.cpp formats it as
-                        // "missedFrames = %d\n"). An earlier version of this code looked for
-                        // "missedFrameCount", which does not exist in the actual dump — that
-                        // typo is why jankyFrames always read 0. missedFrames is SurfaceFlinger's
-                        // own count of frames that missed their intended present deadline in
-                        // this accumulation window — the direct stutter signal, independent of
-                        // whatever the window's averageFPS mean happens to be.
-                        val janky = Regex("missedFrames\\s*=\\s*([0-9]+)")
+                        val janky = JANKY_REGEX
                             .find(output)
                             ?.groupValues?.get(1)
                             ?.toIntOrNull()
@@ -148,6 +140,11 @@ class FpsMonitor @Inject constructor(
             }
             delay(1000)
         }
+    }
+
+    companion object {
+        private val FPS_REGEX = Regex("averageFPS\\s*=\\s*([0-9.]+)")
+        private val JANKY_REGEX = Regex("missedFrames\\s*=\\s*([0-9]+)")
     }
 }
 
@@ -303,7 +300,7 @@ class RamMonitor @Inject constructor(
                 val parts = line.split(":")
                 if (parts.size == 2) {
                     val key = parts[0].trim()
-                    val valStr = parts[1].trim().split("\\s+".toRegex())[0].trim()
+                    val valStr = parts[1].trim().split(WHITESPACE_REGEX)[0].trim()
                     val value = valStr.toFloatOrNull() ?: 0f
                     when (key) {
                         "MemTotal" -> totalKb = value
@@ -335,6 +332,10 @@ class RamMonitor @Inject constructor(
             totalGb = info.totalMem.toFloat() / (1024 * 1024 * 1024)
         )
     }
+
+    companion object {
+        private val WHITESPACE_REGEX = Regex("\\s+")
+    }
 }
 
 @Singleton
@@ -345,7 +346,6 @@ class NetworkMonitor @Inject constructor() {
         // Guard: on some devices/builds TrafficStats is not supported.
         if (TrafficStats.getTotalRxBytes() == TrafficStats.UNSUPPORTED.toLong()) {
             while (true) { emit(NetworkState(0f, 0f)); delay(2000) }
-            return@flow
         }
         var previousRx = TrafficStats.getTotalRxBytes()
         var previousTx = TrafficStats.getTotalTxBytes()
@@ -549,7 +549,11 @@ class PingMonitor @Inject constructor(
     private fun executePing(): String {
         return try {
             val process = Runtime.getRuntime().exec("ping -c 1 8.8.8.8")
-            process.inputStream.bufferedReader().use { it.readText() }
+            try {
+                process.inputStream.bufferedReader().use { it.readText() }
+            } finally {
+                process.destroy()
+            }
         } catch (e: Exception) {
             com.framex.app.utils.FrameXLog.w("executePing failed", e)
             ""

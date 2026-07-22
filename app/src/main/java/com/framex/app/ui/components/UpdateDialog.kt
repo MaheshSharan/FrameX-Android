@@ -33,7 +33,10 @@ fun UpdateDialog(
     updateInfo: AppUpdateInfo,
     downloadState: DownloadState,
     onDownloadAndInstallClicked: () -> Unit,
-    onRemindLaterClicked: () -> Unit
+    onRemindLaterClicked: () -> Unit,
+    onCancelDownload: () -> Unit = {},
+    canInstallPackages: () -> Boolean = { true },
+    onRequestInstallPermission: () -> Unit = {}
 ) {
     Dialog(onDismissRequest = onRemindLaterClicked) {
         Card(
@@ -140,6 +143,25 @@ fun UpdateDialog(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                     }
+                    is DownloadState.VerifyingSha -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Verifying APK integrity...",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                     is DownloadState.Failed -> {
                         Text(
                             text = "Download failed: ${downloadState.error}",
@@ -156,19 +178,41 @@ fun UpdateDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = onDownloadAndInstallClicked,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        enabled = downloadState !is DownloadState.Downloading,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text("Download & Install", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    if (downloadState is DownloadState.Downloading) {
+                        OutlinedButton(
+                            onClick = onCancelDownload,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(0.5f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFFEF4444)
+                            )
+                        ) {
+                            Text("Cancel Download", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (!canInstallPackages()) {
+                                    onRequestInstallPermission()
+                                } else {
+                                    onDownloadAndInstallClicked()
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = downloadState !is DownloadState.VerifyingSha,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Download & Install", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
 
                     OutlinedButton(
@@ -178,7 +222,7 @@ fun UpdateDialog(
                             .height(42.dp),
                         shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, Color.White.copy(0.12f)),
-                        enabled = downloadState !is DownloadState.Downloading
+                        enabled = downloadState !is DownloadState.Downloading && downloadState !is DownloadState.VerifyingSha
                     ) {
                         Text("Remind Me Later", color = Color.White.copy(0.8f), fontSize = 13.sp)
                     }

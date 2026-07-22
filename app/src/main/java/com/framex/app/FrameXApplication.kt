@@ -17,6 +17,7 @@ class FrameXApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.framex.app.utils.CrashHandler.init(this)
         shizukuManager.init()
         // Recover gaming mode state if the process was killed while mode was active.
         gamingModeEngine.recoverPersistedState()

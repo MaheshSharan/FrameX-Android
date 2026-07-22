@@ -41,6 +41,7 @@ class ShizukuManager @Inject constructor() {
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         _isShizukuAvailable.value = false
         _hasPermission.value = false
+        disconnectUserService()
     }
 
     private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
