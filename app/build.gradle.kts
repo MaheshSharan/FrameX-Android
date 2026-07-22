@@ -41,9 +41,9 @@ android {
             val keystoreFile = file("release.keystore")
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "framex123"
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
                 keyAlias = System.getenv("KEY_ALIAS") ?: "framex"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "framex123"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
             }
         }
     }

@@ -42,6 +42,7 @@ import com.framex.app.metrics.METRIC_MODULE_REGISTRY
 import com.framex.app.metrics.metricValueFor
 import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.ui.theme.FrameXTheme
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -58,13 +59,13 @@ class OverlayManager @Inject constructor(
     private var windowParams: WindowManager.LayoutParams? = null
 
     fun showOverlay() {
-        android.util.Log.d("FrameX_Overlay", "Attempting to show overlay...")
+        FrameXLog.d("Attempting to show overlay...")
         if (composeView != null) {
-            android.util.Log.d("FrameX_Overlay", "Overlay already exists, returning.")
+            FrameXLog.d("Overlay already exists, returning.")
             return
         }
 
-        android.util.Log.d("FrameX_Overlay", "Creating new ComposeView...")
+        FrameXLog.d("Creating new ComposeView...")
         composeView = ComposeView(context).apply {
             setContent {
                 FrameXTheme {

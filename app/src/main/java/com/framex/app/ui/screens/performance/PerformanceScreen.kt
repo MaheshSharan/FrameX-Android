@@ -100,17 +100,19 @@ fun PerformanceScreen(
         0f
     }
 
-    val storageInfo = remember {
-        try {
-            val stat = StatFs(Environment.getDataDirectory().path)
-            val totalBytes = stat.blockCountLong * stat.blockSizeLong
-            val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
-            val totalGb = totalBytes / (1024L * 1024L * 1024L)
-            val freeGb = freeBytes / (1024L * 1024L * 1024L)
-            val usedGb = totalGb - freeGb
-            Triple(usedGb, totalGb, freeGb)
-        } catch (e: Exception) {
-            Triple(0L, 0L, 0L)
+    val storageInfo by produceState(initialValue = Triple(0L, 0L, 0L)) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val stat = StatFs(Environment.getDataDirectory().path)
+                val totalBytes = stat.blockCountLong * stat.blockSizeLong
+                val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
+                val totalGb = totalBytes / (1024L * 1024L * 1024L)
+                val freeGb = freeBytes / (1024L * 1024L * 1024L)
+                val usedGb = totalGb - freeGb
+                Triple(usedGb, totalGb, freeGb)
+            } catch (e: Exception) {
+                Triple(0L, 0L, 0L)
+            }
         }
     }
 

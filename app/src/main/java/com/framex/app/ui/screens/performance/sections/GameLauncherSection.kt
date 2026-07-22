@@ -101,9 +101,10 @@ fun GameLauncherSection(
                                             }
                                         }
                                     }
-                                    if (iconBitmap != null) {
+                                    val currentBitmap = iconBitmap
+                                    if (currentBitmap != null) {
                                         Image(
-                                            bitmap = iconBitmap!!,
+                                            bitmap = currentBitmap,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
                                         )

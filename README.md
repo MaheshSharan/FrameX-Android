@@ -28,8 +28,8 @@ FrameX shows a draggable, fully customisable overlay with live system stats on t
 
 - Android 8.0 (API 26) or higher
 - [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running
-  - Activate via Wireless Debugging (no PC needed on Android 11+) or ADB
-  - Also works with the Sui module on rooted devices
+- Activate via Wireless Debugging (no PC needed on Android 11+) or ADB
+- Works with the Sui module on rooted devices
 
 ---
 
@@ -54,47 +54,11 @@ FrameX shows a draggable, fully customisable overlay with live system stats on t
 
 ---
 
-## How to use
-
-1. Install Shizuku and follow its setup guide to activate the service
-2. Open FrameX and complete onboarding — it will request overlay and Shizuku permissions
-3. From the dashboard tap **Start Overlay**
-4. The overlay appears on screen and stays on top of everything including games
-5. **Drag** it anywhere · **Long-press** to cycle display modes without leaving the game
-6. **Metrics** — choose which stats are visible via Overlay Customization
-7. **Appearance** — change opacity, background, border, text color, text size, font
-8. **Performance** — Activate Gaming Mode to suspend OEM bloatware and restrict background noise
-
----
-
-## Overlay modes
-
-| Mode | Description |
-|------|-------------|
-| **Minimal** | Single line, values only, minimal visual footprint |
-| **Compact** | Two-column grid of enabled metrics with labels |
-| **Expanded** | Full grid with icons and labels, best for side-mounted position |
-
----
-
-## Appearance options
-
-- **Background** — Black / Navy / Charcoal / Transparent
-- **Border** — Accent color / None / Subtle / Ghost
-- **Text color** — White / Accent / Silver / Auto (FPS-adaptive green → amber → red)
-- **Accent color** — 6 presets
-- **Text size** — Small / Medium / Large
-- **Font** — Default or JetBrains Mono
-
-All settings and the last overlay position persist across restarts.
-
----
-
 ## How FPS is measured
 
-FPS is read from SurfaceFlinger via Shizuku — the same compositor-level frame timing data used by production performance tools. It adds zero overhead to the game's rendering pipeline.
+FrameX measures frame rates directly at the Android OS compositor layer using privileged IPC calls to `SurfaceFlinger --timestats`. Because telemetry is gathered directly from the display pipeline, it adds **zero overhead** to game rendering threads or GPU pipelines.
 
-Other metrics poll at 1–5 second intervals and run only when their module is enabled, so disabled metrics cost nothing.
+![FPS Architecture Diagram](docs/assets/fps_measurement_architecture.svg)
 
 ---
 

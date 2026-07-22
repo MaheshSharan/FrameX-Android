@@ -54,9 +54,10 @@ fun AppWhitelistRow(
             .padding(horizontal = 4.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (iconBitmap != null) {
+        val currentBitmap = iconBitmap
+        if (currentBitmap != null) {
             Image(
-                bitmap = iconBitmap!!,
+                bitmap = currentBitmap,
                 contentDescription = null,
                 modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
             )
