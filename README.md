@@ -11,8 +11,8 @@
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
     <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
   </a>
-  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.3">
-    <img src="https://img.shields.io/badge/Version-1.5.3-orange?style=for-the-badge&logo=github" alt="Version"/>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.4">
+    <img src="https://img.shields.io/badge/Version-1.5.4-orange?style=for-the-badge&logo=github" alt="Version"/>
   </a>
   <a href="https://developer.android.com/about/versions/oreo">
     <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>

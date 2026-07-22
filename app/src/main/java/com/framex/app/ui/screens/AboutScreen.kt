@@ -88,7 +88,7 @@ fun AboutScreen(
     } catch (e: Exception) {
         null
     }
-    val versionName = packageInfo?.versionName ?: "1.5.3"
+    val versionName = packageInfo?.versionName ?: com.framex.app.BuildConfig.VERSION_NAME
     val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
         packageInfo?.longVersionCode ?: 9L
     } else {
@@ -377,7 +377,7 @@ fun AboutScreen(
                     errorMessage = msg,
                     onUninstallClicked = {
                         scope.launch {
-                            val targetVer = updateInfoState?.versionName ?: "1.5.3"
+                            val targetVer = updateInfoState?.versionName ?: com.framex.app.BuildConfig.VERSION_NAME
                             viewModel.updateInstaller.handleSignatureMismatch(downloadedApkFile, targetVer) {
                                 signatureErrorMessage = null
                                 updateInfoState = null
