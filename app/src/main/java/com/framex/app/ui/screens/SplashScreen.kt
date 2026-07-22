@@ -57,6 +57,7 @@ fun SplashScreen(
     var updateInfoState by remember { mutableStateOf<AppUpdateInfo?>(null) }
     var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
     var signatureErrorMessage by remember { mutableStateOf<String?>(null) }
+    var downloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     fun proceedToNextScreen() {
         if (isOnboardingCompleted) {
@@ -185,32 +186,40 @@ fun SplashScreen(
             UpdateDialog(
                 updateInfo = info,
                 downloadState = downloadState,
+                canInstallPackages = { viewModel.updateInstaller.canInstallPackages() },
+                onRequestInstallPermission = {
+                    viewModel.updateInstaller.openUnknownAppSourcesSettings()
+                },
                 onDownloadAndInstallClicked = {
-                    if (!viewModel.updateInstaller.canInstallPackages()) {
-                        viewModel.updateInstaller.openUnknownAppSourcesSettings()
-                    } else {
-                        scope.launch {
-                            viewModel.updateRepository.downloadUpdateApk(info.downloadUrl, info.versionName)
-                                .collect { state ->
-                                    downloadState = state
-                                    if (state is DownloadState.Completed) {
-                                        downloadedApkFile = state.apkFile
-                                        viewModel.updateInstaller.installApk(state.apkFile) { installRes ->
-                                            when (installRes) {
-                                                is InstallResult.PermissionRequired -> {
-                                                    viewModel.updateInstaller.openUnknownAppSourcesSettings()
-                                                }
-                                                is InstallResult.SignatureMismatch -> {
-                                                    signatureErrorMessage = installRes.errorMessage
-                                                    updateInfoState = null
-                                                }
-                                                else -> {}
+                    downloadJob = scope.launch {
+                        viewModel.updateRepository.downloadUpdateApk(info.downloadUrl, info.versionName, info.sha256)
+                            .collect { state ->
+                                downloadState = state
+                                if (state is DownloadState.Failed || state is DownloadState.Completed) {
+                                    downloadJob = null
+                                }
+                                if (state is DownloadState.Completed) {
+                                    downloadedApkFile = state.apkFile
+                                    viewModel.updateInstaller.installApk(state.apkFile) { installRes ->
+                                        when (installRes) {
+                                            is InstallResult.PermissionRequired -> {
+                                                viewModel.updateInstaller.openUnknownAppSourcesSettings()
                                             }
+                                            is InstallResult.SignatureMismatch -> {
+                                                signatureErrorMessage = installRes.errorMessage
+                                                updateInfoState = null
+                                            }
+                                            else -> {}
                                         }
                                     }
                                 }
-                        }
+                            }
                     }
+                },
+                onCancelDownload = {
+                    downloadJob?.cancel()
+                    downloadJob = null
+                    downloadState = DownloadState.Idle
                 },
                 onRemindLaterClicked = {
                     updateInfoState = null

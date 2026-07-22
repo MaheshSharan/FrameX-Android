@@ -2,6 +2,7 @@ package com.framex.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,12 +14,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -77,6 +80,7 @@ fun AboutScreen(
     var downloadState by remember { mutableStateOf<com.framex.app.update.DownloadState>(com.framex.app.update.DownloadState.Idle) }
     var signatureErrorMessage by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var downloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val packageInfo = try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -90,10 +94,10 @@ fun AboutScreen(
     }
     val versionName = packageInfo?.versionName ?: com.framex.app.BuildConfig.VERSION_NAME
     val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-        packageInfo?.longVersionCode ?: 9L
+        packageInfo?.longVersionCode ?: com.framex.app.BuildConfig.VERSION_CODE.toLong()
     } else {
         @Suppress("DEPRECATION")
-        packageInfo?.versionCode?.toLong() ?: 9L
+        packageInfo?.versionCode?.toLong() ?: com.framex.app.BuildConfig.VERSION_CODE.toLong()
     }
 
     Column(
@@ -336,33 +340,41 @@ fun AboutScreen(
                 com.framex.app.ui.components.UpdateDialog(
                     updateInfo = info,
                     downloadState = downloadState,
+                    canInstallPackages = { viewModel.updateInstaller.canInstallPackages() },
+                    onRequestInstallPermission = {
+                        viewModel.updateInstaller.openUnknownAppSourcesSettings()
+                        statusMessage = "Please allow unknown app installation, then tap Download & Install again."
+                    },
                     onDownloadAndInstallClicked = {
-                        if (!viewModel.updateInstaller.canInstallPackages()) {
-                            viewModel.updateInstaller.openUnknownAppSourcesSettings()
-                            statusMessage = "Please allow unknown app installation, then tap Download & Install again."
-                        } else {
-                            scope.launch {
-                                viewModel.updateRepository.downloadUpdateApk(info.downloadUrl, info.versionName)
-                                    .collect { state ->
-                                        downloadState = state
-                                        if (state is com.framex.app.update.DownloadState.Completed) {
-                                            downloadedApkFile = state.apkFile
-                                            viewModel.updateInstaller.installApk(state.apkFile) { installRes ->
-                                                when (installRes) {
-                                                    is com.framex.app.update.InstallResult.PermissionRequired -> {
-                                                        viewModel.updateInstaller.openUnknownAppSourcesSettings()
-                                                    }
-                                                    is com.framex.app.update.InstallResult.SignatureMismatch -> {
-                                                        signatureErrorMessage = installRes.errorMessage
-                                                        updateInfoState = null
-                                                    }
-                                                    else -> {}
+                        downloadJob = scope.launch {
+                            viewModel.updateRepository.downloadUpdateApk(info.downloadUrl, info.versionName, info.sha256)
+                                .collect { state ->
+                                    downloadState = state
+                                    if (state is com.framex.app.update.DownloadState.Failed || state is com.framex.app.update.DownloadState.Completed) {
+                                        downloadJob = null
+                                    }
+                                    if (state is com.framex.app.update.DownloadState.Completed) {
+                                        downloadedApkFile = state.apkFile
+                                        viewModel.updateInstaller.installApk(state.apkFile) { installRes ->
+                                            when (installRes) {
+                                                is com.framex.app.update.InstallResult.PermissionRequired -> {
+                                                    viewModel.updateInstaller.openUnknownAppSourcesSettings()
                                                 }
+                                                is com.framex.app.update.InstallResult.SignatureMismatch -> {
+                                                    signatureErrorMessage = installRes.errorMessage
+                                                    updateInfoState = null
+                                                }
+                                                else -> {}
                                             }
                                         }
                                     }
-                            }
+                                }
                         }
+                    },
+                    onCancelDownload = {
+                        downloadJob?.cancel()
+                        downloadJob = null
+                        downloadState = com.framex.app.update.DownloadState.Idle
                     },
                     onRemindLaterClicked = {
                         updateInfoState = null
@@ -413,6 +425,63 @@ fun AboutScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+
+            // Crash Log Diagnostics Card (100% Local & Privacy-Preserving)
+            val hasCrashLog = remember { com.framex.app.utils.CrashHandler.hasCrashLog(context) }
+            var crashLogState by remember { mutableStateOf(hasCrashLog) }
+
+            if (crashLogState) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Crash Diagnostics", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, Color.Red.copy(0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.BugReport, contentDescription = null, tint = Color.Red, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("Recent Crash Log Detected", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "FrameX captured a local crash stack trace. No telemetry was sent. You can share this log on GitHub to help fix issues.",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Button(
+                                    onClick = { com.framex.app.utils.CrashHandler.shareCrashLog(context) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Share Log", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        com.framex.app.utils.CrashHandler.clearCrashLog(context)
+                                        crashLogState = false
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(0.2f)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Clear Log", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
 
             // Legal List
             Column(modifier = Modifier.fillMaxWidth()) {

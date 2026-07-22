@@ -16,17 +16,21 @@ import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import java.security.MessageDigest
+
 data class AppUpdateInfo(
     val versionName: String,
     val releaseNotes: String,
     val downloadUrl: String,
     val assetSize: Long,
-    val isUpdateAvailable: Boolean
+    val isUpdateAvailable: Boolean,
+    val sha256: String? = null
 )
 
 sealed class DownloadState {
     object Idle : DownloadState()
     data class Downloading(val progress: Float, val bytesDownloaded: Long, val totalBytes: Long) : DownloadState()
+    data class VerifyingSha(val apkFile: File) : DownloadState()
     data class Completed(val apkFile: File) : DownloadState()
     data class Failed(val error: String) : DownloadState()
 }
@@ -39,12 +43,14 @@ class UpdateRepository @Inject constructor(
         const val GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/MaheshSharan/FrameX-Android/releases/latest"
         const val CONNECT_TIMEOUT_MS = 5000
         const val READ_TIMEOUT_MS = 8000
+        private val SHA256_REGEX = Regex("(?i)sha-?256\\s*:?\\s*([a-f0-9]{64})")
     }
 
     suspend fun checkForUpdates(): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
         try {
             val url = URL(GITHUB_LATEST_RELEASE_URL)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
+            connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -67,6 +73,8 @@ class UpdateRepository @Inject constructor(
             val tagName = json.optString("tag_name", "").removePrefix("v")
             val releaseNotes = json.optString("body", "No release notes provided.")
             
+            val extractedSha256 = SHA256_REGEX.find(releaseNotes)?.groupValues?.get(1)?.lowercase()
+
             var downloadUrl = ""
             var assetSize = 0L
 
@@ -96,16 +104,20 @@ class UpdateRepository @Inject constructor(
                     releaseNotes = releaseNotes,
                     downloadUrl = downloadUrl,
                     assetSize = assetSize,
-                    isUpdateAvailable = isAvailable
+                    isUpdateAvailable = isAvailable,
+                    sha256 = extractedSha256
                 )
             )
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            connection?.disconnect()
         }
     }
 
-    fun downloadUpdateApk(downloadUrl: String, targetVersionName: String): Flow<DownloadState> = flow {
+    fun downloadUpdateApk(downloadUrl: String, targetVersionName: String, expectedSha256: String? = null): Flow<DownloadState> = flow {
         emit(DownloadState.Downloading(0f, 0L, 0L))
+        var connection: HttpURLConnection? = null
         try {
             val updatesDir = File(context.cacheDir, "updates").apply { if (!exists()) mkdirs() }
             val apkFile = File(updatesDir, "FrameX_v$targetVersionName.apk")
@@ -114,39 +126,91 @@ class UpdateRepository @Inject constructor(
             }
 
             val url = URL(downloadUrl)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
+            connection = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 setRequestProperty("User-Agent", "FrameX-App-${BuildConfig.VERSION_NAME}")
             }
 
-            val totalBytes = connection.contentLengthLong
-            var bytesDownloaded = 0L
+            val currentJob = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+            val cancelHandler = currentJob?.invokeOnCompletion {
+                runCatching { connection.disconnect() }
+            }
 
-            connection.inputStream.use { input ->
-                FileOutputStream(apkFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var lastReportedProgress = 0f
+            try {
+                val totalBytes = connection.contentLengthLong
+                var bytesDownloaded = 0L
 
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        bytesDownloaded += bytesRead
-                        val progress = if (totalBytes > 0) bytesDownloaded.toFloat() / totalBytes else 0f
-                        
-                        if (progress - lastReportedProgress >= 0.02f || progress == 1.0f) {
-                            lastReportedProgress = progress
-                            emit(DownloadState.Downloading(progress, bytesDownloaded, totalBytes))
+                connection.inputStream.use { input ->
+                    FileOutputStream(apkFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead = 0
+                        var lastReportedProgress = 0f
+
+                        while (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive != false &&
+                            input.read(buffer).also { bytesRead = it } != -1
+                        ) {
+                            output.write(buffer, 0, bytesRead)
+                            bytesDownloaded += bytesRead
+                            val progress = if (totalBytes > 0) bytesDownloaded.toFloat() / totalBytes else 0f
+                            
+                            if (progress - lastReportedProgress >= 0.02f || progress == 1.0f) {
+                                lastReportedProgress = progress
+                                emit(DownloadState.Downloading(progress, bytesDownloaded, totalBytes))
+                            }
                         }
                     }
                 }
-            }
 
-            emit(DownloadState.Completed(apkFile))
+                if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == false) {
+                    apkFile.delete()
+                    emit(DownloadState.Failed("Download cancelled"))
+                    return@flow
+                }
+
+                if (totalBytes > 0 && apkFile.length() != totalBytes) {
+                    apkFile.delete()
+                    emit(DownloadState.Failed("Downloaded file size mismatch"))
+                    return@flow
+                }
+
+                emit(DownloadState.VerifyingSha(apkFile))
+                kotlinx.coroutines.delay(400)
+                val computedHash = computeSha256(apkFile)
+                if (!expectedSha256.isNullOrBlank()) {
+                    if (!computedHash.equals(expectedSha256, ignoreCase = true)) {
+                        apkFile.delete()
+                        emit(DownloadState.Failed("SHA-256 checksum mismatch (expected $expectedSha256, got $computedHash)"))
+                        return@flow
+                    }
+                }
+
+                emit(DownloadState.Completed(apkFile))
+            } finally {
+                cancelHandler?.dispose()
+            }
         } catch (e: Exception) {
-            emit(DownloadState.Failed(e.localizedMessage ?: "Download failed"))
+            if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == false) {
+                emit(DownloadState.Failed("Download cancelled"))
+            } else {
+                emit(DownloadState.Failed(e.localizedMessage ?: "Download failed"))
+            }
+        } finally {
+            connection?.disconnect()
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     private fun isVersionHigher(remoteVersion: String, currentVersion: String): Boolean {
         try {
