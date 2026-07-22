@@ -38,6 +38,7 @@ class AppearanceViewModel @Inject constructor(
     val moduleOrder = settingsRepository.moduleOrder
     val overlayOpacity = settingsRepository.overlayOpacity
     val overlayTextSize = settingsRepository.overlayTextSize
+    val overlayScale = settingsRepository.overlayScale
     val overlayUseMonospace = settingsRepository.overlayUseMonospace
     val overlayColorIndex = settingsRepository.overlayColorIndex
     val overlayBgColorIndex = settingsRepository.overlayBgColorIndex
@@ -45,11 +46,11 @@ class AppearanceViewModel @Inject constructor(
     val overlayTextColorIndex = settingsRepository.overlayTextColorIndex
 
     fun saveSettings(
-        opacity: Float, textSize: Int, useMonospace: Boolean, colorIndex: Int,
+        opacity: Float, scale: Float, useMonospace: Boolean, colorIndex: Int,
         bgColorIndex: Int, borderColorIndex: Int, textColorIndex: Int
     ) {
         settingsRepository.setOverlayOpacity(opacity)
-        settingsRepository.setOverlayTextSize(textSize)
+        settingsRepository.setOverlayScale(scale)
         settingsRepository.setOverlayUseMonospace(useMonospace)
         settingsRepository.setOverlayColorIndex(colorIndex)
         settingsRepository.setOverlayBgColorIndex(bgColorIndex)
@@ -65,6 +66,7 @@ fun AppearanceScreen(
 ) {
     val savedOpacity by viewModel.overlayOpacity.collectAsState()
     val savedTextSize by viewModel.overlayTextSize.collectAsState()
+    val savedScale by viewModel.overlayScale.collectAsState()
     val savedUseMonospace by viewModel.overlayUseMonospace.collectAsState()
     val savedColorIndex by viewModel.overlayColorIndex.collectAsState()
     val savedBgColorIndex by viewModel.overlayBgColorIndex.collectAsState()
@@ -78,6 +80,7 @@ fun AppearanceScreen(
 
     var opacity by remember(savedOpacity) { mutableStateOf(savedOpacity) }
     var selectedTextSize by remember(savedTextSize) { mutableStateOf(savedTextSize) }
+    var overlayScale by remember(savedScale) { mutableStateOf(savedScale) }
     var useMonospace by remember(savedUseMonospace) { mutableStateOf(savedUseMonospace) }
     var selectedColorIndex by remember(savedColorIndex) { mutableStateOf(savedColorIndex) }
     var selectedBgColorIndex by remember(savedBgColorIndex) { mutableStateOf(savedBgColorIndex) }
@@ -85,6 +88,7 @@ fun AppearanceScreen(
     var selectedTextColorIndex by remember(savedTextColorIndex) { mutableStateOf(savedTextColorIndex) }
     
     val hasChanges = opacity != savedOpacity || selectedTextSize != savedTextSize ||
+        kotlin.math.abs(overlayScale - savedScale) > 0.01f ||
         useMonospace != savedUseMonospace || selectedColorIndex != savedColorIndex ||
         selectedBgColorIndex != savedBgColorIndex || selectedBorderColorIndex != savedBorderColorIndex ||
         selectedTextColorIndex != savedTextColorIndex
@@ -145,6 +149,7 @@ fun AppearanceScreen(
                             moduleOrder = moduleOrder,
                             opacity = opacity,
                             textSize = selectedTextSize,
+                            overlayScale = overlayScale,
                             useMonospace = useMonospace,
                             colorIndex = selectedColorIndex,
                             bgColorIndex = selectedBgColorIndex,
@@ -264,7 +269,14 @@ fun AppearanceScreen(
                 ) {
                     Column {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Text("Text Size", color = Color.White, fontWeight = FontWeight.Medium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Text Size & Scale", color = Color.White, fontWeight = FontWeight.Medium)
+                                Text("${(overlayScale * 100).toInt()}%", color = colors[selectedColorIndex], fontWeight = FontWeight.Bold)
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(
                                 modifier = Modifier
@@ -274,24 +286,51 @@ fun AppearanceScreen(
                                     .padding(4.dp)
                             ) {
                                 listOf("Small", "Medium", "Large").forEachIndexed { index, label ->
+                                    val isSelected = selectedTextSize == index
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(if (selectedTextSize == index) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                            .clickable { selectedTextSize = index }
+                                            .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                            .clickable {
+                                                selectedTextSize = index
+                                                overlayScale = when (index) {
+                                                    0 -> 0.8f
+                                                    2 -> 1.2f
+                                                    else -> 1.0f
+                                                }
+                                            }
                                             .padding(vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = label,
-                                            color = if (selectedTextSize == index) Color.White else Color.Gray,
-                                            fontWeight = if (selectedTextSize == index) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) Color.White else Color.Gray,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             fontSize = 14.sp
                                         )
                                     }
                                 }
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Slider(
+                                value = overlayScale,
+                                onValueChange = { newScale ->
+                                    overlayScale = newScale
+                                    selectedTextSize = when {
+                                        kotlin.math.abs(newScale - 0.8f) < 0.05f -> 0
+                                        kotlin.math.abs(newScale - 1.0f) < 0.05f -> 1
+                                        kotlin.math.abs(newScale - 1.2f) < 0.05f -> 2
+                                        else -> -1
+                                    }
+                                },
+                                valueRange = 0.5f..1.5f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = colors[selectedColorIndex],
+                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
                         }
                         HorizontalDivider(color = Color.White.copy(0.05f))
                         Row(
@@ -394,7 +433,7 @@ fun AppearanceScreen(
             Button(
                 onClick = { 
                     if (hasChanges) {
-                        viewModel.saveSettings(opacity, selectedTextSize, useMonospace, selectedColorIndex, selectedBgColorIndex, selectedBorderColorIndex, selectedTextColorIndex)
+                        viewModel.saveSettings(opacity, overlayScale, useMonospace, selectedColorIndex, selectedBgColorIndex, selectedBorderColorIndex, selectedTextColorIndex)
                         Toast.makeText(context, "Appearance configuration saved!", Toast.LENGTH_SHORT).show()
                     }
                 },

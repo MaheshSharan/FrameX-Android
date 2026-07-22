@@ -74,6 +74,7 @@ class OverlayManager @Inject constructor(
                     val moduleOrder by settingsRepository.moduleOrder.collectAsState()
                     val opacity by settingsRepository.overlayOpacity.collectAsState()
                     val textSize by settingsRepository.overlayTextSize.collectAsState()
+                    val overlayScale by settingsRepository.overlayScale.collectAsState()
                     val useMonospace by settingsRepository.overlayUseMonospace.collectAsState()
                     val colorIndex by settingsRepository.overlayColorIndex.collectAsState()
                     val bgColorIndex by settingsRepository.overlayBgColorIndex.collectAsState()
@@ -87,6 +88,7 @@ class OverlayManager @Inject constructor(
                         moduleOrder = moduleOrder,
                         opacity = opacity,
                         textSize = textSize,
+                        overlayScale = overlayScale,
                         useMonospace = useMonospace,
                         colorIndex = colorIndex,
                         bgColorIndex = bgColorIndex,
@@ -276,7 +278,8 @@ fun OverlayContent(
     enabledModules: Set<String>,
     moduleOrder: List<String>,
     opacity: Float,
-    textSize: Int,
+    textSize: Int = 1,
+    overlayScale: Float = 1.0f,
     useMonospace: Boolean,
     colorIndex: Int,
     bgColorIndex: Int = 0,
@@ -293,6 +296,7 @@ fun OverlayContent(
         moduleOrder = moduleOrder,
         opacity = opacity,
         textSize = textSize,
+        overlayScale = overlayScale,
         useMonospace = useMonospace,
         colorIndex = colorIndex,
         bgColorIndex = bgColorIndex,
