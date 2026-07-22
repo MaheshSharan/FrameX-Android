@@ -27,7 +27,8 @@ fun OverlayPreviewContent(
     enabledModules: Set<String>,
     moduleOrder: List<String>,
     opacity: Float,
-    textSize: Int,
+    textSize: Int = 1,
+    overlayScale: Float = 1.0f,
     useMonospace: Boolean,
     colorIndex: Int,
     bgColorIndex: Int = 0,
@@ -58,7 +59,7 @@ fun OverlayPreviewContent(
     )
     val accentColor = colors.getOrElse(colorIndex) { MaterialTheme.colorScheme.primary }
     val fontFamily = if (useMonospace) FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
-    val textScale = when (textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
+    val textScale = if (overlayScale != 1.0f || textSize == 1) overlayScale else when (textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
 
     val bgColors = listOf(Color.Black, Color(0xFF0D1117), Color(0xFF1C1C1E), Color.Transparent)
     val bgBase = bgColors.getOrElse(bgColorIndex) { Color.Black }

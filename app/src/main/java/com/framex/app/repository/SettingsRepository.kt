@@ -45,6 +45,19 @@ class SettingsRepository @Inject constructor(
     private val _overlayTextSize = MutableStateFlow(prefs.getInt(KEY_OVERLAY_TEXT_SIZE, 1))
     val overlayTextSize: StateFlow<Int> = _overlayTextSize.asStateFlow()
 
+    private val _overlayScale = MutableStateFlow(
+        if (prefs.contains(KEY_OVERLAY_SCALE)) {
+            prefs.getFloat(KEY_OVERLAY_SCALE, 1.0f)
+        } else {
+            when (prefs.getInt(KEY_OVERLAY_TEXT_SIZE, 1)) {
+                0 -> 0.8f
+                2 -> 1.2f
+                else -> 1.0f
+            }
+        }
+    )
+    val overlayScale: StateFlow<Float> = _overlayScale.asStateFlow()
+
     private val _overlayUseMonospace = MutableStateFlow(prefs.getBoolean(KEY_OVERLAY_USE_MONOSPACE, false))
     val overlayUseMonospace: StateFlow<Boolean> = _overlayUseMonospace.asStateFlow()
 
@@ -94,8 +107,27 @@ class SettingsRepository @Inject constructor(
     }
 
     fun setOverlayTextSize(size: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_TEXT_SIZE, size).apply()
-        _overlayTextSize.value = size
+        val targetScale = when (size) {
+            0 -> 0.8f
+            2 -> 1.2f
+            else -> 1.0f
+        }
+        setOverlayScale(targetScale)
+    }
+
+    fun setOverlayScale(scale: Float) {
+        prefs.edit().putFloat(KEY_OVERLAY_SCALE, scale).apply()
+        _overlayScale.value = scale
+        val matchedIndex = when {
+            kotlin.math.abs(scale - 0.8f) < 0.05f -> 0
+            kotlin.math.abs(scale - 1.0f) < 0.05f -> 1
+            kotlin.math.abs(scale - 1.2f) < 0.05f -> 2
+            else -> -1
+        }
+        if (matchedIndex != -1) {
+            prefs.edit().putInt(KEY_OVERLAY_TEXT_SIZE, matchedIndex).apply()
+            _overlayTextSize.value = matchedIndex
+        }
     }
 
     fun setOverlayUseMonospace(useMonospace: Boolean) {
@@ -282,6 +314,7 @@ class SettingsRepository @Inject constructor(
         private const val MODULE_ORDER_DELIMITER = ","
         private const val KEY_OVERLAY_OPACITY = "overlay_opacity"
         private const val KEY_OVERLAY_TEXT_SIZE = "overlay_text_size"
+        private const val KEY_OVERLAY_SCALE = "overlay_scale"
         private const val KEY_OVERLAY_USE_MONOSPACE = "overlay_use_monospace"
         private const val KEY_OVERLAY_COLOR_INDEX = "overlay_color_index"
         private const val KEY_OVERLAY_BG_COLOR_INDEX = "overlay_bg_color_index"

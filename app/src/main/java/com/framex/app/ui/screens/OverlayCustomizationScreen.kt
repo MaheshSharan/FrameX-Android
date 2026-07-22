@@ -62,6 +62,7 @@ class OverlayCustomizationViewModel @Inject constructor(
     val savedModuleOrder = settingsRepository.moduleOrder
     val opacity = settingsRepository.overlayOpacity
     val textSize = settingsRepository.overlayTextSize
+    val overlayScale = settingsRepository.overlayScale
     val useMonospace = settingsRepository.overlayUseMonospace
     val colorIndex = settingsRepository.overlayColorIndex
 
@@ -81,7 +82,7 @@ fun OverlayCustomizationScreen(
     val savedModules by viewModel.savedModules.collectAsState()
     val savedModuleOrder by viewModel.savedModuleOrder.collectAsState()
     val opacity by viewModel.opacity.collectAsState()
-    val textSize by viewModel.textSize.collectAsState()
+    val overlayScale by viewModel.overlayScale.collectAsState()
     val useMonospace by viewModel.useMonospace.collectAsState()
     val colorIndex by viewModel.colorIndex.collectAsState()
     val context = LocalContext.current
@@ -99,7 +100,7 @@ fun OverlayCustomizationScreen(
     )
     val accentColor = colors[colorIndex]
     val fontFamily = if (useMonospace) FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
-    val textScale = when (textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
+    val textScale = overlayScale
 
     val savedOrderIds = remember(savedModuleOrder) {
         val resolved = resolveMetricModuleOrder(savedModuleOrder)
