@@ -1,11 +1,12 @@
 package com.framex.app.ui.screens.performance.dialogs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -20,9 +21,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.framex.app.gaming.AppInfo
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddGameModal(
     userApps: List<AppInfo>,
@@ -31,62 +33,115 @@ fun AddGameModal(
     onToggleLauncherGame: (String) -> Unit
 ) {
     val context = LocalContext.current
-    ModalBottomSheet(
+
+    Dialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        scrimColor = Color.Black.copy(0.6f)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
+                .fillMaxHeight(0.8f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, Color.White.copy(0.06f))
         ) {
-            Text("Add Games to Launcher", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            Spacer(modifier = Modifier.height(16.dp))
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(userApps) { app ->
-                    val isAdded = launcherGames.contains(app.packageName)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggleLauncherGame(app.packageName) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val iconDrawable = remember(app.packageName) {
-                            try {
-                                context.packageManager.getApplicationIcon(app.packageName)
-                            } catch (e: Exception) {
-                                null
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    "Add Games",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Select the apps you want to display in the game launcher.",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(userApps, key = { it.packageName }) { app ->
+                        val isAdded = launcherGames.contains(app.packageName)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onToggleLauncherGame(app.packageName) }
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val iconDrawable = remember(app.packageName) {
+                                try {
+                                    context.packageManager.getApplicationIcon(app.packageName)
+                                } catch (e: Exception) {
+                                    null
+                                }
                             }
-                        }
-                        if (iconDrawable != null) {
-                            AndroidView(
-                                factory = { ctx ->
-                                    android.widget.ImageView(ctx).apply {
-                                        setImageDrawable(iconDrawable)
-                                    }
-                                },
-                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                            if (iconDrawable != null) {
+                                AndroidView(
+                                    factory = { ctx ->
+                                        android.widget.ImageView(ctx).apply {
+                                            setImageDrawable(iconDrawable)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        app.label.take(2).uppercase(),
+                                        color = Color.White.copy(0.6f),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    app.label,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    app.packageName,
+                                    color = Color.Gray,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Checkbox(
+                                checked = isAdded,
+                                onCheckedChange = { onToggleLauncherGame(app.packageName) },
+                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                             )
-                        } else {
-                            Box(
-                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(app.label.take(2).uppercase(), color = Color.White, fontSize = 12.sp)
-                            }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(app.label, color = Color.White, modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Checkbox(
-                            checked = isAdded,
-                            onCheckedChange = { onToggleLauncherGame(app.packageName) }
-                        )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold)
                 }
             }
         }

@@ -185,7 +185,7 @@ class GamingModeEngine @Inject constructor(
         val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        var finalWhitelist = userWhitelist
+        var finalWhitelist = userWhitelist + settingsRepository.launcherGames.value
         var boostRam = true
 
         if (activeGamePkg != null) {

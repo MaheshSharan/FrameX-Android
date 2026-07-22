@@ -1,14 +1,10 @@
 package com.framex.app.ui.screens.performance.dialogs
 
-import android.app.ActivityManager
-import android.content.Context
 import android.content.Intent
-import android.media.AudioManager
-import android.os.Build
+import android.net.Uri
 import android.provider.Settings
-import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,18 +16,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.framex.app.gaming.AppInfo
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameConfigModal(
     pkg: String,
+    userApps: List<AppInfo>,
     canWriteSettings: Boolean,
     getGameConfigBoostRam: (String) -> Boolean,
     setGameConfigBoostRam: (String, Boolean) -> Unit,
@@ -41,196 +39,277 @@ fun GameConfigModal(
     setGameConfigDisableRotate: (String, Boolean) -> Unit,
     getGameConfigRingtoneVol: (String) -> Int,
     setGameConfigRingtoneVol: (String, Int) -> Unit,
-    onRemoveGame: (String) -> Unit,
-    onLaunchGame: (String) -> Unit,
+    onBoostClicked: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val pm = context.packageManager
+    val app = remember(pkg, userApps) {
+        userApps.firstOrNull { it.packageName == pkg } ?: AppInfo(pkg, pkg.substringAfterLast('.'))
+    }
 
-    var boostRam by remember { mutableStateOf(getGameConfigBoostRam(pkg)) }
-    var disableBrightness by remember { mutableStateOf(getGameConfigDisableBrightness(pkg)) }
-    var disableRotate by remember { mutableStateOf(getGameConfigDisableRotate(pkg)) }
-    var ringtoneVol by remember { mutableIntStateOf(getGameConfigRingtoneVol(pkg)) }
+    var boostRam by remember(pkg) { mutableStateOf(getGameConfigBoostRam(pkg)) }
+    var disableBrightness by remember(pkg) { mutableStateOf(getGameConfigDisableBrightness(pkg)) }
+    var disableRotate by remember(pkg) { mutableStateOf(getGameConfigDisableRotate(pkg)) }
+    var ringtoneVol by remember(pkg) { mutableFloatStateOf(getGameConfigRingtoneVol(pkg).toFloat()) }
 
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        scrimColor = Color.Black.copy(0.6f)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, Color.White.copy(0.06f))
         ) {
-            val appLabel = remember(pkg) {
-                try {
-                    val ai = pm.getApplicationInfo(pkg, 0)
-                    pm.getApplicationLabel(ai).toString()
-                } catch (e: Exception) {
-                    pkg.substringAfterLast('.')
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val iconDrawable = remember(app.packageName) {
+                        try {
+                            context.packageManager.getApplicationIcon(app.packageName)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    if (iconDrawable != null) {
+                        AndroidView(
+                            factory = { ctx ->
+                                android.widget.ImageView(ctx).apply {
+                                    setImageDrawable(iconDrawable)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                app.label.take(2).uppercase(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            app.label,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        Text(
+                            app.packageName,
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            }
-            val appIcon = remember(pkg) {
-                try {
-                    val ai = pm.getApplicationInfo(pkg, 0)
-                    pm.getApplicationIcon(ai).toBitmap().asImageBitmap()
-                } catch (e: Exception) {
-                    null
-                }
-            }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "The following configuration will change automatically when the game starts.",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                Spacer(modifier = Modifier.height(20.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (appIcon != null) {
-                    androidx.compose.foundation.Image(
-                        bitmap = appIcon,
+                Text(
+                    "ENGINE OPTIMIZATIONS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Bolt,
                         contentDescription = null,
-                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                }
-                Column {
-                    Text(appLabel, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Text(pkg, color = Color.Gray, fontSize = 11.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val next = !boostRam
-                        boostRam = next
-                        setGameConfigBoostRam(pkg, next)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Boost RAM",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Force-stop background activities",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
                     }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto RAM Boost on Launch", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text("Purge non-essential caches before launching", color = Color.Gray, fontSize = 11.sp)
+                    Switch(
+                        checked = boostRam,
+                        onCheckedChange = {
+                            boostRam = it
+                            setGameConfigBoostRam(pkg, it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
                 }
-                Switch(checked = boostRam, onCheckedChange = {
-                    boostRam = it
-                    setGameConfigBoostRam(pkg, it)
-                })
-            }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val next = !disableBrightness
-                        disableBrightness = next
-                        setGameConfigDisableBrightness(pkg, next)
-                    }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.BrightnessAuto, contentDescription = null, tint = Color(0xFFEAB308), modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Disable Auto-Brightness", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text("Lock current brightness level while gaming", color = Color.Gray, fontSize = 11.sp)
-                }
-                Switch(
-                    checked = disableBrightness,
-                    onCheckedChange = {
-                        disableBrightness = it
-                        setGameConfigDisableBrightness(pkg, it)
-                    },
-                    enabled = canWriteSettings
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val next = !disableRotate
-                        disableRotate = next
-                        setGameConfigDisableRotate(pkg, next)
-                    }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.ScreenRotation, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Disable Auto-Rotation", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text("Lock current screen orientation while gaming", color = Color.Gray, fontSize = 11.sp)
-                }
-                Switch(
-                    checked = disableRotate,
-                    onCheckedChange = {
-                        disableRotate = it
-                        setGameConfigDisableRotate(pkg, it)
-                    },
-                    enabled = canWriteSettings
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.BrightnessMedium,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Auto Ringtone Volume", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(if (ringtoneVol == -1) "Off" else "$ringtoneVol%", color = Color.Gray, fontSize = 12.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Disable auto brightness",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Lock brightness at current level",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Switch(
+                        checked = disableBrightness,
+                        onCheckedChange = {
+                            disableBrightness = it
+                            setGameConfigDisableBrightness(pkg, it)
+                            if (it && !canWriteSettings) {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.ScreenRotation,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Disable auto rotate",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Lock display in landscape mode",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Switch(
+                        checked = disableRotate,
+                        onCheckedChange = {
+                            disableRotate = it
+                            setGameConfigDisableRotate(pkg, it)
+                            if (it && !canWriteSettings) {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Change ringtone volume",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
                 Slider(
-                    value = if (ringtoneVol == -1) 0f else ringtoneVol.toFloat(),
+                    value = ringtoneVol,
                     onValueChange = {
-                        val v = it.toInt()
-                        ringtoneVol = v
-                        setGameConfigRingtoneVol(pkg, v)
+                        ringtoneVol = it
+                        setGameConfigRingtoneVol(pkg, it.toInt())
                     },
                     valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(thumbColor = Color(0xFF10B981), activeTrackColor = Color(0xFF10B981))
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary
+                    )
                 )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        onRemoveGame(pkg)
-                        onDismiss()
-                    },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("Remove")
-                }
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = {
                         onDismiss()
-                        onLaunchGame(pkg)
+                        onBoostClicked(pkg)
                     },
-                    modifier = Modifier.weight(1.5f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Launch Game", fontWeight = FontWeight.Bold)
+                    Text("BOOST", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

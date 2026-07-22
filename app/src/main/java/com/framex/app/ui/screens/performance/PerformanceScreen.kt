@@ -288,6 +288,7 @@ fun PerformanceScreen(
         configGamePkg?.let { targetPkg ->
             GameConfigModal(
                 pkg = targetPkg,
+                userApps = userApps,
                 canWriteSettings = hasWriteSettingsAccess,
                 getGameConfigBoostRam = { p -> viewModel.getGameConfigBoostRam(p) },
                 setGameConfigBoostRam = { p, v -> viewModel.setGameConfigBoostRam(p, v) },
@@ -297,20 +298,9 @@ fun PerformanceScreen(
                 setGameConfigDisableRotate = { p, v -> viewModel.setGameConfigDisableRotate(p, v) },
                 getGameConfigRingtoneVol = { p -> viewModel.getGameConfigRingtoneVol(p) },
                 setGameConfigRingtoneVol = { p, v -> viewModel.setGameConfigRingtoneVol(p, v) },
-                onRemoveGame = { tPkg -> viewModel.toggleLauncherGame(tPkg) },
-                onLaunchGame = { tPkg ->
+                onBoostClicked = { tPkg ->
+                    configGamePkg = null
                     activeDeployingGamePkg = tPkg
-                    scope.launch {
-                        delay(100)
-                        viewModel.launchGameWithOptimizations(context, tPkg) { freed: Long ->
-                            activeDeployingGamePkg = null
-                            scope.launch {
-                                showRamSuccessBanner = "Game boosted successfully! Freed $freed MB of RAM"
-                                delay(2500)
-                                showRamSuccessBanner = null
-                            }
-                        }
-                    }
                 },
                 onDismiss = { configGamePkg = null }
             )
@@ -318,7 +308,19 @@ fun PerformanceScreen(
 
         // Deploying Game Modal
         activeDeployingGamePkg?.let { pkg ->
-            DeployingGameModal(pkg = pkg)
+            DeployingGameModal(
+                pkg = pkg,
+                onAnimationComplete = { tPkg ->
+                    viewModel.launchGameWithOptimizations(context, tPkg) { freed ->
+                        activeDeployingGamePkg = null
+                        scope.launch {
+                            showRamSuccessBanner = "Game boosted successfully! Freed $freed MB of RAM"
+                            delay(2500)
+                            showRamSuccessBanner = null
+                        }
+                    }
+                }
+            )
         }
     }
 }

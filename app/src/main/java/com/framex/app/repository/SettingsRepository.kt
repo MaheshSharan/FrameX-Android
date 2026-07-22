@@ -193,7 +193,14 @@ class SettingsRepository @Inject constructor(
 
     fun toggleLauncherGame(packageName: String) {
         val current = _launcherGames.value.toMutableSet()
-        if (current.contains(packageName)) current.remove(packageName) else current.add(packageName)
+        val whitelist = _gamingModeWhitelist.value.toMutableSet()
+        if (current.contains(packageName)) {
+            current.remove(packageName)
+        } else {
+            current.add(packageName)
+            whitelist.add(packageName)
+            setGamingModeWhitelist(whitelist)
+        }
         setLauncherGames(current)
     }
 
