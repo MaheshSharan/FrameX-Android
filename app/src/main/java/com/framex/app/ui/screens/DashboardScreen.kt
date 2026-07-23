@@ -162,7 +162,33 @@ fun DashboardScreen(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // FPS Status Header — right-aligned directly above the graph card
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val lineColor = MaterialTheme.colorScheme.primary
+                    if (fpsHistory.isNotEmpty()) {
+                        Text(
+                            text = "${fpsHistory.last()} FPS",
+                            color = lineColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "FPS Graph",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 // Live FPS sparkline — draws the last 60 seconds of real frame data.
                 // Shows a flat baseline when the overlay isn't running or no data yet.
@@ -175,23 +201,6 @@ fun DashboardScreen(
                 ) {
                     val lineColor = MaterialTheme.colorScheme.primary
                     val gridColor = Color.White.copy(alpha = 0.04f)
-                    // Label: current FPS value in corner
-                    if (fpsHistory.isNotEmpty()) {
-                        Text(
-                            text = "${fpsHistory.last()} FPS",
-                            color = lineColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
-                    } else {
-                        Text(
-                            text = "FPS Graph",
-                            color = Color.Gray,
-                            fontSize = 11.sp,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
-                    }
                     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                         val w = size.width
                         val h = size.height
