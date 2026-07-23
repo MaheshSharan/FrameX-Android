@@ -397,15 +397,9 @@ class GamingModeEngine @Inject constructor(
     /** Called on app start-up to recover state that was active before a kill. */
     fun recoverPersistedState() {
         if (settingsRepository.isGamingModeActive()) {
-            if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
-                // The FGS may have been killed but the device is still in the modified state.
-                // Mark as active so the UI reflects reality; the user can deactivate normally.
-                _isActive.value = true
-                _state.value = GamingModeState.Active
-            } else {
-                // OriginOS 6 "Final Boss" Fix: Reboot Dilemma.
-                // Gaming Mode was active but Shizuku is gone (e.g. after reboot).
-                // We MUST notify the user to reconnect Shizuku to restore their apps.
+            _isActive.value = true
+            _state.value = GamingModeState.Active
+            if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
                 showRecoveryNotification()
             }
         }
