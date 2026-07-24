@@ -13,8 +13,8 @@ android {
         applicationId = "com.framex.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.5.5"
+        versionCode = 12
+        versionName = "1.5.6"
     }
 
     buildFeatures {
