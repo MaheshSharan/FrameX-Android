@@ -19,7 +19,9 @@ internal object ThermalServiceParser {
         val batteryC: Float? = null,
         val thermalStatus: Int = 0,
         /** Number of Temperature{…} blocks that yielded a value. */
-        val entryCount: Int = 0
+        val entryCount: Int = 0,
+        /** True if HAL is explicitly reported as not ready/disabled (e.g. HAL Ready: false). */
+        val halNotReady: Boolean = false
     ) {
         val hasAnySensor: Boolean
             get() = cpuC != null || gpuC != null || skinC != null || npuC != null || batteryC != null
@@ -92,6 +94,10 @@ internal object ThermalServiceParser {
             ?.toIntOrNull()
             ?: 0
 
+        val halNotReady = output.contains("HAL Ready: false", ignoreCase = true) || 
+                          output.contains("mHalReady: false", ignoreCase = true) ||
+                          output.contains("Thermal HAL is not ready", ignoreCase = true)
+
         return Result(
             cpuC = cpu,
             gpuC = gpu,
@@ -99,7 +105,8 @@ internal object ThermalServiceParser {
             npuC = npu,
             batteryC = battery,
             thermalStatus = thermalStatus,
-            entryCount = entryCount
+            entryCount = entryCount,
+            halNotReady = halNotReady
         )
     }
 

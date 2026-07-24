@@ -463,7 +463,8 @@ class ThermalMonitor @Inject constructor(
                                 val status = parsed?.thermalStatus ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                     powerManager.currentThermalStatus
                                 } else 0
-                                ThermalState(status = status, readStatus = MetricReadStatus.ParseFailed)
+                                val statusType = if (parsed?.halNotReady == true) MetricReadStatus.EmptyOutput else MetricReadStatus.ParseFailed
+                                ThermalState(status = status, readStatus = statusType)
                             }
                         } else {
                             consecutiveFailures = 0
