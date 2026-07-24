@@ -14,9 +14,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -440,25 +446,53 @@ fun ThermalDiagnosticsScreen(
 
 @Composable
 private fun ReadingCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp))
-            .padding(14.dp)
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
-        Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            value,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
-            maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-        )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                val (plateBg, plateBorder, iconColor, iconVector) = when (label) {
+                    "CPU" -> Quadruple(Color(0xFFEF4444).copy(alpha = 0.14f), Color(0xFFEF4444).copy(alpha = 0.28f), Color(0xFFF87171), Icons.Default.Memory)
+                    "GPU" -> Quadruple(Color(0xFF3B82F6).copy(alpha = 0.14f), Color(0xFF3B82F6).copy(alpha = 0.28f), Color(0xFF60A5FA), Icons.Default.Speed)
+                    "SKIN" -> Quadruple(Color(0xFFF59E0B).copy(alpha = 0.14f), Color(0xFFF59E0B).copy(alpha = 0.28f), Color(0xFFFBBF24), Icons.Default.Thermostat)
+                    "NPU" -> Quadruple(Color(0xFF8B5CF6).copy(alpha = 0.14f), Color(0xFF8B5CF6).copy(alpha = 0.28f), Color(0xFFA78BFA), Icons.Default.DeveloperBoard)
+                    "BATTERY" -> Quadruple(Color(0xFF10B981).copy(alpha = 0.14f), Color(0xFF10B981).copy(alpha = 0.28f), Color(0xFF34D399), Icons.Default.BatteryChargingFull)
+                    else -> Quadruple(Color(0xFFEC4899).copy(alpha = 0.14f), Color(0xFFEC4899).copy(alpha = 0.28f), Color(0xFFF472B6), Icons.Default.LocalFireDepartment)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(plateBg)
+                            .border(1.dp, plateBorder, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(iconVector, contentDescription = null, tint = iconColor, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    value,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @Composable
 private fun LegendDot(color: Color) {

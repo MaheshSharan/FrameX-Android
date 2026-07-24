@@ -22,6 +22,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 
 @Composable
+fun WovenNetBackground(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val step = 14.dp.toPx()
+        val lineColor = Color.White.copy(alpha = 0.025f)
+        var x = -size.height
+        while (x < size.width + size.height) {
+            drawLine(lineColor, start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x + size.height, size.height), strokeWidth = 1.dp.toPx())
+            drawLine(lineColor, start = androidx.compose.ui.geometry.Offset(x, size.height), end = androidx.compose.ui.geometry.Offset(x + size.height, 0f), strokeWidth = 1.dp.toPx())
+            x += step
+        }
+    }
+}
+
+@Composable
 fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
@@ -95,16 +109,7 @@ fun QuickActionButton(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             // Woven net texture background
-            androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
-                val step = 14.dp.toPx()
-                val lineColor = Color.White.copy(alpha = 0.025f)
-                var x = -size.height
-                while (x < size.width + size.height) {
-                    drawLine(lineColor, start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x + size.height, size.height), strokeWidth = 1.dp.toPx())
-                    drawLine(lineColor, start = androidx.compose.ui.geometry.Offset(x, size.height), end = androidx.compose.ui.geometry.Offset(x + size.height, 0f), strokeWidth = 1.dp.toPx())
-                    x += step
-                }
-            }
+            WovenNetBackground(modifier = Modifier.matchParentSize())
 
             if (isFullWidth) {
                 Row(

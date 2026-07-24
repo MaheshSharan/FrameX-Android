@@ -36,15 +36,17 @@ fun CircularGauge(
     Card(
         modifier = modifier
             .height(160.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color.White.copy(0.04f))
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
             Box(contentAlignment = Alignment.Center) {
                 Canvas(modifier = Modifier.size(90.dp)) {
                     drawArc(
@@ -77,4 +79,5 @@ fun CircularGauge(
             )
         }
     }
+}
 }

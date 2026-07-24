@@ -32,11 +32,13 @@ fun RequirementsSection(
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, Color.White.copy(0.05f))
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 RequirementRow(
                     label = "Shizuku Service",
                     description = if (shizukuReady) "Connected — ADB shell is available"
@@ -85,6 +87,7 @@ fun RequirementsSection(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
+    }
+    Spacer(modifier = Modifier.height(24.dp))
     }
 }

@@ -287,7 +287,8 @@ fun OverlayContent(
     textColorIndex: Int = 0,
     metricsState: com.framex.app.metrics.MetricsState,
     onDrag: (Float, Float) -> Unit,
-    onDragEnd: () -> Unit = {}
+    onDragEnd: () -> Unit = {},
+    onModeToggle: () -> Unit = {}
 ) {
     com.framex.app.ui.components.OverlayPreviewContent(
         mode = mode,

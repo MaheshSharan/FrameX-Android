@@ -78,16 +78,19 @@ fun LazyListScope.AppWhitelistSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 3.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
             ) {
-                Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    AppWhitelistRow(
-                        app = app,
-                        isWhitelisted = whitelist.contains(app.packageName),
-                        onToggle = { onToggleWhitelist(app.packageName) }
-                    )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+                    Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        AppWhitelistRow(
+                            app = app,
+                            isWhitelisted = whitelist.contains(app.packageName),
+                            onToggle = { onToggleWhitelist(app.packageName) }
+                        )
+                    }
                 }
             }
         }

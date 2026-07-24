@@ -1,5 +1,6 @@
 package com.framex.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -165,87 +166,92 @@ fun PermissionsScreen(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // Shizuku Card
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                        .padding(20.dp)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
                 ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("A", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Shizuku Service", color = Color.White, fontWeight = FontWeight.Bold)
-                                Row(
-                                    modifier = Modifier.clip(CircleShape)
-                                        .background(if (isShizukuAvailable && hasShizukuPermission) Color(0xFF22C55E).copy(0.1f) else Color.Red.copy(0.1f))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF3D9BE0).copy(alpha = 0.14f))
+                                        .border(1.dp, Color(0xFF3D9BE0).copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(if (isShizukuAvailable && hasShizukuPermission) Color(0xFF22C55E) else Color.Red))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        if (isShizukuAvailable && hasShizukuPermission) "RUNNING & GRANTED" else if (isShizukuAvailable) "PERMISSION REQUIRED" else "NOT RUNNING", 
-                                        color = if (isShizukuAvailable && hasShizukuPermission) Color(0xFF22C55E) else Color.Red, 
-                                        fontSize = 10.sp, 
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text("ADB", color = Color(0xFF6EB8EE), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Shizuku Service", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(
+                                        modifier = Modifier.clip(CircleShape)
+                                            .background(if (isShizukuAvailable && hasShizukuPermission) Color(0xFF2FBF9F).copy(0.14f) else Color.Red.copy(0.14f))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(if (isShizukuAvailable && hasShizukuPermission) Color(0xFF2FBF9F) else Color.Red))
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            if (isShizukuAvailable && hasShizukuPermission) "RUNNING & GRANTED" else if (isShizukuAvailable) "PERMISSION REQUIRED" else "NOT RUNNING", 
+                                            color = if (isShizukuAvailable && hasShizukuPermission) Color(0xFF2FBF9F) else Color.Red, 
+                                            fontSize = 10.sp, 
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "The core bridge for non-root access. Please ensure Shizuku is running via ADB or Wireless Debugging.",
-                            color = Color.LightGray,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Launch Button
-                            Button(
-                                onClick = {
-                                    val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                                    if (intent != null) {
-                                        context.startActivity(intent)
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Shizuku app not found", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = Color.White)
-                            ) {
-                                Text("Launch App", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            
-                            // Grant Button
-                            Button(
-                                onClick = {
-                                    if (isShizukuAvailable && !hasShizukuPermission) {
-                                        viewModel.requestShizukuPermission()
-                                    } else if (!isShizukuAvailable) {
-                                        android.widget.Toast.makeText(context, "Start Shizuku service first", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                shape = CircleShape,
-                                enabled = !hasShizukuPermission,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (hasShizukuPermission) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary,
-                                    disabledContainerColor = Color(0xFF22C55E).copy(alpha = 0.5f),
-                                    disabledContentColor = Color.White
-                                )
-                            ) {
-                                Text(if (hasShizukuPermission) "Authorized" else "Grant Access", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "The core bridge for non-root access. Please ensure Shizuku is running via ADB or Wireless Debugging.",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 12.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                        if (intent != null) {
+                                            context.startActivity(intent)
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Shizuku app not found", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.08f), contentColor = Color.White)
+                                ) {
+                                    Text("Launch App", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        if (isShizukuAvailable && !hasShizukuPermission) {
+                                            viewModel.requestShizukuPermission()
+                                        } else if (!isShizukuAvailable) {
+                                            android.widget.Toast.makeText(context, "Start Shizuku service first", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    shape = CircleShape,
+                                    enabled = !hasShizukuPermission,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (hasShizukuPermission) Color(0xFF2FBF9F) else MaterialTheme.colorScheme.primary,
+                                        disabledContainerColor = Color(0xFF2FBF9F).copy(alpha = 0.5f),
+                                        disabledContentColor = Color.White
+                                    )
+                                ) {
+                                    Text(if (hasShizukuPermission) "Authorized" else "Grant Access", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }

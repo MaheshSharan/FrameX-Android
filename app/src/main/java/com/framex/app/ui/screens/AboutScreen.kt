@@ -180,84 +180,99 @@ fun AboutScreen(
 
             // App Updates Card
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Application Updates", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
-                Spacer(modifier = Modifier.height(12.dp))
+                Text("APPLICATION UPDATES", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray, letterSpacing = 0.06.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(24.dp))
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Auto-check for updates", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Check GitHub releases automatically on app startup.", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Switch(
-                                checked = autoUpdateEnabled,
-                                onCheckedChange = { checked ->
-                                    viewModel.setAutoUpdateCheckEnabled(checked)
-                                }
-                            )
-                        }
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
 
-                        HorizontalDivider(
-                            color = Color.White.copy(0.06f),
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = statusMessage ?: "Current Version: v$versionName",
-                                fontSize = 12.sp,
-                                color = if (statusMessage != null) accentColor else Color.Gray,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            Button(
-                                onClick = {
-                                    isCheckingUpdate = true
-                                    statusMessage = "Checking GitHub..."
-                                    scope.launch {
-                                        val result = viewModel.updateRepository.checkForUpdates()
-                                        isCheckingUpdate = false
-                                        result.onSuccess { info ->
-                                            if (info.isUpdateAvailable) {
-                                                updateInfoState = info
-                                                statusMessage = "Update available: v${info.versionName}"
-                                            } else {
-                                                statusMessage = "FrameX is up to date (v$versionName)"
-                                            }
-                                        }.onFailure { err ->
-                                            statusMessage = err.localizedMessage ?: "Check failed"
-                                        }
-                                    }
-                                },
-                                enabled = !isCheckingUpdate,
-                                colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(0.15f), contentColor = accentColor),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.height(40.dp)
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                if (isCheckingUpdate) {
-                                    CircularProgressIndicator(
-                                        color = accentColor,
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Check for Updates", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(accentColor.copy(alpha = 0.14f))
+                                            .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Bolt, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column {
+                                        Text("Auto-check for updates", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text("Check GitHub releases on app startup.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = autoUpdateEnabled,
+                                    onCheckedChange = { checked ->
+                                        viewModel.setAutoUpdateCheckEnabled(checked)
+                                    }
+                                )
+                            }
+
+                            HorizontalDivider(
+                                color = Color.White.copy(0.06f),
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = statusMessage ?: "Current Version: v$versionName",
+                                    fontSize = 12.5.sp,
+                                    color = if (statusMessage != null) accentColor else Color.Gray,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Button(
+                                    onClick = {
+                                        isCheckingUpdate = true
+                                        statusMessage = "Checking GitHub..."
+                                        scope.launch {
+                                            val result = viewModel.updateRepository.checkForUpdates()
+                                            isCheckingUpdate = false
+                                            result.onSuccess { info ->
+                                                if (info.isUpdateAvailable) {
+                                                    updateInfoState = info
+                                                    statusMessage = "Update available: v${info.versionName}"
+                                                } else {
+                                                    statusMessage = "FrameX is up to date (v$versionName)"
+                                                }
+                                            }.onFailure { err ->
+                                                statusMessage = err.localizedMessage ?: "Check failed"
+                                            }
+                                        }
+                                    },
+                                    enabled = !isCheckingUpdate,
+                                    colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(0.15f), contentColor = accentColor),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.height(40.dp)
+                                ) {
+                                    if (isCheckingUpdate) {
+                                        CircularProgressIndicator(
+                                            color = accentColor,
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Check for Updates", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -265,44 +280,59 @@ fun AboutScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             // Hardware Optimization Card (Vivo / iQOO Diagnostic)
             val isVivoOptActive by viewModel.vivoOptEnabled.collectAsState()
             var showVivoDiagModal by remember { mutableStateOf(false) }
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Hardware Optimizations", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
-                Spacer(modifier = Modifier.height(12.dp))
+                Text("HARDWARE OPTIMIZATIONS", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray, letterSpacing = 0.06.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(24.dp))
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Vivo / iQOO Hardware Optimizations", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Enable OriginOS / FuntouchOS OEM power governor overrides and touch boost.", color = Color.Gray, fontSize = 12.sp)
-                        }
-                        Switch(
-                            checked = isVivoOptActive,
-                            onCheckedChange = { checked ->
-                                if (checked) {
-                                    showVivoDiagModal = true
-                                } else {
-                                    viewModel.setVivoOptEnabled(false)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF2FBF9F).copy(alpha = 0.14f))
+                                        .border(1.dp, Color(0xFF2FBF9F).copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFF4FDCB8), modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text("Vivo / iQOO Hardware Optimizations", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("Enable OriginOS / FuntouchOS OEM power governor overrides.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)
                                 }
                             }
-                        )
+                            Switch(
+                                checked = isVivoOptActive,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        showVivoDiagModal = true
+                                    } else {
+                                        viewModel.setVivoOptEnabled(false)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
