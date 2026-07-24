@@ -51,8 +51,10 @@ class EsportsOptimizationEngine @Inject constructor(
         activeGameUid = uid
         val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
 
-        // 0. RAM Cache Pre-Trimming
+        // 0. RAM Cache Pre-Trimming, ART Heap Compaction & Framework Pinning
         shizukuManager.executeCommand("pm trim-caches 4G")
+        shizukuManager.executeCommand("am compact background")
+        runCatching { shizukuManager.executeCommand("cmd pinner repin /system/framework/framework.jar") }
 
         // 1. CPU Priority & Memory Lock (Android 16 Verified)
         if (settingsRepository.cpuPriorityLock.value && packageName != null) {
@@ -74,11 +76,10 @@ class EsportsOptimizationEngine @Inject constructor(
             shizukuManager.executeCommand("cmd thermalservice override-status 0")
             true
         }.getOrDefault(false)
-        // NOTE: setprop persist.sys.performance.mode 1 is intentionally omitted.
-        // OriginOS 6 (Android 13+) blocks persist.sys.* writes from ADB shell UID 2000 via SELinux.
 
-        // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Override
+        // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Downscaling Override
         // maxHz is read from device hardware — never hardcoded. Supports 120, 144, 165+ Hz devices.
+        // Downscaling ratio 0.9x provides GPU/thermal headroom during intense hot drops.
         val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
         var refreshRateLockOk = false
         if (settingsRepository.refreshRateLock.value) {
@@ -86,9 +87,9 @@ class EsportsOptimizationEngine @Inject constructor(
             shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
             shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
             if (isVivo) {
-                // cmd game set --fps requires a specific package — skip during manual activation.
+                // cmd game set --fps and --downscale 0.9 require a specific package — skip during manual activation.
                 if (!packageName.isNullOrBlank()) {
-                    shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} $packageName")
+                    shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} --downscale 0.9 $packageName")
                 }
                 // Use global namespace — empirically verified on Vivo T3 Ultra (OriginOS 6).
                 val result = shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode ${maxHz.toInt()}")
