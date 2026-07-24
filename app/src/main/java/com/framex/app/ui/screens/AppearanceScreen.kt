@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -395,23 +397,46 @@ fun AppearanceScreen(
                         // Text Value Color
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Value Color", color = Color.White, fontWeight = FontWeight.Medium)
-                            Text(listOf("White", "Accent", "Silver", "Auto")[selectedTextColorIndex], color = colors[selectedColorIndex], fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            val selectedName = if (selectedTextColorIndex == 3) "Auto (Dynamic FPS)" else listOf("White", "Accent", "Silver", "Auto")[selectedTextColorIndex]
+                            Text(selectedName, color = if (selectedTextColorIndex == 3) Color(0xFF22C55E) else colors[selectedColorIndex], fontWeight = FontWeight.Medium, fontSize = 12.sp)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         val textColorSamples = listOf(Color.White, colors[selectedColorIndex], Color(0xFFCBD5E1), Color(0xFF22C55E))
-                        val textColorLabels = listOf("White", "Accent", "Silver", "Auto")
+                        val textColorLabels = listOf("White", "Accent", "Silver", "Auto (Dynamic FPS)")
+                        val autoGradient = androidx.compose.ui.graphics.Brush.sweepGradient(
+                            listOf(Color(0xFF22C55E), Color(0xFFEAB308), Color(0xFFEF4444), Color(0xFF22C55E))
+                        )
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             textColorSamples.forEachIndexed { index, col ->
+                                val isAuto = index == 3
+                                val bgModifier = if (isAuto) {
+                                    Modifier.background(autoGradient)
+                                } else {
+                                    Modifier.background(col.copy(alpha = 0.15f))
+                                }
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(col.copy(alpha = 0.15f))
-                                        .border(if (selectedTextColorIndex == index) 2.dp else 1.dp, if (selectedTextColorIndex == index) Color.White else col.copy(0.3f), CircleShape)
+                                        .then(bgModifier)
+                                        .border(
+                                            if (selectedTextColorIndex == index) 2.dp else 1.dp,
+                                            if (selectedTextColorIndex == index) Color.White else if (isAuto) Color.White.copy(0.4f) else col.copy(0.3f),
+                                            CircleShape
+                                        )
+                                        .semantics {
+                                            contentDescription = if (isAuto) {
+                                                "Auto Value Color: Dynamically colors metrics (Green, Yellow, Red) based on live FPS performance"
+                                            } else {
+                                                "${textColorLabels[index]} Value Color"
+                                            }
+                                        }
                                         .clickable { selectedTextColorIndex = index },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(textColorLabels[index].take(1), color = col, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    if (!isAuto) {
+                                        Text(textColorLabels[index].take(1), color = col, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
                                 }
                             }
                         }
