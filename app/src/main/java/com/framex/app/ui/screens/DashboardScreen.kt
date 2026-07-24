@@ -278,15 +278,15 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("AVG", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
                             Text("$avgFps", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.8f))
                         }
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("1% LOW", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
                             Text("$onePercentLow", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.8f))
                         }
-                        Column(horizontalAlignment = Alignment.End) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("FRAMETIME", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
                             Text("${frametimeMs}ms", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.8f))
                         }

@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.gaming.VivoOptimizationResult
 import com.framex.app.ui.screens.performance.PerformanceViewModel
 import com.framex.app.ui.screens.performance.dialogs.*
 import com.framex.app.ui.screens.performance.sections.*
@@ -46,6 +47,7 @@ fun PerformanceScreen(
     val userApps by viewModel.userApps.collectAsState()
     val googleApps by viewModel.googleApps.collectAsState()
     val metricsState by viewModel.metricsState.collectAsState()
+    val vivoOptResult by viewModel.vivoOptimizationResult.collectAsState()
 
     val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
@@ -166,6 +168,7 @@ fun PerformanceScreen(
                     isBusy = isBusy,
                     activeColor = activeColor,
                     primaryRed = primaryRed,
+                    vivoOptResult = vivoOptResult,
                     onActivate = { if (canActivate) viewModel.enableGamingMode(context) },
                     onDeactivate = { viewModel.disableGamingMode(context) }
                 )

@@ -6,9 +6,11 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.gaming.AppInfo
+import com.framex.app.gaming.EsportsOptimizationEngine
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeService
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.gaming.VivoOptimizationResult
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +28,7 @@ import javax.inject.Inject
 class PerformanceViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val gamingModeEngine: GamingModeEngine,
+    private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: com.framex.app.metrics.MetricsEngine,
@@ -64,6 +67,9 @@ class PerformanceViewModel @Inject constructor(
 
     val framePacingOverlay = settingsRepository.framePacingOverlay
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val vivoOptimizationResult = esportsOptimizationEngine.vivoOptimizationResult
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
     fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)

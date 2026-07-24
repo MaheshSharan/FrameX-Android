@@ -22,6 +22,9 @@ import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -196,7 +199,10 @@ fun AboutScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f).padding(end = 16.dp)
+                                ) {
                                     Box(
                                         modifier = Modifier
                                             .size(42.dp)
@@ -205,10 +211,10 @@ fun AboutScreen(
                                             .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Bolt, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
                                     }
                                     Spacer(modifier = Modifier.width(14.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text("Auto-check for updates", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text("Check GitHub releases on app startup.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)
@@ -304,7 +310,10 @@ fun AboutScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f).padding(end = 16.dp)
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(42.dp)
@@ -313,10 +322,10 @@ fun AboutScreen(
                                         .border(1.dp, Color(0xFF2FBF9F).copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFF4FDCB8), modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF4FDCB8), modifier = Modifier.size(20.dp))
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text("Vivo / iQOO Hardware Optimizations", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text("Enable OriginOS / FuntouchOS OEM power governor overrides.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)

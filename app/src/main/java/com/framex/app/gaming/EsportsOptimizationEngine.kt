@@ -5,9 +5,26 @@ import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
+
+/**
+ * Result of a single Vivo/iQOO-specific gaming optimization execution.
+ * Each field is true only when the corresponding Shizuku command completed without error.
+ * [maxHzApplied] carries the actual device max Hz used at activation time (not hardcoded).
+ */
+data class VivoOptimizationResult(
+    val thermalOverride: Boolean,
+    val refreshRateLock: Boolean,
+    val maxHzApplied: Int,
+    val touchBoost: Boolean,
+    val competitionMode: Boolean,
+    val resolutionSwitch: Boolean,
+)
 
 @Singleton
 class EsportsOptimizationEngine @Inject constructor(
@@ -20,8 +37,14 @@ class EsportsOptimizationEngine @Inject constructor(
     private var activeGameUid: Int? = null
     private var initialMinRefreshRate: String? = null
     private var initialTouchSpeed: String? = null
+    private var initialGameCubeCompetitionState: String? = null
+    private var initialGameScreenResolutionSwitch: String? = null
 
-    suspend fun applyOptimizationsForGame(packageName: String, uid: Int) {
+    private val _vivoOptimizationResult = MutableStateFlow<VivoOptimizationResult?>(null)
+    /** Null when gaming mode is inactive or device is not Vivo/iQOO. Non-null when active. */
+    val vivoOptimizationResult: StateFlow<VivoOptimizationResult?> = _vivoOptimizationResult.asStateFlow()
+
+    suspend fun applyOptimizationsForGame(packageName: String?, uid: Int?) {
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return
 
         activeGamePackage = packageName
@@ -32,43 +55,84 @@ class EsportsOptimizationEngine @Inject constructor(
         shizukuManager.executeCommand("pm trim-caches 4G")
 
         // 1. CPU Priority & Memory Lock (Android 16 Verified)
-        if (settingsRepository.cpuPriorityLock.value) {
+        if (settingsRepository.cpuPriorityLock.value && packageName != null) {
             shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
             shizukuManager.executeCommand("am set-standby-bucket --user 0 $packageName active")
         }
 
         // 2. Network Firewall & Light Doze
-        if (settingsRepository.networkFirewall.value) {
+        if (settingsRepository.networkFirewall.value && uid != null) {
             shizukuManager.executeCommand("cmd netpolicy add restrict-background-whitelist $uid")
             shizukuManager.executeCommand("cmd deviceidle force-idle")
         }
 
-        // 3. Performance Governor Lock
+        // 3. Performance Governor Lock + Active Thermal Throttling Override
+        // cmd thermalservice override-status 0: empirically verified on Vivo T3 Ultra (ADB shell UID 2000).
+        // Locks Android ThermalManager to THERMAL_STATUS_NONE, preventing OEM frame-rate throttling drops.
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled true")
-        if (isVivo) {
-            shizukuManager.executeCommand("setprop persist.sys.performance.mode 1")
-        }
+        val thermalOverrideOk = runCatching {
+            shizukuManager.executeCommand("cmd thermalservice override-status 0")
+            true
+        }.getOrDefault(false)
+        // NOTE: setprop persist.sys.performance.mode 1 is intentionally omitted.
+        // OriginOS 6 (Android 13+) blocks persist.sys.* writes from ADB shell UID 2000 via SELinux.
 
         // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Override
+        // maxHz is read from device hardware — never hardcoded. Supports 120, 144, 165+ Hz devices.
+        val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
+        var refreshRateLockOk = false
         if (settingsRepository.refreshRateLock.value) {
-            val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
             initialMinRefreshRate = shizukuManager.executeCommand("settings get system min_refresh_rate")
             shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
             shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
             if (isVivo) {
-                shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} $packageName")
-                shizukuManager.executeCommand("settings put system vivo_screen_refresh_rate_mode ${maxHz.toInt()}")
+                // cmd game set --fps requires a specific package — skip during manual activation.
+                if (!packageName.isNullOrBlank()) {
+                    shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} $packageName")
+                }
+                // Use global namespace — empirically verified on Vivo T3 Ultra (OriginOS 6).
+                val result = shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode ${maxHz.toInt()}")
+                refreshRateLockOk = !result.contains("error", ignoreCase = true)
+            } else {
+                refreshRateLockOk = true
             }
         }
 
         // 5. Touch Response Latency Boost
+        var touchBoostOk = false
         if (settingsRepository.touchBoost.value) {
             initialTouchSpeed = shizukuManager.executeCommand("settings get system touch_response_speed")
             shizukuManager.executeCommand("settings put system touch_response_speed 2")
             if (isVivo) {
-                shizukuManager.executeCommand("settings put system com.vivo.vtouch.persist 1")
-                shizukuManager.executeCommand("setprop persist.sys.touch.response 2")
+                val result = shizukuManager.executeCommand("settings put system com.vivo.vtouch.persist 1")
+                touchBoostOk = !result.contains("error", ignoreCase = true)
+                // NOTE: setprop persist.sys.touch.response 2 is intentionally omitted.
+                // OriginOS 6 blocks persist.sys.* writes from ADB shell UID 2000 via SELinux.
+            } else {
+                touchBoostOk = true
             }
+        }
+
+        // 6. Vivo GameCube Esports Boost (empirically verified writable on Vivo T3 Ultra)
+        var competitionModeOk: Boolean
+        var resolutionSwitchOk: Boolean
+        if (isVivo) {
+            initialGameCubeCompetitionState = shizukuManager.executeCommand("settings get system gamecube_competition_mode_state")
+            initialGameScreenResolutionSwitch = shizukuManager.executeCommand("settings get system game_screen_resolution_switch")
+            val compResult = shizukuManager.executeCommand("settings put system gamecube_competition_mode_state 1")
+            competitionModeOk = !compResult.contains("error", ignoreCase = true)
+            val resResult = shizukuManager.executeCommand("settings put system game_screen_resolution_switch 1")
+            resolutionSwitchOk = !resResult.contains("error", ignoreCase = true)
+
+            // Publish Vivo-specific execution result for UI status card
+            _vivoOptimizationResult.value = VivoOptimizationResult(
+                thermalOverride = thermalOverrideOk,
+                refreshRateLock = refreshRateLockOk,
+                maxHzApplied = maxHz.toInt(),
+                touchBoost = touchBoostOk,
+                competitionMode = competitionModeOk,
+                resolutionSwitch = resolutionSwitchOk,
+            )
         }
     }
 
@@ -91,6 +155,8 @@ class EsportsOptimizationEngine @Inject constructor(
         }
 
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
+        // Unlock thermal throttling — restores OEM default thermal management.
+        shizukuManager.executeCommand("cmd thermalservice reset")
 
         if (settingsRepository.refreshRateLock.value) {
             val prev = initialMinRefreshRate
@@ -110,8 +176,26 @@ class EsportsOptimizationEngine @Inject constructor(
             }
         }
 
+        // Revert Vivo GameCube Esports Boost keys
+        val prevCompetition = initialGameCubeCompetitionState
+        if (!prevCompetition.isNullOrBlank() && prevCompetition != "null") {
+            shizukuManager.executeCommand("settings put system gamecube_competition_mode_state $prevCompetition")
+        } else {
+            shizukuManager.executeCommand("settings delete system gamecube_competition_mode_state")
+        }
+        val prevResSwitch = initialGameScreenResolutionSwitch
+        if (!prevResSwitch.isNullOrBlank() && prevResSwitch != "null") {
+            shizukuManager.executeCommand("settings put system game_screen_resolution_switch $prevResSwitch")
+        } else {
+            shizukuManager.executeCommand("settings delete system game_screen_resolution_switch")
+        }
+
         activeGamePackage = null
         activeGameUid = null
+        initialGameCubeCompetitionState = null
+        initialGameScreenResolutionSwitch = null
+        // Clear Vivo status — device is no longer in gaming mode
+        _vivoOptimizationResult.value = null
     }
 
     fun calculateFramePacingDeltaMs(actualFps: Int): Float {

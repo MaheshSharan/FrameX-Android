@@ -303,14 +303,17 @@ class GamingModeEngine @Inject constructor(
                     nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
                 }
             }
-            
-            if (activeGamePkg != null) {
-                try {
-                    val uid = context.packageManager.getPackageUid(activeGamePkg, 0)
-                    esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
-                } catch (e: Exception) {
-                    com.framex.app.utils.FrameXLog.w("Esports optimization failed for $activeGamePkg", e)
+
+            // Apply Esports optimizations for all activations.
+            // When activeGamePkg is null (manual activation), package-specific commands like
+            // cmd game set --fps are skipped, but all system-wide Vivo/thermal boosts still run.
+            try {
+                val uid = activeGamePkg?.let {
+                    runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
                 }
+                esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Esports optimization failed", e)
             }
 
             // ----------------------------------------------------------------

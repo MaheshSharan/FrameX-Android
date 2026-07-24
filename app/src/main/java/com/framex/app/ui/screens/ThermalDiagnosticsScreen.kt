@@ -18,11 +18,13 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -462,6 +464,8 @@ private fun ReadingCard(label: String, value: String, modifier: Modifier = Modif
                     "SKIN" -> Quadruple(Color(0xFFF59E0B).copy(alpha = 0.14f), Color(0xFFF59E0B).copy(alpha = 0.28f), Color(0xFFFBBF24), Icons.Default.Thermostat)
                     "NPU" -> Quadruple(Color(0xFF8B5CF6).copy(alpha = 0.14f), Color(0xFF8B5CF6).copy(alpha = 0.28f), Color(0xFFA78BFA), Icons.Default.DeveloperBoard)
                     "BATTERY" -> Quadruple(Color(0xFF10B981).copy(alpha = 0.14f), Color(0xFF10B981).copy(alpha = 0.28f), Color(0xFF34D399), Icons.Default.BatteryChargingFull)
+                    "JANKY FRAMES" -> Quadruple(Color(0xFFF43F5E).copy(alpha = 0.14f), Color(0xFFF43F5E).copy(alpha = 0.28f), Color(0xFFFB7185), Icons.Default.Warning)
+                    "TOP PROCESS" -> Quadruple(Color(0xFF06B6D4).copy(alpha = 0.14f), Color(0xFF06B6D4).copy(alpha = 0.28f), Color(0xFF22D3EE), Icons.Default.Layers)
                     else -> Quadruple(Color(0xFFEC4899).copy(alpha = 0.14f), Color(0xFFEC4899).copy(alpha = 0.28f), Color(0xFFF472B6), Icons.Default.LocalFireDepartment)
                 }
 
