@@ -312,9 +312,6 @@ fun OverlayContent(
                     onDrag(dragAmount.x, dragAmount.y)
                 }
             }
-            .pointerInput(Unit) {
-                detectTapGestures(onLongPress = { onModeToggle() })
-            }
     )
 }
 
