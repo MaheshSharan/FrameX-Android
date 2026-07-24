@@ -134,14 +134,14 @@ class ThermalDiagnosticsViewModel @Inject constructor(
 private fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricReadStatus): String {
     return when (readStatus) {
         MetricReadStatus.NoShizuku -> "Needs Shizuku"
-        MetricReadStatus.EmptyOutput -> "Unavailable"
+        MetricReadStatus.EmptyOutput -> "Hardware Not Supported"
         MetricReadStatus.ParseFailed -> "Parse Failed"
         MetricReadStatus.Loading -> "Waiting..."
         else -> {
             if (present) {
                 String.format(java.util.Locale.US, "%.1f°C", value)
             } else {
-                "Unavailable"
+                "Hardware Not Supported"
             }
         }
     }
