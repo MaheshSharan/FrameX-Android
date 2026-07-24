@@ -40,14 +40,16 @@ fun HeroGamingCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(
             1.dp,
-            if (isActive) activeColor.copy(0.25f) else Color.White.copy(0.05f)
+            if (isActive) activeColor.copy(0.25f) else Color.White.copy(alpha = 0.08f)
         )
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
+            Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -285,4 +287,5 @@ fun HeroGamingCard(
             }
         }
     }
+}
 }

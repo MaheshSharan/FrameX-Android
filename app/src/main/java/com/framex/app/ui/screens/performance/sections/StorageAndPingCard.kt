@@ -27,10 +27,12 @@ fun StorageAndPingCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color.White.copy(0.04f))
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -108,6 +110,7 @@ fun StorageAndPingCard(
                         )
                     }
                 }
+            }
             }
         }
     }
