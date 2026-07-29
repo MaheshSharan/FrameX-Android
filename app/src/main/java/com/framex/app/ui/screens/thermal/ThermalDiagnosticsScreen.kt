@@ -144,11 +144,28 @@ fun ThermalDiagnosticsScreen(
         metricsState.batteryTempC - prev
     }
 
-    // Session Peaks
+    // Session Peaks & Averages
     val cpuPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalCpuC } ?: metricsState.thermalCpuC }
     val gpuPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalGpuC } ?: metricsState.thermalGpuC }
     val skinPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalSkinC } ?: metricsState.thermalSkinC }
     val batteryPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.batteryTempC } ?: metricsState.batteryTempC }
+
+    val cpuAvg = remember(snapshotHistory) {
+        val valid = snapshotHistory.filter { it.state.thermalCpuC > 0f }
+        if (valid.isNotEmpty()) valid.map { it.state.thermalCpuC }.average().toFloat() else metricsState.thermalCpuC
+    }
+    val gpuAvg = remember(snapshotHistory) {
+        val valid = snapshotHistory.filter { it.state.thermalGpuC > 0f }
+        if (valid.isNotEmpty()) valid.map { it.state.thermalGpuC }.average().toFloat() else metricsState.thermalGpuC
+    }
+    val skinAvg = remember(snapshotHistory) {
+        val valid = snapshotHistory.filter { it.state.thermalSkinC > 0f }
+        if (valid.isNotEmpty()) valid.map { it.state.thermalSkinC }.average().toFloat() else metricsState.thermalSkinC
+    }
+    val batteryAvg = remember(snapshotHistory) {
+        val valid = snapshotHistory.filter { it.state.batteryTempC > 0f }
+        if (valid.isNotEmpty()) valid.map { it.state.batteryTempC }.average().toFloat() else metricsState.batteryTempC
+    }
 
     val likelyCause = remember(filteredSnapshots, metricsState) {
         evaluateLikelyCause(filteredSnapshots, metricsState)
@@ -312,6 +329,7 @@ fun ThermalDiagnosticsScreen(
                         value = getThermalDisplayValue(metricsState.thermalCpuC, metricsState.hasThermalCpu, metricsState.thermalReadStatus),
                         delta30s = cpuDelta,
                         peakVal = cpuPeak,
+                        avgVal = cpuAvg,
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     ReadingCard(
@@ -319,6 +337,7 @@ fun ThermalDiagnosticsScreen(
                         value = getThermalDisplayValue(metricsState.thermalGpuC, metricsState.hasThermalGpu, metricsState.thermalReadStatus),
                         delta30s = 0f,
                         peakVal = gpuPeak,
+                        avgVal = gpuAvg,
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
@@ -332,6 +351,7 @@ fun ThermalDiagnosticsScreen(
                         value = getThermalDisplayValue(metricsState.thermalSkinC, metricsState.hasThermalSkin, metricsState.thermalReadStatus),
                         delta30s = skinDelta,
                         peakVal = skinPeak,
+                        avgVal = skinAvg,
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     ReadingCard(
@@ -352,6 +372,7 @@ fun ThermalDiagnosticsScreen(
                         value = getBatteryDisplayValue(metricsState.batteryTempC),
                         delta30s = batteryDelta,
                         peakVal = batteryPeak,
+                        avgVal = batteryAvg,
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     val jankRate = String.format(Locale.US, "%.1f/s", metricsState.jankyFrames / 3.0f)

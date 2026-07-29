@@ -36,6 +36,7 @@ fun ReadingCard(
     value: String,
     delta30s: Float = 0f,
     peakVal: Float = 0f,
+    avgVal: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -96,13 +97,29 @@ fun ReadingCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (peakVal > 0f) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Peak: ${String.format(Locale.US, "%.1f°C", peakVal)}",
-                        color = Color.Gray,
-                        fontSize = 10.sp
-                    )
+                if (peakVal > 0f || avgVal > 0f) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (avgVal > 0f) {
+                            Text(
+                                text = "Avg: ${String.format(Locale.US, "%.1f°C", avgVal)}",
+                                color = Color.White.copy(alpha = 0.65f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (peakVal > 0f) {
+                            Text(
+                                text = "Peak: ${String.format(Locale.US, "%.1f°C", peakVal)}",
+                                color = Color.Gray,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
                 }
             }
         }

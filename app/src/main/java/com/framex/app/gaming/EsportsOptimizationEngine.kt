@@ -276,12 +276,17 @@ class EsportsOptimizationEngine @Inject constructor(
         // Restore Vivo global settings
         snapshot.vivoRefreshRateMode?.let { restoreSetting("global", "vivo_screen_refresh_rate_mode", it) }
 
-        // Strip pkg from Vivo CSV whitelists
+        // Strip pkg from Vivo CSV whitelists or restore captured baseline
         if (pkg != null) {
             stripPackageFromCsv("game_cube_apps", pkg, snapshot.gameCubeApps)
             stripPackageFromCsv("speed_mode_apps", pkg, snapshot.speedModeApps)
             stripPackageFromCsv("vivo_high_refresh_rate_apps", pkg, snapshot.vivoHighRefreshApps)
             stripPackageFromCsv("vivo_screen_refresh_rate_apps_list", pkg, snapshot.vivoScreenRefreshAppsList)
+        } else {
+            snapshot.gameCubeApps?.let { restoreSetting("global", "game_cube_apps", it) }
+            snapshot.speedModeApps?.let { restoreSetting("global", "speed_mode_apps", it) }
+            snapshot.vivoHighRefreshApps?.let { restoreSetting("global", "vivo_high_refresh_rate_apps", it) }
+            snapshot.vivoScreenRefreshAppsList?.let { restoreSetting("global", "vivo_screen_refresh_rate_apps_list", it) }
         }
 
         // Clear snapshot only after successful restoration
@@ -390,6 +395,10 @@ class EsportsOptimizationEngine @Inject constructor(
             "settings put secure user_preferred_display_mode_id -1",
             "settings delete global vivo_screen_refresh_rate_mode",
             "settings delete system touch_response_speed",
+            "settings delete global game_cube_apps",
+            "settings delete global speed_mode_apps",
+            "settings delete global vivo_high_refresh_rate_apps",
+            "settings delete global vivo_screen_refresh_rate_apps_list",
             "cmd power set-fixed-performance-mode-enabled false",
             "cmd thermalservice reset",
             "cmd deviceidle unforce"

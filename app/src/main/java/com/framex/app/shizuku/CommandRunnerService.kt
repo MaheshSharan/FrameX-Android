@@ -328,22 +328,11 @@ class CommandRunnerService private constructor(
     override fun suspendPackages(packageNames: Array<out String>?, suspended: Boolean): Int {
         if (packageNames.isNullOrEmpty()) return 0
         var successCount = 0
-        try {
-            val pm = context?.packageManager ?: throw IllegalStateException("UserService context unavailable")
-            val method = pm.javaClass.getMethod(
-                "setPackagesSuspended",
-                Array<String>::class.java,
-                Boolean::class.javaPrimitiveType,
-                android.os.PersistableBundle::class.java,
-                android.os.PersistableBundle::class.java,
-                String::class.java
-            )
-            val unfailed = method.invoke(pm, packageNames, suspended, null, null, "com.framex.app") as? Array<*>
-            successCount = packageNames.size - (unfailed?.size ?: 0)
-        } catch (e: Exception) {
-            for (pkg in packageNames) {
-                val cmd = if (suspended) "pm suspend --user 0 $pkg" else "pm unsuspend --user 0 $pkg"
-                executeCommand(cmd)
+        val action = if (suspended) "suspend" else "unsuspend"
+        for (pkg in packageNames) {
+            val cmd = "cmd package $action --user 0 $pkg"
+            val result = executeCommandWithResult(cmd)
+            if (result.exitCode == 0) {
                 successCount++
             }
         }
