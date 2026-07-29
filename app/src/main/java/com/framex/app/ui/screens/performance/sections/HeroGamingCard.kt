@@ -338,22 +338,20 @@ private fun VivoBoostStatusCard(result: VivoOptimizationResult) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Vivo / iQOO Hardware Boost",
+                    "Vivo T3 Ultra Hardware Boost",
                     color = accentColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
             }
             HorizontalDivider(color = accentColor.copy(alpha = 0.15f))
-            // maxHzApplied comes from the device's actual hardware max Hz — not hardcoded
             VivoStatusRow(
-                "Refresh Rate Lock",
-                "${result.maxHzApplied} Hz (Device Max) Locked",
-                result.refreshRateLock
+                "Display Mode Lock (Mode 4)",
+                "1080p @ ${result.maxHzApplied} Hz Locked",
+                result.displayModeLock
             )
             VivoStatusRow("Touch Latency Boost", "vtouch.persist Active", result.touchBoost)
-            VivoStatusRow("Competition Mode", "GameCube Esports Mode Active", result.competitionMode)
-            VivoStatusRow("Resolution Switch", "Game Resolution Control Active", result.resolutionSwitch)
+            VivoStatusRow("OEM Game Whitelists", "4 Whitelists Appended", result.whitelistApplied)
         }
     }
 }

@@ -8,8 +8,8 @@
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
     <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
   </a>
-  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.16">
-    <img src="https://img.shields.io/badge/Version-1.5.16-orange?style=for-the-badge&logo=github" alt="Version"/>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.17">
+    <img src="https://img.shields.io/badge/Version-1.5.17-orange?style=for-the-badge&logo=github" alt="Version"/>
   </a>
   <a href="https://developer.android.com/about/versions/oreo">
     <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>
@@ -24,7 +24,7 @@
 
 ---
 >  [!NOTE]
-> **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices. For Vivo/iQOO devices, enable the **Vivo Optimization** toggle in Settings (About) first to unlock maximum gaming performance and bypass dynamic thermal downclocking. Behavior on other Android skins may vary. Use this feature at your own risk.
+> **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices (featuring hardware Mode 4 1080p @ 120Hz lock and 4 OEM Whitelists engine). For Vivo devices, enable **Vivo T3 Ultra Hardware Optimizations** in Settings (About) to unlock maximum gaming performance. Behavior on other Android skins may vary.
 
 > [!IMPORTANT]
 > **Encountering "Parse Failed" or "Unsupported Hardware"?**
@@ -49,11 +49,13 @@
 ---
 ## What it does
 
-FrameX shows a draggable, fully customisable overlay with live system stats on top of any app or game — including full-screen titles.
+FrameX displays a fully customizable, low-overhead overlay on top of any application or full-screen title.
 
-**Available metrics:** FPS · CPU frequency & core clusters · Multi-sensor Thermals (CPU, GPU, Skin, NPU, Battery) · RAM usage · Network speed · Ping
-
-**Performance Mode:** Optimize your device for gaming by suspending bloatware, restricting background apps, enabling advanced Do Not Disturb, deploying per-game display/volume configurations, and triggering OriginOS Esports hardware engines.
+| Category | Telemetry & Features |
+| :--- | :--- |
+| **Real-Time Telemetry** | **FPS** · **CPU Frequencies** · **Thermals** *(CPU/GPU/Skin/NPU/Battery)* · **RAM Usage** · **Network Speed** · **Ping** |
+| **System Optimization** | • **Crash-Safe Snapshots:** Automatic pre-game setting capture & auto-revert on exit<br>• **Process Management:** Background app suspension & Doze CPU whitelisting<br>• **Emergency Safety:** One-swipe reset slider to purge overrides back to stock OS defaults |
+| **OEM Hardware Locks** | • **Vivo OriginOS Engine:** Forces hardware Mode 4 ($1080 \times 2400$ @ 120Hz) lock<br>• **Triple Whitelisting:** Automatic injection across 4 native OriginOS game-booster daemons |
 
 ---
 

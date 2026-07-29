@@ -64,6 +64,37 @@ class CommandRunnerService private constructor(
         }
     }
 
+    override fun executeCommandWithResult(command: String): CommandResult {
+        return try {
+            val process = ProcessBuilder("sh", "-c", command)
+                .redirectErrorStream(true)
+                .start()
+            val output = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                reader.readText().trim()
+            }
+            val exitCode = process.waitFor()
+            CommandResult().apply {
+                this.output = output
+                this.exitCode = exitCode
+            }
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.e("Error executing command with result: $command", e)
+            CommandResult().apply {
+                this.output = "Error executing command: ${e.message}"
+                this.exitCode = COMMAND_EXECUTION_FAILED
+            }
+        }
+    }
+
+    override fun readProcStat(): String {
+        return try {
+            java.io.File("/proc/stat").readText()
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("Direct /proc/stat read failed, falling back to shell", e)
+            executeCommand("cat /proc/stat")
+        }
+    }
+
     override fun getThermalTemperatures(): String {
         resolvedThermalStrategy?.let { cached ->
             val cachedResult = readUsingStrategy(cached)

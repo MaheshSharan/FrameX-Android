@@ -178,7 +178,7 @@ class CpuMonitor @Inject constructor(
             try {
                 val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
                     try {
-                        shizukuManager.executeCommand("cat /proc/stat")
+                        shizukuManager.readProcStat()
                     } catch (e: Exception) {
                         ""
                     }
@@ -618,7 +618,7 @@ class TopProcessMonitor @Inject constructor(
             }
 
             emit(result)
-            delay(1000)
+            delay(2000)
         }
     }
 }

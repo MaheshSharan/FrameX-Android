@@ -14,16 +14,15 @@ import javax.inject.Singleton
 import kotlin.math.abs
 
 /**
- * Result of a single Vivo/iQOO-specific gaming optimization execution.
+ * Result of a single Vivo T3 Ultra hardware optimization execution.
  * Each field is true only when the corresponding Shizuku command completed without error.
  * [maxHzApplied] carries the actual device max Hz used at activation time (not hardcoded).
  */
 data class VivoOptimizationResult(
-    val refreshRateLock: Boolean,
+    val displayModeLock: Boolean,
     val maxHzApplied: Int,
     val touchBoost: Boolean,
-    val competitionMode: Boolean,
-    val resolutionSwitch: Boolean,
+    val whitelistApplied: Boolean,
 )
 
 @Singleton
@@ -33,25 +32,104 @@ class EsportsOptimizationEngine @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val deviceDiagnosticManager: DeviceDiagnosticManager
 ) {
-    private var activeGamePackage: String? = null
-    private var activeGameUid: Int? = null
-    private var initialMinRefreshRate: String? = null
-    private var initialPeakRefreshRate: String? = null
-    private var initialVivoRefreshRateMode: String? = null
-    private var initialTouchSpeed: String? = null
-    private var initialVivoTouchPersist: String? = null
-    private var initialGameCubeCompetitionState: String? = null
-    private var initialGameScreenResolutionSwitch: String? = null
-
     private val _vivoOptimizationResult = MutableStateFlow<VivoOptimizationResult?>(null)
-    /** Null when gaming mode is inactive or device is not Vivo/iQOO. Non-null when active. */
+    /** Null when gaming mode is inactive or device is not Vivo T3 Ultra. Non-null when active. */
     val vivoOptimizationResult: StateFlow<VivoOptimizationResult?> = _vivoOptimizationResult.asStateFlow()
 
-    suspend fun applyOptimizationsForGame(packageName: String?, uid: Int?) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return
+    // Vivo OEM whitelist key names (settings global CSV)
+    private val vivoWhitelistKeys = listOf(
+        "game_cube_apps",
+        "speed_mode_apps",
+        "vivo_high_refresh_rate_apps",
+        "vivo_screen_refresh_rate_apps_list"
+    )
 
-        activeGamePackage = packageName
-        activeGameUid = uid
+    /**
+     * Captures a snapshot of all system settings FrameX is about to modify.
+     * Returns null if any binder IPC command fails (indicating an un-restorable binder state).
+     */
+    private suspend fun captureSnapshot(packageName: String?, uid: Int?): GamingOptimizationSnapshot? {
+        val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
+
+        // Capture system settings (all devices)
+        val minRefreshResult = shizukuManager.executeCommandWithResult("settings get system min_refresh_rate")
+        val peakRefreshResult = shizukuManager.executeCommandWithResult("settings get system peak_refresh_rate")
+        val touchSpeedResult = shizukuManager.executeCommandWithResult("settings get system touch_response_speed")
+
+        if (minRefreshResult == null || peakRefreshResult == null || touchSpeedResult == null) {
+            FrameXLog.e("IPC failure capturing generic display/touch settings, aborting optimization", tag = TAG)
+            return null
+        }
+
+        val minRefresh = SettingValue.fromCommandOutput(minRefreshResult.output)
+        val peakRefresh = SettingValue.fromCommandOutput(peakRefreshResult.output)
+        val touchSpeed = SettingValue.fromCommandOutput(touchSpeedResult.output)
+
+        // Capture Vivo secure display mode (Group 1 mode 4)
+        val displayModeResult = shizukuManager.executeCommandWithResult("settings get secure user_preferred_display_mode_id")
+        if (displayModeResult == null) {
+            FrameXLog.e("IPC failure capturing user_preferred_display_mode_id, aborting optimization", tag = TAG)
+            return null
+        }
+        val userPreferredDisplayModeId = SettingValue.fromCommandOutput(displayModeResult.output)
+
+        // Capture Vivo global settings
+        var vivoRefreshMode: SettingValue? = null
+        var gameCubeApps: SettingValue? = null
+        var speedModeApps: SettingValue? = null
+        var vivoHighRefreshApps: SettingValue? = null
+        var vivoScreenRefreshAppsList: SettingValue? = null
+
+        if (isVivo) {
+            val vivoRrRes = shizukuManager.executeCommandWithResult("settings get global vivo_screen_refresh_rate_mode")
+            val gcAppsRes = shizukuManager.executeCommandWithResult("settings get global game_cube_apps")
+            val smAppsRes = shizukuManager.executeCommandWithResult("settings get global speed_mode_apps")
+            val hrAppsRes = shizukuManager.executeCommandWithResult("settings get global vivo_high_refresh_rate_apps")
+            val srAppsRes = shizukuManager.executeCommandWithResult("settings get global vivo_screen_refresh_rate_apps_list")
+
+            if (vivoRrRes == null || gcAppsRes == null || smAppsRes == null || hrAppsRes == null || srAppsRes == null) {
+                FrameXLog.e("IPC failure capturing Vivo OEM global settings, aborting optimization", tag = TAG)
+                return null
+            }
+
+            vivoRefreshMode = SettingValue.fromCommandOutput(vivoRrRes.output)
+            gameCubeApps = SettingValue.fromCommandOutput(gcAppsRes.output)
+            speedModeApps = SettingValue.fromCommandOutput(smAppsRes.output)
+            vivoHighRefreshApps = SettingValue.fromCommandOutput(hrAppsRes.output)
+            vivoScreenRefreshAppsList = SettingValue.fromCommandOutput(srAppsRes.output)
+        }
+
+        return GamingOptimizationSnapshot(
+            activeGamePackage = packageName,
+            activeGameUid = uid,
+            timestamp = System.currentTimeMillis(),
+            minRefreshRate = minRefresh,
+            peakRefreshRate = peakRefresh,
+            touchResponseSpeed = touchSpeed,
+            userPreferredDisplayModeId = userPreferredDisplayModeId,
+            vivoRefreshRateMode = vivoRefreshMode,
+            vivoTouchPersist = null,
+            gameCubeApps = gameCubeApps,
+            speedModeApps = speedModeApps,
+            vivoHighRefreshApps = vivoHighRefreshApps,
+            vivoScreenRefreshAppsList = vivoScreenRefreshAppsList,
+            affectedPackages = emptySet()
+        )
+    }
+
+    suspend fun applyOptimizationsForGame(packageName: String?, uid: Int?): Boolean {
+        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
+
+        // Capture snapshot BEFORE making any changes
+        val snapshot = captureSnapshot(packageName, uid)
+        if (snapshot == null) {
+            FrameXLog.e("Snapshot capture failed, aborting optimizations", tag = TAG)
+            return false
+        }
+
+        // Save snapshot immediately
+        settingsRepository.saveGamingOptimizationSnapshot(snapshot)
+
         val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
 
         // 0. RAM Cache Pre-Trimming, ART Heap Compaction & Framework Pinning
@@ -59,15 +137,21 @@ class EsportsOptimizationEngine @Inject constructor(
         shizukuManager.executeCommand("am compact background")
         runCatching { shizukuManager.executeCommand("cmd pinner repin /system/framework/framework.jar") }
 
-        // 1. CPU Priority & Memory Lock (Android 16 Verified)
+        // 1. CPU Priority & Memory Lock
         if (settingsRepository.cpuPriorityLock.value && packageName != null) {
             shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
             shizukuManager.executeCommand("am set-standby-bucket --user 0 $packageName active")
         }
 
-        // 2. Network Firewall & Light Doze
+        // 2. Network Firewall & Deep Doze Exemption
         if (settingsRepository.networkFirewall.value && uid != null) {
+            // Exempt socket restrictions in NetPolicy
             shizukuManager.executeCommand("cmd netpolicy add restrict-background-whitelist $uid")
+            // Exempt CPU process throttling in DeviceIdleController
+            if (!packageName.isNullOrBlank()) {
+                shizukuManager.executeCommand("cmd deviceidle whitelist +$packageName")
+            }
+            // Force Light/Deep Doze for non-whitelisted background processes
             shizukuManager.executeCommand("cmd deviceidle force-idle")
         }
 
@@ -75,64 +159,71 @@ class EsportsOptimizationEngine @Inject constructor(
         if (settingsRepository.fixedPerformanceMode.value) {
             shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled true")
         }
-        // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Downscaling Override
-        // maxHz is read from device hardware — never hardcoded. Supports 120, 144, 165+ Hz devices.
-        // Downscaling ratio 0.9x provides GPU/thermal headroom during intense hot drops.
+
+        // 4. Refresh Rate Lock & Display Mode Override
         val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
-        var refreshRateLockOk = false
+        var displayModeLockOk = false
+
         if (settingsRepository.refreshRateLock.value) {
-            initialMinRefreshRate = shizukuManager.executeCommand("settings get system min_refresh_rate")
-            initialPeakRefreshRate = shizukuManager.executeCommand("settings get system peak_refresh_rate")
             shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
             shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
+
             if (isVivo) {
-                initialVivoRefreshRateMode = shizukuManager.executeCommand("settings get global vivo_screen_refresh_rate_mode")
-                // cmd game set --fps and --downscale 0.9 require a specific package — skip during manual activation.
+                // Lock hardware display to Group 1 Mode 4 (1080x2400 @ 120Hz)
+                val modeResult = shizukuManager.executeCommandWithResult("settings put secure user_preferred_display_mode_id 4")
+                // Lock Vivo OEM display refresh rate mode
+                shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode 1")
+
                 if (!packageName.isNullOrBlank()) {
                     shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} --downscale 0.9 $packageName")
                 }
-                // Use global namespace — empirically verified on Vivo T3 Ultra (OriginOS 6).
-                val result = shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode ${maxHz.toInt()}")
-                refreshRateLockOk = !result.contains("error", ignoreCase = true)
+                displayModeLockOk = modeResult?.exitCode == 0
             } else {
-                refreshRateLockOk = true
+                displayModeLockOk = true
             }
         }
 
         // 5. Touch Response Latency Boost
         var touchBoostOk = false
         if (settingsRepository.touchBoost.value) {
-            initialTouchSpeed = shizukuManager.executeCommand("settings get system touch_response_speed")
-            shizukuManager.executeCommand("settings put system touch_response_speed 2")
-            if (isVivo) {
-                initialVivoTouchPersist = shizukuManager.executeCommand("settings get system com.vivo.vtouch.persist")
-                val result = shizukuManager.executeCommand("settings put system com.vivo.vtouch.persist 1")
-                touchBoostOk = !result.contains("error", ignoreCase = true)
-            } else {
-                touchBoostOk = true
-            }
+            // Universal Android touch response speed knob
+            val touchRes = shizukuManager.executeCommandWithResult("settings put system touch_response_speed 2")
+            touchBoostOk = touchRes?.exitCode == 0
+            // NOTE: Ghost key 'com.vivo.vtouch.persist' purged to eliminate redundant IPC overhead.
         }
 
-        // 6. Vivo GameCube Esports Boost (empirically verified writable on Vivo T3 Ultra)
-        var competitionModeOk: Boolean
-        var resolutionSwitchOk: Boolean
+        // 6. Vivo Whitelist Injection (Safe CSV Append)
+        var whitelistAppliedOk = false
         if (isVivo) {
-            initialGameCubeCompetitionState = shizukuManager.executeCommand("settings get system gamecube_competition_mode_state")
-            initialGameScreenResolutionSwitch = shizukuManager.executeCommand("settings get system game_screen_resolution_switch")
-            val compResult = shizukuManager.executeCommand("settings put system gamecube_competition_mode_state 1")
-            competitionModeOk = !compResult.contains("error", ignoreCase = true)
-            val resResult = shizukuManager.executeCommand("settings put system game_screen_resolution_switch 1")
-            resolutionSwitchOk = !resResult.contains("error", ignoreCase = true)
+            if (!packageName.isNullOrBlank()) {
+                var allSucceeded = true
+                for (key in vivoWhitelistKeys) {
+                    val currentValRes = shizukuManager.executeCommandWithResult("settings get global $key")
+                    val rawOutput = currentValRes?.output?.trim().orEmpty()
+                    val existingList = if (rawOutput == "null") "" else rawOutput
 
-            // Publish Vivo-specific execution result for UI status card
+                    val pkgs = existingList.split(",").map { it.trim() }.filter { it.isNotBlank() }.toMutableList()
+                    if (packageName !in pkgs) {
+                        pkgs.add(packageName)
+                        val newList = pkgs.joinToString(",")
+                        val writeRes = shizukuManager.executeCommandWithResult("settings put global $key \"$newList\"")
+                        if (writeRes?.exitCode != 0) allSucceeded = false
+                    }
+                }
+                whitelistAppliedOk = allSucceeded
+            } else {
+                whitelistAppliedOk = true
+            }
+
             _vivoOptimizationResult.value = VivoOptimizationResult(
-                refreshRateLock = refreshRateLockOk,
+                displayModeLock = displayModeLockOk,
                 maxHzApplied = maxHz.toInt(),
                 touchBoost = touchBoostOk,
-                competitionMode = competitionModeOk,
-                resolutionSwitch = resolutionSwitchOk,
+                whitelistApplied = whitelistAppliedOk
             )
         }
+
+        return true
     }
 
     suspend fun revertOptimizations() {
@@ -140,9 +231,17 @@ class EsportsOptimizationEngine @Inject constructor(
 
         recoverThermalOverrideIfNeeded()
 
-        val pkg = activeGamePackage
-        val uid = activeGameUid
+        val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
+        if (snapshot == null) {
+            FrameXLog.w("No snapshot found, performing legacy revert", tag = TAG)
+            revertLegacy()
+            return
+        }
 
+        val pkg = snapshot.activeGamePackage
+        val uid = snapshot.activeGameUid
+
+        // Revert per-app overrides
         if (pkg != null) {
             shizukuManager.executeCommand("cmd game reset $pkg")
             if (settingsRepository.cpuPriorityLock.value) {
@@ -153,78 +252,78 @@ class EsportsOptimizationEngine @Inject constructor(
 
         if (uid != null && settingsRepository.networkFirewall.value) {
             shizukuManager.executeCommand("cmd netpolicy remove restrict-background-whitelist $uid")
+            if (!pkg.isNullOrBlank()) {
+                shizukuManager.executeCommand("cmd deviceidle whitelist -$pkg")
+            }
         }
         shizukuManager.executeCommand("cmd deviceidle unforce")
-
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
-        // Unlock thermal throttling — restores OEM default thermal management.
 
-        if (settingsRepository.refreshRateLock.value) {
-            val prevMin = initialMinRefreshRate
-            if (!prevMin.isNullOrBlank() && prevMin != "null") {
-                shizukuManager.executeCommand("settings put system min_refresh_rate $prevMin")
+        // Restore system display & touch settings
+        snapshot.minRefreshRate?.let { restoreSetting("system", "min_refresh_rate", it) }
+        snapshot.peakRefreshRate?.let { restoreSetting("system", "peak_refresh_rate", it) }
+        snapshot.touchResponseSpeed?.let { restoreSetting("system", "touch_response_speed", it) }
+
+        // Restore secure display mode ID (restore to -1 if absent)
+        snapshot.userPreferredDisplayModeId?.let { setting ->
+            if (setting.existed && setting.value.isNotBlank()) {
+                shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id ${setting.value}")
             } else {
-                shizukuManager.executeCommand("settings delete system min_refresh_rate")
-            }
-
-            val prevPeak = initialPeakRefreshRate
-            if (!prevPeak.isNullOrBlank() && prevPeak != "null") {
-                shizukuManager.executeCommand("settings put system peak_refresh_rate $prevPeak")
-            } else {
-                shizukuManager.executeCommand("settings delete system peak_refresh_rate")
-            }
-
-            val prevVivoMode = initialVivoRefreshRateMode
-            if (!prevVivoMode.isNullOrBlank() && prevVivoMode != "null") {
-                shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode $prevVivoMode")
-            } else {
-                shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode 0")
-            }
-
-            // Force WindowManagerService / SurfaceFlinger policy recalculation
-            shizukuManager.executeCommand("settings put global user_refresh_rate 0")
-        }
-
-        if (settingsRepository.touchBoost.value) {
-            val prevTouch = initialTouchSpeed
-            if (!prevTouch.isNullOrBlank() && prevTouch != "null") {
-                shizukuManager.executeCommand("settings put system touch_response_speed $prevTouch")
-            } else {
-                shizukuManager.executeCommand("settings delete system touch_response_speed")
-            }
-
-            val prevVivoTouch = initialVivoTouchPersist
-            if (!prevVivoTouch.isNullOrBlank() && prevVivoTouch != "null") {
-                shizukuManager.executeCommand("settings put system com.vivo.vtouch.persist $prevVivoTouch")
-            } else {
-                shizukuManager.executeCommand("settings delete system com.vivo.vtouch.persist")
+                shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id -1")
             }
         }
 
-        // Revert Vivo GameCube Esports Boost keys
-        val prevCompetition = initialGameCubeCompetitionState
-        if (!prevCompetition.isNullOrBlank() && prevCompetition != "null") {
-            shizukuManager.executeCommand("settings put system gamecube_competition_mode_state $prevCompetition")
+        // Restore Vivo global settings
+        snapshot.vivoRefreshRateMode?.let { restoreSetting("global", "vivo_screen_refresh_rate_mode", it) }
+
+        // Strip pkg from Vivo CSV whitelists
+        if (pkg != null) {
+            stripPackageFromCsv("game_cube_apps", pkg, snapshot.gameCubeApps)
+            stripPackageFromCsv("speed_mode_apps", pkg, snapshot.speedModeApps)
+            stripPackageFromCsv("vivo_high_refresh_rate_apps", pkg, snapshot.vivoHighRefreshApps)
+            stripPackageFromCsv("vivo_screen_refresh_rate_apps_list", pkg, snapshot.vivoScreenRefreshAppsList)
+        }
+
+        // Clear snapshot only after successful restoration
+        settingsRepository.clearGamingOptimizationSnapshot()
+        _vivoOptimizationResult.value = null
+    }
+
+    private suspend fun restoreSetting(namespace: String, key: String, setting: SettingValue) {
+        if (setting.existed && setting.value.isNotBlank()) {
+            shizukuManager.executeCommand("settings put $namespace $key ${setting.value}")
         } else {
-            shizukuManager.executeCommand("settings delete system gamecube_competition_mode_state")
+            shizukuManager.executeCommand("settings delete $namespace $key")
         }
-        val prevResSwitch = initialGameScreenResolutionSwitch
-        if (!prevResSwitch.isNullOrBlank() && prevResSwitch != "null") {
-            shizukuManager.executeCommand("settings put system game_screen_resolution_switch $prevResSwitch")
-        } else {
-            shizukuManager.executeCommand("settings delete system game_screen_resolution_switch")
-        }
+    }
 
-        activeGamePackage = null
-        activeGameUid = null
-        initialMinRefreshRate = null
-        initialPeakRefreshRate = null
-        initialVivoRefreshRateMode = null
-        initialTouchSpeed = null
-        initialVivoTouchPersist = null
-        initialGameCubeCompetitionState = null
-        initialGameScreenResolutionSwitch = null
-        // Clear Vivo status — device is no longer in gaming mode
+    private suspend fun stripPackageFromCsv(key: String, pkg: String, originalBackup: SettingValue?) {
+        val currentValRes = shizukuManager.executeCommandWithResult("settings get global $key")
+        val rawOutput = currentValRes?.output?.trim().orEmpty()
+        if (rawOutput.isNotBlank() && rawOutput != "null") {
+            val pkgs = rawOutput.split(",").map { it.trim() }.filter { it.isNotBlank() && it != pkg }
+            if (pkgs.isNotEmpty()) {
+                shizukuManager.executeCommand("settings put global $key \"${pkgs.joinToString(",")}\"")
+            } else {
+                if (originalBackup != null && originalBackup.existed && originalBackup.value.isNotBlank()) {
+                    shizukuManager.executeCommand("settings put global $key \"${originalBackup.value}\"")
+                } else {
+                    shizukuManager.executeCommand("settings delete global $key")
+                }
+            }
+        } else if (originalBackup != null) {
+            restoreSetting("global", key, originalBackup)
+        }
+    }
+
+    private suspend fun revertLegacy() {
+        shizukuManager.executeCommand("settings delete system min_refresh_rate")
+        shizukuManager.executeCommand("settings delete system peak_refresh_rate")
+        shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id -1")
+        shizukuManager.executeCommand("settings delete global vivo_screen_refresh_rate_mode")
+        shizukuManager.executeCommand("settings delete system touch_response_speed")
+        shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
+        shizukuManager.executeCommand("cmd deviceidle unforce")
         _vivoOptimizationResult.value = null
     }
 
@@ -232,15 +331,83 @@ class EsportsOptimizationEngine @Inject constructor(
         if (!settingsRepository.needsThermalOverrideRecovery()) return true
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
 
-        val exitCode = shizukuManager.executeCommandWithExitCode("cmd thermalservice reset")
-        if (exitCode != 0) {
-            FrameXLog.w("Thermal override recovery failed with exit code $exitCode", tag = "GamingMode")
+        val result = shizukuManager.executeCommandWithResult("cmd thermalservice reset")
+        if (result == null || result.exitCode != 0) {
+            FrameXLog.w("Thermal override recovery failed", tag = TAG)
             return false
         }
 
         settingsRepository.markThermalOverrideRecoveryComplete()
-        FrameXLog.i("Thermal override recovery completed", tag = "GamingMode")
+        FrameXLog.i("Thermal override recovery completed", tag = TAG)
         return true
+    }
+
+    suspend fun performLegacyCleanupIfNeeded(): Boolean {
+        if (!settingsRepository.needsLegacySettingsCleanup()) return true
+        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
+
+        FrameXLog.i("Performing one-time legacy settings cleanup", tag = TAG)
+
+        val cleanupCommands = listOf(
+            "settings delete system min_refresh_rate",
+            "settings delete system peak_refresh_rate",
+            "settings put secure user_preferred_display_mode_id -1",
+            "settings delete global vivo_screen_refresh_rate_mode",
+            "settings delete system touch_response_speed",
+            "settings delete global com.vivo.vtouch.persist",
+            "settings delete system com.vivo.vtouch.persist",
+            "settings delete system game_screen_resolution_switch",
+            "settings delete system gamecube_competition_mode_state",
+            "cmd power set-fixed-performance-mode-enabled false",
+            "cmd thermalservice reset"
+        )
+
+        var allSucceeded = true
+        for (cmd in cleanupCommands) {
+            val result = shizukuManager.executeCommandWithResult(cmd)
+            if (result == null || result.exitCode != 0) {
+                allSucceeded = false
+            }
+        }
+
+        if (allSucceeded) {
+            settingsRepository.markLegacySettingsCleanupComplete()
+            FrameXLog.i("Legacy settings cleanup completed successfully", tag = TAG)
+        }
+
+        return allSucceeded
+    }
+
+    suspend fun resetToDeviceDefaults(forceReset: Boolean = false): Boolean {
+        if (!forceReset && !settingsRepository.needsLegacySettingsCleanup()) return true
+        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
+
+        FrameXLog.i("User-triggered device defaults reset", tag = TAG)
+
+        val resetCommands = listOf(
+            "settings delete system min_refresh_rate",
+            "settings delete system peak_refresh_rate",
+            "settings put secure user_preferred_display_mode_id -1",
+            "settings delete global vivo_screen_refresh_rate_mode",
+            "settings delete system touch_response_speed",
+            "cmd power set-fixed-performance-mode-enabled false",
+            "cmd thermalservice reset",
+            "cmd deviceidle unforce"
+        )
+
+        var successCount = 0
+        for (cmd in resetCommands) {
+            val result = shizukuManager.executeCommandWithResult(cmd)
+            if (result != null && result.exitCode == 0) {
+                successCount++
+            }
+        }
+
+        settingsRepository.markLegacySettingsCleanupComplete()
+        settingsRepository.clearGamingOptimizationSnapshot()
+
+        FrameXLog.i("Device defaults reset: $successCount/${resetCommands.size} commands succeeded", tag = TAG)
+        return successCount == resetCommands.size
     }
 
     fun calculateFramePacingDeltaMs(actualFps: Int): Float {
@@ -249,5 +416,9 @@ class EsportsOptimizationEngine @Inject constructor(
         val targetFrameTimeMs = 1000f / activeHz
         val actualFrameTimeMs = 1000f / actualFps.toFloat()
         return abs(actualFrameTimeMs - targetFrameTimeMs)
+    }
+
+    private companion object {
+        const val TAG = "EsportsEngine"
     }
 }

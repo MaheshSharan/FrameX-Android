@@ -168,6 +168,48 @@ class ShizukuManager @Inject constructor() {
         }
     }
 
+    suspend fun executeCommandWithResult(command: String): CommandResult? {
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            com.framex.app.utils.FrameXLog.w("executeCommandWithResult called when Shizuku is unavailable or permission is not granted")
+            return null
+        }
+        return commandMutex.withLock {
+            val runner = awaitCommandRunner() ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in executeCommandWithResult")
+                return@withLock null
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.executeCommandWithResult(command)
+                }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.e("executeCommandWithResult failed: $command", e)
+                null
+            }
+        }
+    }
+
+    suspend fun readProcStat(): String {
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            com.framex.app.utils.FrameXLog.w("readProcStat called when Shizuku is unavailable")
+            return ""
+        }
+        return commandMutex.withLock {
+            val runner = awaitCommandRunner() ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in readProcStat")
+                return@withLock ""
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.readProcStat()
+                }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.e("readProcStat failed", e)
+                ""
+            }
+        }
+    }
+
     suspend fun getThermalTemperatures(): String {
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             com.framex.app.utils.FrameXLog.w("getThermalTemperatures called when Shizuku is unavailable")

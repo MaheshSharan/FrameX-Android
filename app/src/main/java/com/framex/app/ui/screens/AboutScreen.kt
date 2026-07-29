@@ -369,7 +369,7 @@ fun AboutScreen(
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Vivo / iQOO Hardware Optimizations", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
+                                    Text("Vivo T3 Ultra Hardware Optimizations", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text("Enable OriginOS / FuntouchOS OEM power governor overrides.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)
                                 }

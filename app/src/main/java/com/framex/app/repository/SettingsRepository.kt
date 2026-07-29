@@ -282,7 +282,7 @@ class SettingsRepository @Inject constructor(
 
     // ---- Esports Optimizations ----------------------------------------------
 
-    private val _vivoOptEnabled = MutableStateFlow(prefs.getBoolean(KEY_VIVO_OPT_ENABLED, false))
+    private val _vivoOptEnabled = MutableStateFlow(prefs.getBoolean(KEY_VIVO_OPT_ENABLED, true))
     val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
 
     private val _cpuPriorityLock = MutableStateFlow(prefs.getBoolean(KEY_CPU_PRIORITY_LOCK, true))
@@ -354,6 +354,49 @@ class SettingsRepository @Inject constructor(
         _overlayWasRunning.value = running
     }
 
+    // ---- Gaming Optimization Snapshot (Crash-Safe Recovery) -----------------
+
+    /**
+     * Saves the current gaming optimization snapshot.
+     */
+    fun saveGamingOptimizationSnapshot(snapshot: com.framex.app.gaming.GamingOptimizationSnapshot) {
+        prefs.edit().putString(KEY_GAMING_OPT_SNAPSHOT, snapshot.toJson()).apply()
+    }
+
+    /**
+     * Loads the persisted gaming optimization snapshot, if any.
+     * Returns null if no active snapshot exists or if deserialization fails.
+     */
+    fun loadGamingOptimizationSnapshot(): com.framex.app.gaming.GamingOptimizationSnapshot? {
+        val json = prefs.getString(KEY_GAMING_OPT_SNAPSHOT, null) ?: return null
+        return com.framex.app.gaming.GamingOptimizationSnapshot.fromJson(json)
+    }
+
+    /**
+     * Clears the persisted gaming optimization snapshot. Call only after successful restoration.
+     */
+    fun clearGamingOptimizationSnapshot() {
+        prefs.edit().remove(KEY_GAMING_OPT_SNAPSHOT).apply()
+    }
+
+    /**
+     * Returns true if there is an active gaming optimization snapshot that needs recovery.
+     */
+    fun hasActiveGamingSnapshot(): Boolean {
+        return prefs.contains(KEY_GAMING_OPT_SNAPSHOT)
+    }
+
+    // ---- Legacy Cleanup Migration --------------------------------------------
+
+    fun needsLegacySettingsCleanup(): Boolean =
+        prefs.getInt(KEY_LEGACY_SETTINGS_CLEANUP_VERSION, 0) < LEGACY_SETTINGS_CLEANUP_VERSION
+
+    fun markLegacySettingsCleanupComplete() {
+        prefs.edit()
+            .putInt(KEY_LEGACY_SETTINGS_CLEANUP_VERSION, LEGACY_SETTINGS_CLEANUP_VERSION)
+            .apply()
+    }
+
     companion object {
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_THERMAL_TIME_WINDOW = "thermal_time_window"
@@ -391,5 +434,8 @@ class SettingsRepository @Inject constructor(
         private const val KEY_FIXED_PERFORMANCE_MODE = "esports_fixed_performance_mode"
         private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
         private const val KEY_OVERLAY_WAS_RUNNING = "overlay_was_running"
+        private const val KEY_GAMING_OPT_SNAPSHOT = "gaming_opt_snapshot"
+        private const val KEY_LEGACY_SETTINGS_CLEANUP_VERSION = "legacy_settings_cleanup_version"
+        private const val LEGACY_SETTINGS_CLEANUP_VERSION = 1
     }
 }

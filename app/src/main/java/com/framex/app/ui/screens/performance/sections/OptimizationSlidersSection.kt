@@ -3,6 +3,7 @@ package com.framex.app.ui.screens.performance.sections
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,8 +19,11 @@ fun OptimizationSlidersSection(
     showRamResult: Boolean,
     isOptimizingNet: Boolean,
     showPingResult: Boolean,
+    isResettingDefaults: Boolean,
+    showResetResult: Boolean,
     onBoostRam: () -> Unit,
-    onCheckPing: () -> Unit
+    onCheckPing: () -> Unit,
+    onResetDefaults: () -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
         Text(
@@ -50,6 +54,20 @@ fun OptimizationSlidersSection(
             resultText = "CHECKED",
             onActivated = onCheckPing
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SwipeToActivate(
+            text = "SWIPE TO RESET DEVICE DEFAULTS",
+            icon = Icons.Default.RestoreFromTrash,
+            accentColor = Color(0xFFF59E0B),
+            isBusy = isResettingDefaults,
+            showResult = showResetResult,
+            busyText = "RESETTING…",
+            resultText = "RESET DONE",
+            onActivated = onResetDefaults
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
