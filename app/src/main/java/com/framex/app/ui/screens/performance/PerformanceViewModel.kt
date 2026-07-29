@@ -256,6 +256,9 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
+    suspend fun resetToDeviceDefaults(): Boolean =
+        esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)
+
     val safeToSuspendList: List<String> get() = gamingModeEngine.SAFE_TO_SUSPEND
     val googleSafeToSuspendList: List<String> get() = gamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
     val gamingDaemonsList: List<String>

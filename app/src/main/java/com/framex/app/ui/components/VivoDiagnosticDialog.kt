@@ -62,7 +62,7 @@ fun VivoDiagnosticDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = if (isVivoOrIqoo) "Vivo / iQOO Detected" else "Device Compatibility Notice",
+                    text = if (isVivoOrIqoo) "Vivo T3 Ultra / Vivo OEM Detected" else "Device Compatibility Notice",
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -83,9 +83,9 @@ fun VivoDiagnosticDialog(
 
                 Text(
                     text = if (isVivoOrIqoo) {
-                        "Your hardware supports OriginOS / FuntouchOS performance governor overrides. Enabling will unlock OEM specific power modes & touch boost."
+                        "Your hardware supports OriginOS performance governor overrides. Enabling will unlock OEM specific power modes, touch boost, and 1080p@120Hz display lock."
                     } else {
-                        "Your device is not manufactured by Vivo/iQOO. FrameX will apply universal Android 12–16 optimizations (CPU priority lock, netpolicy firewall, and refresh rate lock) which work 100% reliably on your phone."
+                        "Your device is not manufactured by Vivo. FrameX will apply universal Android 12–16 optimizations (CPU priority lock, netpolicy firewall, and refresh rate lock) which work 100% reliably on your phone."
                     },
                     color = Color.Gray,
                     fontSize = 13.sp,

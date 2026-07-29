@@ -124,6 +124,8 @@ fun PerformanceScreen(
     var showRamResult by remember { mutableStateOf(false) }
     var isOptimizingNet by remember { mutableStateOf(false) }
     var showPingResult by remember { mutableStateOf(false) }
+    var isResettingDefaults by remember { mutableStateOf(false) }
+    var showResetResult by remember { mutableStateOf(false) }
     var showRamSuccessBanner by remember { mutableStateOf<String?>(null) }
     var activeLatencyDiagnostic by remember { mutableStateOf<Int?>(null) }
 
@@ -212,6 +214,8 @@ fun PerformanceScreen(
                     showRamResult = showRamResult,
                     isOptimizingNet = isOptimizingNet,
                     showPingResult = showPingResult,
+                    isResettingDefaults = isResettingDefaults,
+                    showResetResult = showResetResult,
                     onBoostRam = {
                         scope.launch {
                             isBoostingRam = true
@@ -235,6 +239,19 @@ fun PerformanceScreen(
                             showRamSuccessBanner = if (pingRes != null) "Latency check complete: $pingRes ms" else "Latency check failed: network unreachable"
                             delay(2500)
                             showPingResult = false
+                            delay(300)
+                            showRamSuccessBanner = null
+                        }
+                    },
+                    onResetDefaults = {
+                        scope.launch {
+                            isResettingDefaults = true
+                            val resetOk = viewModel.resetToDeviceDefaults()
+                            isResettingDefaults = false
+                            showResetResult = true
+                            showRamSuccessBanner = if (resetOk) "Device settings reset to OS defaults" else "Device reset partially completed"
+                            delay(2500)
+                            showResetResult = false
                             delay(300)
                             showRamSuccessBanner = null
                         }

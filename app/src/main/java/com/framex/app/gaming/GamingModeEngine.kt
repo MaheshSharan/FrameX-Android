@@ -11,10 +11,18 @@ import android.provider.Settings
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +56,9 @@ class GamingModeEngine @Inject constructor(
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val oemPackageResolver: OemPackageResolver
 ) {
+
+    private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var thermalRecoveryJob: Job? = null
 
     // ---- Public state -------------------------------------------------------
 
@@ -306,13 +317,37 @@ class GamingModeEngine @Inject constructor(
             // Apply Esports optimizations for all activations.
             // When activeGamePkg is null (manual activation), package-specific commands like
             // cmd game set --fps are skipped, but all system-wide Vivo/thermal boosts still run.
-            try {
+            // Apply Esports optimizations for all activations.
+            // When activeGamePkg is null (manual activation), package-specific commands like
+            // cmd game set --fps are skipped, but all system-wide Vivo/thermal boosts still run.
+            val optimizationsApplied = try {
                 val uid = activeGamePkg?.let {
                     runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
                 }
                 esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
             } catch (e: Exception) {
                 com.framex.app.utils.FrameXLog.w("Esports optimization failed", e)
+                false
+            }
+
+            if (!optimizationsApplied) {
+                // Esports snapshot capture failed, abort gaming mode activation
+                _state.value = GamingModeState.Error("Failed to capture system settings snapshot")
+                // Clean up what we've done so far
+                if (!isAlreadyActive) {
+                    val allToUnsuspend = (SAFE_TO_SUSPEND + affectedPkgs).distinct()
+                    shizukuManager.suspendPackages(allToUnsuspend, false)
+                }
+                settingsRepository.setGamingModeActive(false)
+                _isActive.value = false
+                return
+            }
+
+            // Update snapshot with affected packages (now that suspension is complete)
+            val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
+            currentSnapshot?.let { snapshot ->
+                val updatedSnapshot = snapshot.copy(affectedPackages = affectedPkgs)
+                settingsRepository.saveGamingOptimizationSnapshot(updatedSnapshot)
             }
 
             // ----------------------------------------------------------------
@@ -335,13 +370,15 @@ class GamingModeEngine @Inject constructor(
      * 1. pm unsuspend on SAFE_TO_SUSPEND
      * 2. pm unsuspend + restore AppOps on previously-affected user packages
      * 3. Disable DND
+     * 4. Restore esports optimizations from snapshot
      */
     suspend fun disableGamingMode() {
         _state.value = GamingModeState.Disabling
 
         try {
-            // Unsuspend all OEM packages and user packages in a single batched IPC call
-            val affectedUserPkgs = settingsRepository.getGamingAffectedPackages()
+            // Load snapshot to get affected packages
+            val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
+            val affectedUserPkgs = snapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
             val allToUnsuspend = (SAFE_TO_SUSPEND + affectedUserPkgs).distinct()
 
             shizukuManager.suspendPackages(allToUnsuspend, false)
@@ -349,8 +386,6 @@ class GamingModeEngine @Inject constructor(
 
             // Purge spawned background processes after unsuspending to prevent Vivo PEM battery drain
             shizukuManager.executeCommand("am kill-all")
-
-            esportsOptimizationEngine.revertOptimizations()
 
             // Restore DND
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -389,21 +424,75 @@ class GamingModeEngine @Inject constructor(
 
         } catch (e: Exception) {
             com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e)
-        }
+        } finally {
+            try {
+                esportsOptimizationEngine.revertOptimizations()
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e)
+            }
 
-        settingsRepository.setGamingModeActive(false)
-        _isActive.value = false
-        _state.value = GamingModeState.Idle
+            settingsRepository.setGamingModeActive(false)
+            _isActive.value = false
+            _state.value = GamingModeState.Idle
+        }
     }
 
     /** Called on app start-up to recover state that was active before a kill. */
     fun recoverPersistedState() {
-        if (settingsRepository.isGamingModeActive()) {
+        recoverThermalOverrideIfNeeded()
+        recoverLegacySettingsIfNeeded()
+
+        // Check for orphaned gaming optimization snapshot
+        if (settingsRepository.hasActiveGamingSnapshot()) {
+            com.framex.app.utils.FrameXLog.w("Detected orphaned gaming optimization snapshot, will recover on Shizuku connect", tag = "GamingMode")
+            _isActive.value = true
+            _state.value = GamingModeState.Active
+
+            if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+                recoveryScope.launch {
+                    disableGamingMode()
+                }
+            } else {
+                showRecoveryNotification()
+            }
+        } else if (settingsRepository.isGamingModeActive()) {
             _isActive.value = true
             _state.value = GamingModeState.Active
             if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
                 showRecoveryNotification()
             }
+        }
+    }
+
+    private fun recoverThermalOverrideIfNeeded() {
+        if (!settingsRepository.needsThermalOverrideRecovery() || thermalRecoveryJob?.isActive == true) return
+
+        thermalRecoveryJob = recoveryScope.launch {
+            combine(
+                shizukuManager.isShizukuAvailable,
+                shizukuManager.hasPermission
+            ) { available, granted ->
+                available && granted
+            }
+                .distinctUntilChanged()
+                .filter { it }
+                .first { esportsOptimizationEngine.recoverThermalOverrideIfNeeded() }
+        }
+    }
+
+    private fun recoverLegacySettingsIfNeeded() {
+        if (!settingsRepository.needsLegacySettingsCleanup()) return
+
+        recoveryScope.launch {
+            combine(
+                shizukuManager.isShizukuAvailable,
+                shizukuManager.hasPermission
+            ) { available, granted ->
+                available && granted
+            }
+                .distinctUntilChanged()
+                .filter { it }
+                .first { esportsOptimizationEngine.performLegacyCleanupIfNeeded() }
         }
     }
 
