@@ -346,7 +346,6 @@ private fun VivoBoostStatusCard(result: VivoOptimizationResult) {
             }
             HorizontalDivider(color = accentColor.copy(alpha = 0.15f))
             // maxHzApplied comes from the device's actual hardware max Hz — not hardcoded
-            VivoStatusRow("Thermal Override", "THERMAL_STATUS_NONE Active", result.thermalOverride)
             VivoStatusRow(
                 "Refresh Rate Lock",
                 "${result.maxHzApplied} Hz (Device Max) Locked",

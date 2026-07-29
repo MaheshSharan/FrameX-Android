@@ -49,6 +49,21 @@ class CommandRunnerService private constructor(
         }
     }
 
+    override fun executeCommandWithExitCode(command: String): Int {
+        return try {
+            val process = ProcessBuilder("sh", "-c", command)
+                .redirectErrorStream(true)
+                .start()
+            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                reader.readText()
+            }
+            process.waitFor()
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
+            COMMAND_EXECUTION_FAILED
+        }
+    }
+
     override fun getThermalTemperatures(): String {
         resolvedThermalStrategy?.let { cached ->
             val cachedResult = readUsingStrategy(cached)
@@ -321,5 +336,9 @@ class CommandRunnerService private constructor(
 
     override fun destroy() {
         exitProcess(0)
+    }
+
+    private companion object {
+        const val COMMAND_EXECUTION_FAILED = -1
     }
 }

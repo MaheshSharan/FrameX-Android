@@ -11,10 +11,18 @@ import android.provider.Settings
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +56,9 @@ class GamingModeEngine @Inject constructor(
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val oemPackageResolver: OemPackageResolver
 ) {
+
+    private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var thermalRecoveryJob: Job? = null
 
     // ---- Public state -------------------------------------------------------
 
@@ -350,8 +361,6 @@ class GamingModeEngine @Inject constructor(
             // Purge spawned background processes after unsuspending to prevent Vivo PEM battery drain
             shizukuManager.executeCommand("am kill-all")
 
-            esportsOptimizationEngine.revertOptimizations()
-
             // Restore DND
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.isNotificationPolicyAccessGranted) {
@@ -389,21 +398,44 @@ class GamingModeEngine @Inject constructor(
 
         } catch (e: Exception) {
             com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e)
-        }
+        } finally {
+            try {
+                esportsOptimizationEngine.revertOptimizations()
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e)
+            }
 
-        settingsRepository.setGamingModeActive(false)
-        _isActive.value = false
-        _state.value = GamingModeState.Idle
+            settingsRepository.setGamingModeActive(false)
+            _isActive.value = false
+            _state.value = GamingModeState.Idle
+        }
     }
 
     /** Called on app start-up to recover state that was active before a kill. */
     fun recoverPersistedState() {
+        recoverThermalOverrideIfNeeded()
         if (settingsRepository.isGamingModeActive()) {
             _isActive.value = true
             _state.value = GamingModeState.Active
             if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
                 showRecoveryNotification()
             }
+        }
+    }
+
+    private fun recoverThermalOverrideIfNeeded() {
+        if (!settingsRepository.needsThermalOverrideRecovery() || thermalRecoveryJob?.isActive == true) return
+
+        thermalRecoveryJob = recoveryScope.launch {
+            combine(
+                shizukuManager.isShizukuAvailable,
+                shizukuManager.hasPermission
+            ) { available, granted ->
+                available && granted
+            }
+                .distinctUntilChanged()
+                .filter { it }
+                .first { esportsOptimizationEngine.recoverThermalOverrideIfNeeded() }
         }
     }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,6 @@ import kotlin.math.abs
  * [maxHzApplied] carries the actual device max Hz used at activation time (not hardcoded).
  */
 data class VivoOptimizationResult(
-    val thermalOverride: Boolean,
     val refreshRateLock: Boolean,
     val maxHzApplied: Int,
     val touchBoost: Boolean,
@@ -71,17 +71,10 @@ class EsportsOptimizationEngine @Inject constructor(
             shizukuManager.executeCommand("cmd deviceidle force-idle")
         }
 
-        // 3. Performance Governor Lock + Active Thermal Throttling Override
-        // cmd thermalservice override-status 0: empirically verified on Vivo T3 Ultra (ADB shell UID 2000).
-        // Locks Android ThermalManager to THERMAL_STATUS_NONE, preventing OEM frame-rate throttling drops.
+        // 3. Performance Governor Lock
         if (settingsRepository.fixedPerformanceMode.value) {
             shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled true")
         }
-        val thermalOverrideOk = runCatching {
-            shizukuManager.executeCommand("cmd thermalservice override-status 0")
-            true
-        }.getOrDefault(false)
-
         // 4. Per-App Refresh Rate Lock & Android 16 Game Mode Downscaling Override
         // maxHz is read from device hardware — never hardcoded. Supports 120, 144, 165+ Hz devices.
         // Downscaling ratio 0.9x provides GPU/thermal headroom during intense hot drops.
@@ -133,7 +126,6 @@ class EsportsOptimizationEngine @Inject constructor(
 
             // Publish Vivo-specific execution result for UI status card
             _vivoOptimizationResult.value = VivoOptimizationResult(
-                thermalOverride = thermalOverrideOk,
                 refreshRateLock = refreshRateLockOk,
                 maxHzApplied = maxHz.toInt(),
                 touchBoost = touchBoostOk,
@@ -145,6 +137,8 @@ class EsportsOptimizationEngine @Inject constructor(
 
     suspend fun revertOptimizations() {
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return
+
+        recoverThermalOverrideIfNeeded()
 
         val pkg = activeGamePackage
         val uid = activeGameUid
@@ -164,7 +158,6 @@ class EsportsOptimizationEngine @Inject constructor(
 
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
         // Unlock thermal throttling — restores OEM default thermal management.
-        shizukuManager.executeCommand("cmd thermalservice reset")
 
         if (settingsRepository.refreshRateLock.value) {
             val prevMin = initialMinRefreshRate
@@ -233,6 +226,21 @@ class EsportsOptimizationEngine @Inject constructor(
         initialGameScreenResolutionSwitch = null
         // Clear Vivo status — device is no longer in gaming mode
         _vivoOptimizationResult.value = null
+    }
+
+    suspend fun recoverThermalOverrideIfNeeded(): Boolean {
+        if (!settingsRepository.needsThermalOverrideRecovery()) return true
+        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
+
+        val exitCode = shizukuManager.executeCommandWithExitCode("cmd thermalservice reset")
+        if (exitCode != 0) {
+            FrameXLog.w("Thermal override recovery failed with exit code $exitCode", tag = "GamingMode")
+            return false
+        }
+
+        settingsRepository.markThermalOverrideRecoveryComplete()
+        FrameXLog.i("Thermal override recovery completed", tag = "GamingMode")
+        return true
     }
 
     fun calculateFramePacingDeltaMs(actualFps: Int): Float {

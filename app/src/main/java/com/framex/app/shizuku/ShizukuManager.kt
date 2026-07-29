@@ -147,6 +147,27 @@ class ShizukuManager @Inject constructor() {
         }
     }
 
+    suspend fun executeCommandWithExitCode(command: String): Int {
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            com.framex.app.utils.FrameXLog.w("executeCommandWithExitCode called when Shizuku is unavailable or permission is not granted")
+            return COMMAND_EXECUTION_FAILED
+        }
+        return commandMutex.withLock {
+            val runner = awaitCommandRunner() ?: run {
+                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in executeCommandWithExitCode")
+                return@withLock COMMAND_EXECUTION_FAILED
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.executeCommandWithExitCode(command)
+                }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.e("executeCommandWithExitCode failed: $command", e)
+                COMMAND_EXECUTION_FAILED
+            }
+        }
+    }
+
     suspend fun getThermalTemperatures(): String {
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             com.framex.app.utils.FrameXLog.w("getThermalTemperatures called when Shizuku is unavailable")
@@ -300,5 +321,6 @@ class ShizukuManager @Inject constructor() {
         private const val BIND_TIMEOUT_MS = 5000L
         private const val INITIAL_BIND_DELAY_MS = 2000L
         private const val USER_SERVICE_TAG = "framex-command-runner"
+        private const val COMMAND_EXECUTION_FAILED = -1
     }
 }

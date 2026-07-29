@@ -233,6 +233,15 @@ class SettingsRepository @Inject constructor(
     fun getGamingAffectedPackages(): Set<String> =
         prefs.getStringSet(KEY_GAMING_AFFECTED_PKGS, emptySet()) ?: emptySet()
 
+    fun needsThermalOverrideRecovery(): Boolean =
+        prefs.getInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, 0) < THERMAL_OVERRIDE_RECOVERY_VERSION
+
+    fun markThermalOverrideRecoveryComplete() {
+        prefs.edit()
+            .putInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, THERMAL_OVERRIDE_RECOVERY_VERSION)
+            .apply()
+    }
+
     // ---- Game Launcher ------------------------------------------------------
 
     private val _launcherGames = MutableStateFlow(
@@ -370,6 +379,8 @@ class SettingsRepository @Inject constructor(
         private const val KEY_GAMING_WHITELIST = "gaming_mode_whitelist"
         private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
         private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"
+        private const val KEY_THERMAL_OVERRIDE_RECOVERY_VERSION = "thermal_override_recovery_version"
+        private const val THERMAL_OVERRIDE_RECOVERY_VERSION = 1
         private const val KEY_LAUNCHER_GAMES = "launcher_games"
         private const val KEY_VIVO_OPT_ENABLED = "esports_vivo_opt_enabled"
         private const val KEY_CPU_PRIORITY_LOCK = "esports_cpu_priority_lock"
