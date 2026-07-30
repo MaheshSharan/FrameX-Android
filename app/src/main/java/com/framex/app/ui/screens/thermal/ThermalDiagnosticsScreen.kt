@@ -144,26 +144,32 @@ fun ThermalDiagnosticsScreen(
         metricsState.batteryTempC - prev
     }
 
-    // Session Peaks & Averages
+    // Session peaks remain available for the diagnostic timeline. Card averages use a
+    // timestamp-based recent window so they describe current thermal conditions.
     val cpuPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalCpuC } ?: metricsState.thermalCpuC }
     val gpuPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalGpuC } ?: metricsState.thermalGpuC }
     val skinPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.thermalSkinC } ?: metricsState.thermalSkinC }
     val batteryPeak = remember(snapshotHistory) { snapshotHistory.maxOfOrNull { it.state.batteryTempC } ?: metricsState.batteryTempC }
 
-    val cpuAvg = remember(snapshotHistory) {
-        val valid = snapshotHistory.filter { it.state.thermalCpuC > 0f }
+    val recentThermalSnapshots = remember(snapshotHistory) {
+        val latestTimestampMs = snapshotHistory.lastOrNull()?.timestampMs ?: return@remember emptyList()
+        snapshotHistory.filter { it.timestampMs >= latestTimestampMs - THERMAL_AVERAGE_WINDOW_MS }
+    }
+
+    val cpuAvg = remember(recentThermalSnapshots, metricsState.thermalCpuC) {
+        val valid = recentThermalSnapshots.filter { it.state.thermalCpuC > 0f }
         if (valid.isNotEmpty()) valid.map { it.state.thermalCpuC }.average().toFloat() else metricsState.thermalCpuC
     }
-    val gpuAvg = remember(snapshotHistory) {
-        val valid = snapshotHistory.filter { it.state.thermalGpuC > 0f }
+    val gpuAvg = remember(recentThermalSnapshots, metricsState.thermalGpuC) {
+        val valid = recentThermalSnapshots.filter { it.state.thermalGpuC > 0f }
         if (valid.isNotEmpty()) valid.map { it.state.thermalGpuC }.average().toFloat() else metricsState.thermalGpuC
     }
-    val skinAvg = remember(snapshotHistory) {
-        val valid = snapshotHistory.filter { it.state.thermalSkinC > 0f }
+    val skinAvg = remember(recentThermalSnapshots, metricsState.thermalSkinC) {
+        val valid = recentThermalSnapshots.filter { it.state.thermalSkinC > 0f }
         if (valid.isNotEmpty()) valid.map { it.state.thermalSkinC }.average().toFloat() else metricsState.thermalSkinC
     }
-    val batteryAvg = remember(snapshotHistory) {
-        val valid = snapshotHistory.filter { it.state.batteryTempC > 0f }
+    val batteryAvg = remember(recentThermalSnapshots, metricsState.batteryTempC) {
+        val valid = recentThermalSnapshots.filter { it.state.batteryTempC > 0f }
         if (valid.isNotEmpty()) valid.map { it.state.batteryTempC }.average().toFloat() else metricsState.batteryTempC
     }
 

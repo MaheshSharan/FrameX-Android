@@ -358,9 +358,10 @@ class SettingsRepository @Inject constructor(
 
     /**
      * Saves the current gaming optimization snapshot.
+     * Uses synchronous commit() to guarantee disk persistence before system writes execute.
      */
     fun saveGamingOptimizationSnapshot(snapshot: com.framex.app.gaming.GamingOptimizationSnapshot) {
-        prefs.edit().putString(KEY_GAMING_OPT_SNAPSHOT, snapshot.toJson()).apply()
+        prefs.edit().putString(KEY_GAMING_OPT_SNAPSHOT, snapshot.toJson()).commit()
     }
 
     /**
@@ -374,9 +375,10 @@ class SettingsRepository @Inject constructor(
 
     /**
      * Clears the persisted gaming optimization snapshot. Call only after successful restoration.
+     * Uses synchronous commit() to guarantee snapshot removal on disk.
      */
     fun clearGamingOptimizationSnapshot() {
-        prefs.edit().remove(KEY_GAMING_OPT_SNAPSHOT).apply()
+        prefs.edit().remove(KEY_GAMING_OPT_SNAPSHOT).commit()
     }
 
     /**
