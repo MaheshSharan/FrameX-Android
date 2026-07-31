@@ -177,6 +177,15 @@ class GamingModeEngine @Inject constructor(
         }.sortedBy { it.label.lowercase() }
     }
 
+    private fun isPackageInstalled(pkg: String): Boolean {
+        return try {
+            context.packageManager.getApplicationInfo(pkg, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
     /**
      * Full Gaming Mode activation sequence.
      *
@@ -192,6 +201,7 @@ class GamingModeEngine @Inject constructor(
         }
 
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
+        com.framex.app.utils.FrameXLog.i("Starting Gaming Mode activation (activeGamePkg=$activeGamePkg)...", tag = "GamingMode")
         
         val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -213,8 +223,9 @@ class GamingModeEngine @Inject constructor(
             val targetVol = (targetVolPct / 100f * maxVol).toInt().coerceIn(0, maxVol)
             try {
                 audioManager.setStreamVolume(AudioManager.STREAM_RING, targetVol, 0)
+                com.framex.app.utils.FrameXLog.i("Ringtone volume set to $targetVol/$maxVol (original: $currentVol)", tag = "GamingMode")
             } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Failed to set ringtone volume", e)
+                com.framex.app.utils.FrameXLog.w("Failed to set ringtone volume", e, tag = "GamingMode")
             }
 
             // Settings Overrides (auto-brightness, auto-rotate)
@@ -225,6 +236,7 @@ class GamingModeEngine @Inject constructor(
                     val origBrightnessMode = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
                     prefs.edit().putInt("orig_brightness_mode", origBrightnessMode).apply()
                     Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                    com.framex.app.utils.FrameXLog.i("Screen brightness mode set to MANUAL (original mode: $origBrightnessMode)", tag = "GamingMode")
                 }
 
                 // Rotation override
@@ -232,6 +244,7 @@ class GamingModeEngine @Inject constructor(
                     val origRotation = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1)
                     prefs.edit().putInt("orig_rotation_mode", origRotation).apply()
                     Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) // Lock orientation
+                    com.framex.app.utils.FrameXLog.i("Auto-rotation locked to 0 (original: $origRotation)", tag = "GamingMode")
                 }
             }
         }
@@ -242,8 +255,9 @@ class GamingModeEngine @Inject constructor(
             // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
             try {
                 shizukuManager.executeCommand("pm trim-caches 4G")
+                com.framex.app.utils.FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) completed", tag = "GamingMode")
             } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Deep cache purge failed", e)
+                com.framex.app.utils.FrameXLog.w("Deep cache purge failed", e, tag = "GamingMode")
             }
         }
         
@@ -272,23 +286,27 @@ class GamingModeEngine @Inject constructor(
 
         try {
             val affectedPkgs = mutableSetOf<String>()
+            val installedSafeToSuspend = SAFE_TO_SUSPEND.filter { isPackageInstalled(it) }
 
             if (boostRam && !isAlreadyActive) {
                 // ----------------------------------------------------------------
                 // Phase 1 & 2 — Batch Suspend OEM, Google, and User Apps
                 // ----------------------------------------------------------------
-                val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist }
+                val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist && isPackageInstalled(it) }
                 val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
                     .filter { it.packageName !in finalWhitelist }
                 val userTargets = userApps.map { it.packageName }
 
-                val allTargets = (SAFE_TO_SUSPEND + googleTargets + userTargets).distinct()
+                val allTargets = (installedSafeToSuspend + googleTargets + userTargets).distinct()
+                com.framex.app.utils.FrameXLog.i("Suspending ${allTargets.size} background apps (safe: ${installedSafeToSuspend.size}, google: ${googleTargets.size}, user: ${userTargets.size})...", tag = "GamingMode")
 
                 _state.value = GamingModeState.Enabling(0.5f, "Suspending ${allTargets.size} background apps…")
-                shizukuManager.suspendPackages(allTargets, true)
+                val suspendResult = shizukuManager.suspendPackages(allTargets, true)
+                val failedPkgs = suspendResult?.failedPackages?.toSet().orEmpty()
 
-                affectedPkgs.addAll(googleTargets)
-                affectedPkgs.addAll(userTargets)
+                affectedPkgs.addAll(googleTargets.filter { it !in failedPkgs })
+                affectedPkgs.addAll(userTargets.filter { it !in failedPkgs })
+                com.framex.app.utils.FrameXLog.i("Package suspension finished: ${affectedPkgs.size} apps successfully suspended, ${failedPkgs.size} failed", tag = "GamingMode")
             }
 
             // Persist the affected list so disableGamingMode restores only what we changed.
@@ -302,6 +320,7 @@ class GamingModeEngine @Inject constructor(
                 // ----------------------------------------------------------------
                 _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
                 shizukuManager.executeCommand("am kill-all")
+                com.framex.app.utils.FrameXLog.i("Background process purge (am kill-all) executed", tag = "GamingMode")
             }
 
             // ----------------------------------------------------------------
@@ -311,31 +330,27 @@ class GamingModeEngine @Inject constructor(
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (nm.isNotificationPolicyAccessGranted) {
                     nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                    com.framex.app.utils.FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE", tag = "GamingMode")
                 }
             }
 
-            // Apply Esports optimizations for all activations.
-            // When activeGamePkg is null (manual activation), package-specific commands like
-            // cmd game set --fps are skipped, but all system-wide Vivo/thermal boosts still run.
-            // Apply Esports optimizations for all activations.
-            // When activeGamePkg is null (manual activation), package-specific commands like
-            // cmd game set --fps are skipped, but all system-wide Vivo/thermal boosts still run.
             val optimizationsApplied = try {
                 val uid = activeGamePkg?.let {
                     runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
                 }
                 esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
             } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Esports optimization failed", e)
+                com.framex.app.utils.FrameXLog.w("Esports optimization failed", e, tag = "GamingMode")
                 false
             }
 
             if (!optimizationsApplied) {
                 // Esports snapshot capture failed, abort gaming mode activation
                 _state.value = GamingModeState.Error("Failed to capture system settings snapshot")
+                com.framex.app.utils.FrameXLog.e("Esports optimizations failed to apply, aborting activation", tag = "GamingMode")
                 // Clean up what we've done so far
                 if (!isAlreadyActive) {
-                    val allToUnsuspend = (SAFE_TO_SUSPEND + affectedPkgs).distinct()
+                    val allToUnsuspend = (installedSafeToSuspend + affectedPkgs).distinct()
                     shizukuManager.suspendPackages(allToUnsuspend, false)
                 }
                 settingsRepository.setGamingModeActive(false)
@@ -343,19 +358,19 @@ class GamingModeEngine @Inject constructor(
                 return
             }
 
-            // Update snapshot with affected packages (now that suspension is complete)
-            val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
-            currentSnapshot?.let { snapshot ->
-                val updatedSnapshot = snapshot.copy(affectedPackages = affectedPkgs)
-                settingsRepository.saveGamingOptimizationSnapshot(updatedSnapshot)
+            // Update snapshot with affected packages (only if we suspended new packages)
+            if (!isAlreadyActive || affectedPkgs.isNotEmpty()) {
+                val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
+                currentSnapshot?.let { snapshot ->
+                    val updatedSnapshot = snapshot.copy(affectedPackages = affectedPkgs)
+                    settingsRepository.saveGamingOptimizationSnapshot(updatedSnapshot)
+                }
             }
 
-            // ----------------------------------------------------------------
-            // Done
-            // ----------------------------------------------------------------
             settingsRepository.setGamingModeActive(true)
             _isActive.value = true
             _state.value = GamingModeState.Active
+            com.framex.app.utils.FrameXLog.i("Gaming Mode activation complete! Active game: $activeGamePkg", tag = "GamingMode")
 
         } catch (e: Exception) {
             _state.value = GamingModeState.Error(e.message ?: "Unexpected error during activation")
@@ -374,23 +389,47 @@ class GamingModeEngine @Inject constructor(
      */
     suspend fun disableGamingMode() {
         _state.value = GamingModeState.Disabling
+        com.framex.app.utils.FrameXLog.i("Starting Gaming Mode deactivation...", tag = "GamingMode")
 
         try {
             // Load snapshot to get affected packages
             val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
             val affectedUserPkgs = snapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
-            val allToUnsuspend = (SAFE_TO_SUSPEND + affectedUserPkgs).distinct()
+            val installedSafeToSuspend = SAFE_TO_SUSPEND.filter { isPackageInstalled(it) }
+            val allToUnsuspend = (installedSafeToSuspend + affectedUserPkgs).distinct()
 
-            shizukuManager.suspendPackages(allToUnsuspend, false)
+            com.framex.app.utils.FrameXLog.i("Attempting to unsuspend ${allToUnsuspend.size} packages (safe: ${installedSafeToSuspend.size}, user: ${affectedUserPkgs.size})...", tag = "GamingMode")
+            val suspendResult = shizukuManager.suspendPackages(allToUnsuspend, false)
+            if (suspendResult == null) {
+                com.framex.app.utils.FrameXLog.e("Deactivation failed: Shizuku IPC binder unavailable", tag = "GamingMode")
+                _state.value = GamingModeState.Error("Deactivation incomplete: Shizuku service unavailable. Tap to retry.")
+                return
+            }
+
+            val failedPkgs = suspendResult.failedPackages?.toSet().orEmpty()
+            if (failedPkgs.isNotEmpty()) {
+                com.framex.app.utils.FrameXLog.w("Deactivation partial failure: ${failedPkgs.size}/${allToUnsuspend.size} packages failed to unsuspend: $failedPkgs", tag = "GamingMode")
+                val failedUserPkgs = failedPkgs.filter { it !in SAFE_TO_SUSPEND }.toSet()
+                settingsRepository.setGamingAffectedPackages(failedUserPkgs)
+                snapshot?.let {
+                    settingsRepository.saveGamingOptimizationSnapshot(it.copy(affectedPackages = failedUserPkgs))
+                }
+                _state.value = GamingModeState.Error("Deactivation incomplete: ${failedPkgs.size} apps still suspended. Tap to retry.")
+                return
+            }
+
+            com.framex.app.utils.FrameXLog.i("Package unsuspension completed successfully (${allToUnsuspend.size} packages unsuspended)", tag = "GamingMode")
             settingsRepository.setGamingAffectedPackages(emptySet())
 
             // Purge spawned background processes after unsuspending to prevent Vivo PEM battery drain
             shizukuManager.executeCommand("am kill-all")
+            com.framex.app.utils.FrameXLog.i("Background process purge (am kill-all) executed", tag = "GamingMode")
 
             // Restore DND
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.isNotificationPolicyAccessGranted) {
                 nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                com.framex.app.utils.FrameXLog.i("DND filter restored to INTERRUPTION_FILTER_ALL", tag = "GamingMode")
             }
 
             // Restore original settings/overrides
@@ -402,8 +441,9 @@ class GamingModeEngine @Inject constructor(
             if (origVol != -1) {
                 try {
                     audioManager.setStreamVolume(AudioManager.STREAM_RING, origVol, 0)
+                    com.framex.app.utils.FrameXLog.i("Ringtone volume restored to $origVol", tag = "GamingMode")
                 } catch (e: Exception) {
-                    com.framex.app.utils.FrameXLog.w("Failed to restore ringtone volume", e)
+                    com.framex.app.utils.FrameXLog.w("Failed to restore ringtone volume", e, tag = "GamingMode")
                 }
                 prefs.edit().remove("orig_ringtone_val").apply()
             }
@@ -414,26 +454,37 @@ class GamingModeEngine @Inject constructor(
                 if (origMode != -1) {
                     Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, origMode)
                     prefs.edit().remove("orig_brightness_mode").apply()
+                    com.framex.app.utils.FrameXLog.i("Screen brightness mode restored to $origMode", tag = "GamingMode")
                 }
                 val origRotate = prefs.getInt("orig_rotation_mode", -1)
                 if (origRotate != -1) {
                     Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, origRotate)
                     prefs.edit().remove("orig_rotation_mode").apply()
+                    com.framex.app.utils.FrameXLog.i("Auto-rotation mode restored to $origRotate", tag = "GamingMode")
                 }
             }
 
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e)
-        } finally {
-            try {
+            val revertSuccess = try {
                 esportsOptimizationEngine.revertOptimizations()
             } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e)
+                com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e, tag = "GamingMode")
+                false
+            }
+
+            if (revertSuccess) {
+                com.framex.app.utils.FrameXLog.i("Esports optimizations reverted successfully", tag = "GamingMode")
+            } else {
+                com.framex.app.utils.FrameXLog.w("Esports revert incomplete during deactivation", tag = "GamingMode")
             }
 
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
             _state.value = GamingModeState.Idle
+            com.framex.app.utils.FrameXLog.i("Gaming Mode deactivation complete!", tag = "GamingMode")
+
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e, tag = "GamingMode")
+            _state.value = GamingModeState.Error(e.message ?: "Unexpected error during deactivation")
         }
     }
 

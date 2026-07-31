@@ -117,13 +117,24 @@ class ShizukuManager @Inject constructor() {
         if (initialDelayMs > 0L) {
             kotlinx.coroutines.delay(initialDelayMs)
         }
-        connectUserService()
-        val deferred = pendingConnection ?: return commandRunner
-        val runner = withTimeoutOrNull(BIND_TIMEOUT_MS) { deferred.await() }
-        if (runner == null) {
+        
+        var attempts = 0
+        while (attempts < MAX_BIND_RETRIES) {
+            attempts++
+            connectUserService()
+            val deferred = pendingConnection ?: return commandRunner
+            val runner = withTimeoutOrNull(BIND_TIMEOUT_MS) { deferred.await() }
+            if (runner != null) {
+                return runner
+            }
+            com.framex.app.utils.FrameXLog.w("bindUserService attempt $attempts/$MAX_BIND_RETRIES timed out after ${BIND_TIMEOUT_MS}ms")
             disconnectUserService(remove = true)
+            if (attempts < MAX_BIND_RETRIES) {
+                kotlinx.coroutines.delay(BIND_RETRY_DELAY_MS)
+            }
         }
-        return runner
+        com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after $MAX_BIND_RETRIES bind attempts")
+        return null
     }
 
     suspend fun executeCommand(command: String): String {
@@ -231,15 +242,15 @@ class ShizukuManager @Inject constructor() {
         }
     }
 
-    suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): Int {
+    suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): SuspendResult? {
         if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
             com.framex.app.utils.FrameXLog.w("suspendPackages skipped: Shizuku unavailable/unpermitted or package list empty")
-            return 0
+            return null
         }
         return commandMutex.withLock {
             val runner = awaitCommandRunner() ?: run {
                 com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in suspendPackages")
-                return@withLock 0
+                return@withLock null
             }
             try {
                 withContext(Dispatchers.IO) {
@@ -247,7 +258,7 @@ class ShizukuManager @Inject constructor() {
                 }
             } catch (e: Exception) {
                 com.framex.app.utils.FrameXLog.e("suspendPackages failed", e)
-                0
+                null
             }
         }
     }
@@ -353,7 +364,7 @@ class ShizukuManager @Inject constructor() {
 
     private fun userServiceArgs() = Shizuku.UserServiceArgs(
         ComponentName("com.framex.app", CommandRunnerService::class.java.name)
-    ).daemon(false)
+    ).daemon(true)
         .tag(USER_SERVICE_TAG)
         .version(BuildConfig.VERSION_CODE)
         .processNameSuffix("runner")
@@ -362,6 +373,8 @@ class ShizukuManager @Inject constructor() {
         const val REQUEST_CODE_PERMISSION = 1001
         private const val BIND_TIMEOUT_MS = 5000L
         private const val INITIAL_BIND_DELAY_MS = 2000L
+        private const val MAX_BIND_RETRIES = 3
+        private const val BIND_RETRY_DELAY_MS = 500L
         private const val USER_SERVICE_TAG = "framex-command-runner"
         private const val COMMAND_EXECUTION_FAILED = -1
     }

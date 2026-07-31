@@ -1,6 +1,7 @@
 package com.framex.app.shizuku;
 
 import com.framex.app.shizuku.CommandResult;
+import com.framex.app.shizuku.SuspendResult;
 
 interface ICommandRunner {
     String executeCommand(String command);
@@ -8,7 +9,7 @@ interface ICommandRunner {
     CommandResult executeCommandWithResult(String command);
     String readProcStat();
     String getThermalTemperatures();
-    int suspendPackages(in String[] packageNames, boolean suspended);
+    SuspendResult suspendPackages(in String[] packageNames, boolean suspended);
     int setAppOpMode(in String[] packageNames, int opCode, int mode);
     void destroy();
 }
