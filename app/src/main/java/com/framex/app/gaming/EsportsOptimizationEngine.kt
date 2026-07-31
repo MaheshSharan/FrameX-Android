@@ -99,6 +99,9 @@ class EsportsOptimizationEngine @Inject constructor(
             vivoScreenRefreshAppsList = SettingValue.fromCommandOutput(srAppsRes.output)
         }
 
+        val existingSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
+        val existingAffected = existingSnapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
+
         return GamingOptimizationSnapshot(
             activeGamePackage = packageName,
             activeGameUid = uid,
@@ -113,7 +116,7 @@ class EsportsOptimizationEngine @Inject constructor(
             speedModeApps = speedModeApps,
             vivoHighRefreshApps = vivoHighRefreshApps,
             vivoScreenRefreshAppsList = vivoScreenRefreshAppsList,
-            affectedPackages = emptySet()
+            affectedPackages = existingAffected
         )
     }
 
@@ -131,16 +134,19 @@ class EsportsOptimizationEngine @Inject constructor(
         settingsRepository.saveGamingOptimizationSnapshot(snapshot)
 
         val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
+        FrameXLog.i("Applying Esports Optimizations (pkg=$packageName, uid=$uid, isVivo=$isVivo)", tag = TAG)
 
         // 0. RAM Cache Pre-Trimming, ART Heap Compaction & Framework Pinning
         shizukuManager.executeCommand("pm trim-caches 4G")
         shizukuManager.executeCommand("am compact background")
         runCatching { shizukuManager.executeCommand("cmd pinner repin /system/framework/framework.jar") }
+        FrameXLog.i("RAM cache pre-trimming & ART heap compaction executed", tag = TAG)
 
         // 1. CPU Priority & Memory Lock
         if (settingsRepository.cpuPriorityLock.value && packageName != null) {
             shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
             shizukuManager.executeCommand("am set-standby-bucket --user 0 $packageName active")
+            FrameXLog.i("CPU Priority & Standby Bucket active set for $packageName", tag = TAG)
         }
 
         // 2. Network Firewall & Deep Doze Exemption
@@ -153,11 +159,13 @@ class EsportsOptimizationEngine @Inject constructor(
             }
             // Force Light/Deep Doze for non-whitelisted background processes
             shizukuManager.executeCommand("cmd deviceidle force-idle")
+            FrameXLog.i("Network Firewall & Deep Doze exemption applied (uid=$uid, pkg=$packageName)", tag = TAG)
         }
 
         // 3. Performance Governor Lock
         if (settingsRepository.fixedPerformanceMode.value) {
             shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled true")
+            FrameXLog.i("Fixed performance mode enabled", tag = TAG)
         }
 
         // 4. Refresh Rate Lock & Display Mode Override
@@ -167,6 +175,7 @@ class EsportsOptimizationEngine @Inject constructor(
         if (settingsRepository.refreshRateLock.value) {
             shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
             shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
+            FrameXLog.i("Refresh rate set to peak/min $maxHz Hz", tag = TAG)
 
             if (isVivo) {
                 // Lock hardware display to Group 1 Mode 4 (1080x2400 @ 120Hz)
@@ -178,6 +187,7 @@ class EsportsOptimizationEngine @Inject constructor(
                     shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} --downscale 0.9 $packageName")
                 }
                 displayModeLockOk = modeResult?.exitCode == 0
+                FrameXLog.i("Vivo hardware display mode lock (user_preferred_display_mode_id 4) applied: ok=$displayModeLockOk", tag = TAG)
             } else {
                 displayModeLockOk = true
             }
@@ -186,16 +196,14 @@ class EsportsOptimizationEngine @Inject constructor(
         // 5. Touch Response Latency Boost
         var touchBoostOk = false
         if (settingsRepository.touchBoost.value) {
-            // Universal Android touch response speed knob
             val touchRes = shizukuManager.executeCommandWithResult("settings put system touch_response_speed 2")
             touchBoostOk = touchRes?.exitCode == 0
-            // NOTE: Ghost key 'com.vivo.vtouch.persist' purged to eliminate redundant IPC overhead.
+            FrameXLog.i("Touch response latency boost applied: ok=$touchBoostOk", tag = TAG)
         }
 
         // 6. Vivo Whitelist Injection (Safe CSV Append)
-        var whitelistAppliedOk = false
         if (isVivo) {
-            if (!packageName.isNullOrBlank()) {
+            val whitelistAppliedOk = if (!packageName.isNullOrBlank()) {
                 var allSucceeded = true
                 for (key in vivoWhitelistKeys) {
                     val currentValRes = shizukuManager.executeCommandWithResult("settings get global $key")
@@ -208,11 +216,12 @@ class EsportsOptimizationEngine @Inject constructor(
                         val newList = pkgs.joinToString(",")
                         val writeRes = shizukuManager.executeCommandWithResult("settings put global $key \"$newList\"")
                         if (writeRes?.exitCode != 0) allSucceeded = false
+                        FrameXLog.i("Vivo Whitelist key '$key' updated with $packageName (exitCode=${writeRes?.exitCode})", tag = TAG)
                     }
                 }
-                whitelistAppliedOk = allSucceeded
+                allSucceeded
             } else {
-                whitelistAppliedOk = true
+                true
             }
 
             _vivoOptimizationResult.value = VivoOptimizationResult(
@@ -221,13 +230,15 @@ class EsportsOptimizationEngine @Inject constructor(
                 touchBoost = touchBoostOk,
                 whitelistApplied = whitelistAppliedOk
             )
+            FrameXLog.i("Vivo Optimization result summary: displayModeLock=$displayModeLockOk, maxHz=${maxHz.toInt()}, touchBoost=$touchBoostOk, whitelistApplied=$whitelistAppliedOk", tag = TAG)
         }
 
         return true
     }
 
-    suspend fun revertOptimizations() {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return
+    suspend fun revertOptimizations(): Boolean {
+        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return false
+        FrameXLog.i("Reverting Esports Optimizations...", tag = TAG)
 
         recoverThermalOverrideIfNeeded()
 
@@ -235,11 +246,12 @@ class EsportsOptimizationEngine @Inject constructor(
         if (snapshot == null) {
             FrameXLog.w("No snapshot found, performing legacy revert", tag = TAG)
             revertLegacy()
-            return
+            return true
         }
 
         val pkg = snapshot.activeGamePackage
         val uid = snapshot.activeGameUid
+        FrameXLog.i("Reverting optimizations for pkg=$pkg, uid=$uid from snapshot", tag = TAG)
 
         // Revert per-app overrides
         if (pkg != null) {
@@ -248,6 +260,7 @@ class EsportsOptimizationEngine @Inject constructor(
                 shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $pkg adaptive_bucket")
                 shizukuManager.executeCommand("am set-standby-bucket --user 0 $pkg working_set")
             }
+            FrameXLog.i("Per-app game & CPU priority overrides reset for $pkg", tag = TAG)
         }
 
         if (uid != null && settingsRepository.networkFirewall.value) {
@@ -258,6 +271,7 @@ class EsportsOptimizationEngine @Inject constructor(
         }
         shizukuManager.executeCommand("cmd deviceidle unforce")
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
+        FrameXLog.i("Network policy, deviceidle & fixed performance mode reset", tag = TAG)
 
         // Restore system display & touch settings
         snapshot.minRefreshRate?.let { restoreSetting("system", "min_refresh_rate", it) }
@@ -268,8 +282,10 @@ class EsportsOptimizationEngine @Inject constructor(
         snapshot.userPreferredDisplayModeId?.let { setting ->
             if (setting.existed && setting.value.isNotBlank()) {
                 shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id ${setting.value}")
+                FrameXLog.i("Restored secure user_preferred_display_mode_id to ${setting.value}", tag = TAG)
             } else {
                 shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id -1")
+                FrameXLog.i("Restored secure user_preferred_display_mode_id to -1", tag = TAG)
             }
         }
 
@@ -282,16 +298,20 @@ class EsportsOptimizationEngine @Inject constructor(
             stripPackageFromCsv("speed_mode_apps", pkg, snapshot.speedModeApps)
             stripPackageFromCsv("vivo_high_refresh_rate_apps", pkg, snapshot.vivoHighRefreshApps)
             stripPackageFromCsv("vivo_screen_refresh_rate_apps_list", pkg, snapshot.vivoScreenRefreshAppsList)
+            FrameXLog.i("Stripped $pkg from Vivo CSV whitelists", tag = TAG)
         } else {
             snapshot.gameCubeApps?.let { restoreSetting("global", "game_cube_apps", it) }
             snapshot.speedModeApps?.let { restoreSetting("global", "speed_mode_apps", it) }
             snapshot.vivoHighRefreshApps?.let { restoreSetting("global", "vivo_high_refresh_rate_apps", it) }
             snapshot.vivoScreenRefreshAppsList?.let { restoreSetting("global", "vivo_screen_refresh_rate_apps_list", it) }
+            FrameXLog.i("Restored Vivo CSV whitelists to snapshot baseline", tag = TAG)
         }
 
         // Clear snapshot only after successful restoration
         settingsRepository.clearGamingOptimizationSnapshot()
         _vivoOptimizationResult.value = null
+        FrameXLog.i("Snapshot cleared. Esports revert complete!", tag = TAG)
+        return true
     }
 
     private suspend fun restoreSetting(namespace: String, key: String, setting: SettingValue) {

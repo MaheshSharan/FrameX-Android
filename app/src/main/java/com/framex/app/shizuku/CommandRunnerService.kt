@@ -325,8 +325,14 @@ class CommandRunnerService private constructor(
         return null
     }
 
-    override fun suspendPackages(packageNames: Array<out String>?, suspended: Boolean): Int {
-        if (packageNames.isNullOrEmpty()) return 0
+    override fun suspendPackages(packageNames: Array<out String>?, suspended: Boolean): SuspendResult {
+        val failed = mutableListOf<String>()
+        if (packageNames.isNullOrEmpty()) {
+            return SuspendResult().apply {
+                this.failedPackages = emptyArray()
+                this.successCount = 0
+            }
+        }
         var successCount = 0
         val action = if (suspended) "suspend" else "unsuspend"
         for (pkg in packageNames) {
@@ -334,9 +340,19 @@ class CommandRunnerService private constructor(
             val result = executeCommandWithResult(cmd)
             if (result.exitCode == 0) {
                 successCount++
+            } else {
+                val output = result.output.lowercase()
+                if (output.contains("unknown target package") || output.contains("does not exist") || output.contains("not found")) {
+                    com.framex.app.utils.FrameXLog.d("Skipping uninstalled package $pkg during $action", tag = "CmdRunner")
+                } else {
+                    failed.add(pkg)
+                }
             }
         }
-        return successCount
+        return SuspendResult().apply {
+            this.failedPackages = failed.toTypedArray()
+            this.successCount = successCount
+        }
     }
 
     override fun setAppOpMode(packageNames: Array<out String>?, opCode: Int, mode: Int): Int {
