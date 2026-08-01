@@ -38,6 +38,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.ui.featurediscovery.DiscoveryScreenId
+import com.framex.app.ui.featurediscovery.ScreenDiscoveryEffect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -76,6 +78,8 @@ fun PermissionsScreen(
     onNavigateBack: () -> Unit,
     viewModel: PermissionsViewModel = hiltViewModel()
 ) {
+    ScreenDiscoveryEffect(DiscoveryScreenId.PERMISSIONS)
+
     val context = LocalContext.current
     val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsState()
     val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
