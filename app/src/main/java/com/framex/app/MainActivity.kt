@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.framex.app.repository.SettingsRepository
+import com.framex.app.ui.featurediscovery.FeatureDiscoveryHost
 import com.framex.app.ui.navigation.FrameXNavGraph
 import com.framex.app.ui.theme.FrameXTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -25,12 +26,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val colorIndex by settingsRepository.overlayColorIndex.collectAsState()
+
             FrameXTheme(colorIndex = colorIndex) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FrameXNavGraph()
+                    FeatureDiscoveryHost {
+                        FrameXNavGraph()
+                    }
                 }
             }
         }

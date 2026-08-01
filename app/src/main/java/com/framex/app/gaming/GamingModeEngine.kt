@@ -298,15 +298,17 @@ class GamingModeEngine @Inject constructor(
                 val userTargets = userApps.map { it.packageName }
 
                 val allTargets = (installedSafeToSuspend + googleTargets + userTargets).distinct()
-                com.framex.app.utils.FrameXLog.i("Suspending ${allTargets.size} background apps (safe: ${installedSafeToSuspend.size}, google: ${googleTargets.size}, user: ${userTargets.size})...", tag = "GamingMode")
+                val preSuspended = shizukuManager.getSuspendedPackages(allTargets)
+                val targetsToFreeze = allTargets.filterNot { it in preSuspended }
 
-                _state.value = GamingModeState.Enabling(0.5f, "Suspending ${allTargets.size} background apps…")
-                val suspendResult = shizukuManager.suspendPackages(allTargets, true)
+                com.framex.app.utils.FrameXLog.i("Suspending ${targetsToFreeze.size} background apps (${preSuspended.size} pre-suspended by external tools ignored)...", tag = "GamingMode")
+
+                _state.value = GamingModeState.Enabling(0.5f, "Suspending ${targetsToFreeze.size} background apps…")
+                val suspendResult = if (targetsToFreeze.isNotEmpty()) shizukuManager.suspendPackages(targetsToFreeze, true) else null
                 val failedPkgs = suspendResult?.failedPackages?.toSet().orEmpty()
 
-                affectedPkgs.addAll(googleTargets.filter { it !in failedPkgs })
-                affectedPkgs.addAll(userTargets.filter { it !in failedPkgs })
-                com.framex.app.utils.FrameXLog.i("Package suspension finished: ${affectedPkgs.size} apps successfully suspended, ${failedPkgs.size} failed", tag = "GamingMode")
+                affectedPkgs.addAll(targetsToFreeze.filter { it !in failedPkgs })
+                com.framex.app.utils.FrameXLog.i("Package suspension finished: ${affectedPkgs.size} apps successfully suspended by FrameX, ${failedPkgs.size} failed", tag = "GamingMode")
             }
 
             // Persist the affected list so disableGamingMode restores only what we changed.
@@ -392,30 +394,29 @@ class GamingModeEngine @Inject constructor(
         com.framex.app.utils.FrameXLog.i("Starting Gaming Mode deactivation...", tag = "GamingMode")
 
         try {
-            // Load snapshot to get affected packages
+            // Load snapshot to get strictly packages FrameX suspended during this session
             val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
-            val affectedUserPkgs = snapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
-            val installedSafeToSuspend = SAFE_TO_SUSPEND.filter { isPackageInstalled(it) }
-            val allToUnsuspend = (installedSafeToSuspend + affectedUserPkgs).distinct()
+            val allToUnsuspend = snapshot?.affectedPackages?.toList() ?: settingsRepository.getGamingAffectedPackages().toList()
 
-            com.framex.app.utils.FrameXLog.i("Attempting to unsuspend ${allToUnsuspend.size} packages (safe: ${installedSafeToSuspend.size}, user: ${affectedUserPkgs.size})...", tag = "GamingMode")
-            val suspendResult = shizukuManager.suspendPackages(allToUnsuspend, false)
-            if (suspendResult == null) {
-                com.framex.app.utils.FrameXLog.e("Deactivation failed: Shizuku IPC binder unavailable", tag = "GamingMode")
-                _state.value = GamingModeState.Error("Deactivation incomplete: Shizuku service unavailable. Tap to retry.")
-                return
-            }
-
-            val failedPkgs = suspendResult.failedPackages?.toSet().orEmpty()
-            if (failedPkgs.isNotEmpty()) {
-                com.framex.app.utils.FrameXLog.w("Deactivation partial failure: ${failedPkgs.size}/${allToUnsuspend.size} packages failed to unsuspend: $failedPkgs", tag = "GamingMode")
-                val failedUserPkgs = failedPkgs.filter { it !in SAFE_TO_SUSPEND }.toSet()
-                settingsRepository.setGamingAffectedPackages(failedUserPkgs)
-                snapshot?.let {
-                    settingsRepository.saveGamingOptimizationSnapshot(it.copy(affectedPackages = failedUserPkgs))
+            if (allToUnsuspend.isNotEmpty()) {
+                com.framex.app.utils.FrameXLog.i("Attempting to unsuspend ${allToUnsuspend.size} FrameX-managed packages...", tag = "GamingMode")
+                val suspendResult = shizukuManager.suspendPackages(allToUnsuspend, false)
+                if (suspendResult == null) {
+                    com.framex.app.utils.FrameXLog.e("Deactivation failed: Shizuku IPC binder unavailable", tag = "GamingMode")
+                    _state.value = GamingModeState.Error("Deactivation incomplete: Shizuku service unavailable. Tap to retry.")
+                    return
                 }
-                _state.value = GamingModeState.Error("Deactivation incomplete: ${failedPkgs.size} apps still suspended. Tap to retry.")
-                return
+
+                val failedPkgs = suspendResult.failedPackages?.toSet().orEmpty()
+                if (failedPkgs.isNotEmpty()) {
+                    com.framex.app.utils.FrameXLog.w("Deactivation partial failure: ${failedPkgs.size}/${allToUnsuspend.size} packages failed to unsuspend: $failedPkgs", tag = "GamingMode")
+                    settingsRepository.setGamingAffectedPackages(failedPkgs)
+                    snapshot?.let {
+                        settingsRepository.saveGamingOptimizationSnapshot(it.copy(affectedPackages = failedPkgs))
+                    }
+                    _state.value = GamingModeState.Error("Deactivation incomplete: ${failedPkgs.size} apps still suspended. Tap to retry.")
+                    return
+                }
             }
 
             com.framex.app.utils.FrameXLog.i("Package unsuspension completed successfully (${allToUnsuspend.size} packages unsuspended)", tag = "GamingMode")

@@ -258,6 +258,22 @@ fun HeroGamingCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Deactivate Gaming Mode", fontWeight = FontWeight.Bold)
                         }
+                    } else if (gamingState is GamingModeState.Error && gamingState.message.contains("Deactivation", ignoreCase = true)) {
+                        Button(
+                            onClick = onDeactivate,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = primaryRed,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Retry Deactivation", fontWeight = FontWeight.Bold)
+                        }
                     } else {
                         Button(
                             onClick = onActivate,
@@ -267,7 +283,7 @@ fun HeroGamingCard(
                                 .height(52.dp),
                             shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
+                                containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = Color.White,
                                 disabledContainerColor = Color.White.copy(0.06f),
                                 disabledContentColor = Color.Gray
