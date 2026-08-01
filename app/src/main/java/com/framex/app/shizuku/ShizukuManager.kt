@@ -242,6 +242,29 @@ class ShizukuManager @Inject constructor() {
         }
     }
 
+    suspend fun getSuspendedPackages(packageNames: List<String>): Set<String> {
+        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
+            return emptySet()
+        }
+        return try {
+            val userId = android.os.Process.myUid() / 100000
+            val res = executeCommandWithResult("cmd package list packages -s --user $userId")
+            val rawOutput = res?.output.orEmpty()
+            if (rawOutput.isNotBlank() && rawOutput != "null") {
+                val globSuspended = rawOutput.lines()
+                    .map { line -> line.trim().removePrefix("package:") }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+                packageNames.filter { it in globSuspended }.toSet()
+            } else {
+                emptySet()
+            }
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("Failed to query suspended packages batch", e)
+            emptySet()
+        }
+    }
+
     suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): SuspendResult? {
         if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
             com.framex.app.utils.FrameXLog.w("suspendPackages skipped: Shizuku unavailable/unpermitted or package list empty")
