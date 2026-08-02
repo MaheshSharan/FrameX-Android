@@ -123,9 +123,16 @@ fun evaluateLikelyCause(
     }
 }
 
-fun seriesForMode(mode: GraphMetricMode, maxFps: Float, maxTemp: Float, maxJank: Float = 10f): List<GraphSeries> {
+fun seriesForMode(
+    mode: GraphMetricMode,
+    maxFps: Float,
+    maxTemp: Float,
+    maxJank: Float = 10f,
+    hasGpu: Boolean = true
+): List<GraphSeries> {
     val fpsSeries = GraphSeries("FPS", Color(0xFF38BDF8), "", maxFps, fillArea = true) { it.state.fps.toFloat() }
     val cpuSeries = GraphSeries("CPU", Color(0xFFFF2E4D), "°", maxTemp, fillArea = false) { it.state.thermalCpuC }
+    val gpuSeries = GraphSeries("GPU", Color(0xFF3B82F6), "°", maxTemp, fillArea = false) { it.state.thermalGpuC }
     val skinSeries = GraphSeries("Skin", Color(0xFFFFB703), "°", maxTemp, fillArea = false) { it.state.thermalSkinC }
     val batterySeries = GraphSeries("Battery", Color(0xFF06D6A0), "°", maxTemp, fillArea = false) { it.state.batteryTempC }
     val jankSeries = GraphSeries("Jank", Color(0xFFEF476F), "", maxJank, fillArea = false) { it.state.jankyFrames.toFloat() }
@@ -135,7 +142,13 @@ fun seriesForMode(mode: GraphMetricMode, maxFps: Float, maxTemp: Float, maxJank:
         GraphMetricMode.FPS_THERMAL -> listOf(cpuSeries, skinSeries, fpsSeries)
         GraphMetricMode.FPS_JANK -> listOf(jankSeries, fpsSeries)
         GraphMetricMode.FPS_ONLY -> listOf(fpsSeries)
-        GraphMetricMode.THERMAL_ONLY -> listOf(cpuSeries.copy(fillArea = true), skinSeries, batterySeries)
+        GraphMetricMode.THERMAL_ONLY -> {
+            val list = mutableListOf(cpuSeries.copy(fillArea = true))
+            if (hasGpu) list.add(gpuSeries)
+            list.add(skinSeries)
+            list.add(batterySeries)
+            list
+        }
         GraphMetricMode.FPS_TOP_PROCESS -> listOf(topProcessSeries, fpsSeries)
     }
 }

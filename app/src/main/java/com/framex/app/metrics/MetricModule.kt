@@ -119,7 +119,11 @@ fun metricValueFor(id: MetricModuleId, metricsState: MetricsState): String = whe
             String.format("%.0f KB/s", totalKbps)
         }
     }
-    MetricModuleId.PING -> if (metricsState.pingMs > 0) "${metricsState.pingMs} ms" else "-- ms"
+    MetricModuleId.PING -> when (metricsState.pingReadStatus) {
+        MetricReadStatus.Ok -> "${metricsState.pingMs} ms"
+        MetricReadStatus.Loading -> "-- ms"
+        else -> "timeout"
+    }
 }
 
 /** Short label for the overlay's compact/minimal display — full names are used in

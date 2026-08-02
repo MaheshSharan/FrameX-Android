@@ -28,6 +28,7 @@ data class MetricsState(
     val networkRxKbps: Float = 0f,
     val networkTxKbps: Float = 0f,
     val pingMs: Int = 0,
+    val pingReadStatus: MetricReadStatus = MetricReadStatus.Loading,
     // Full thermal breakdown — see ThermalMonitor.ThermalState for field meaning.
     val thermalCpuC: Float = 0f,
     val thermalGpuC: Float = 0f,
@@ -133,8 +134,15 @@ class MetricsEngine @Inject constructor(
         engineScope.launch {
             combine(
                 settingsRepository.enabledModules,
-                screenOverrideModules
-            ) { persisted, override -> persisted + override }
+                screenOverrideModules,
+                settingsRepository.isGamingModeActiveFlow
+            ) { persisted, override, gamingActive ->
+                if (gamingActive) {
+                    persisted + override + setOf("temp", "thermal")
+                } else {
+                    persisted + override
+                }
+            }
                 .collect { enabled ->
                 toggleModule("cpu", enabled) {
                     coroutineScope {
@@ -196,8 +204,11 @@ class MetricsEngine @Inject constructor(
                     }
                 }
                 toggleModule("ping", enabled) {
-                    pingMonitor.ping.collect {
-                        _metricsState.value = _metricsState.value.copy(pingMs = it)
+                    pingMonitor.ping.collect { p ->
+                        _metricsState.value = _metricsState.value.copy(
+                            pingMs = p.pingMs,
+                            pingReadStatus = p.readStatus
+                        )
                     }
                 }
                 toggleModule("top_process", enabled) {
@@ -240,7 +251,7 @@ class MetricsEngine @Inject constructor(
                     hasThermalCpu = false, hasThermalGpu = false, hasThermalNpu = false,
                     hasThermalSkin = false, hasThermalBattery = false
                 )
-                "ping"    -> _metricsState.value.copy(pingMs = 0)
+                "ping"    -> _metricsState.value.copy(pingMs = 0, pingReadStatus = MetricReadStatus.Loading)
                 "top_process" -> _metricsState.value.copy(
                     topProcessName = null, topProcessCpuPercent = 0f,
                     topProcessReadStatus = MetricReadStatus.Loading
