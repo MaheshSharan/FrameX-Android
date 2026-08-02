@@ -458,9 +458,7 @@ class ThermalMonitor @Inject constructor(
                             if (consecutiveFailures > 3) {
                                 lastGoodState = null
                             }
-                            val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                powerManager.currentThermalStatus
-                            } else 0
+                            val status = powerManager.thermalStatusOrDefault()
                             ThermalState(status = status, readStatus = MetricReadStatus.EmptyOutput)
                         }
                     } else {
@@ -474,21 +472,20 @@ class ThermalMonitor @Inject constructor(
                                 if (consecutiveFailures > 3) {
                                     lastGoodState = null
                                 }
-                                val status = parsed?.thermalStatus ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    powerManager.currentThermalStatus
-                                } else 0
+                                val status = parsed?.thermalStatus?.takeIf { it > 0 } ?: powerManager.thermalStatusOrDefault()
                                 val statusType = if (parsed?.halNotReady == true) MetricReadStatus.EmptyOutput else MetricReadStatus.ParseFailed
                                 ThermalState(status = status, readStatus = statusType)
                             }
                         } else {
                             consecutiveFailures = 0
+                            val effectiveStatus = parsed.thermalStatus.takeIf { it > 0 } ?: powerManager.thermalStatusOrDefault()
                             val newState = ThermalState(
                                 cpuC = parsed.cpuC ?: 0f,
                                 gpuC = parsed.gpuC ?: 0f,
                                 npuC = parsed.npuC ?: 0f,
                                 skinC = parsed.skinC ?: 0f,
                                 batteryC = parsed.batteryC ?: 0f,
-                                status = parsed.thermalStatus,
+                                status = effectiveStatus,
                                 readStatus = MetricReadStatus.Ok,
                                 hasCpu = parsed.cpuC != null,
                                 hasGpu = parsed.gpuC != null,
@@ -508,18 +505,14 @@ class ThermalMonitor @Inject constructor(
                         if (consecutiveFailures > 3) {
                             lastGoodState = null
                         }
-                        val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            powerManager.currentThermalStatus
-                        } else 0
+                        val status = powerManager.thermalStatusOrDefault()
                         ThermalState(status = status, readStatus = MetricReadStatus.ParseFailed)
                     }
                 }
             } else {
                 consecutiveFailures = 0
                 lastGoodState = null
-                val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    powerManager.currentThermalStatus
-                } else 0
+                val status = powerManager.thermalStatusOrDefault()
                 ThermalState(status = status, readStatus = MetricReadStatus.NoShizuku)
             }
             emit(state)
@@ -527,6 +520,9 @@ class ThermalMonitor @Inject constructor(
         }
     }
 }
+
+private fun android.os.PowerManager.thermalStatusOrDefault(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) currentThermalStatus else 0
 
 data class PingResult(
     val pingMs: Int,
