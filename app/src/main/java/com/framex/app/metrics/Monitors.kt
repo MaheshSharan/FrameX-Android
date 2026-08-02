@@ -528,6 +528,11 @@ class ThermalMonitor @Inject constructor(
     }
 }
 
+data class PingResult(
+    val pingMs: Int,
+    val readStatus: MetricReadStatus
+)
+
 @Singleton
 class PingMonitor @Inject constructor(
     private val shizukuManager: ShizukuManager
@@ -537,11 +542,11 @@ class PingMonitor @Inject constructor(
         private const val POLL_INTERVAL_MS = 2_000L
     }
 
-    val ping: Flow<Int> = flow {
+    val ping: Flow<PingResult> = flow {
         while (true) {
             val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
                 try {
-                    shizukuManager.executeCommand("ping -c 1 8.8.8.8")
+                    shizukuManager.executeCommand("ping -c 1 -w 2 8.8.8.8")
                 } catch (e: Exception) {
                     executePing()
                 }
@@ -549,20 +554,33 @@ class PingMonitor @Inject constructor(
                 executePing()
             }
 
-            val pingMs = if (output.contains("time=")) {
-                output.split("time=").getOrNull(1)
-                    ?.split(" ")?.getOrNull(0)
-                    ?.toFloatOrNull()
-                    ?.roundToInt() ?: 0
-            } else 0
-            emit(pingMs)
+            val result = parsePingOutput(output)
+            emit(result)
             delay(POLL_INTERVAL_MS)
+        }
+    }
+
+    private fun parsePingOutput(output: String): PingResult {
+        if (output.isBlank()) return PingResult(0, MetricReadStatus.EmptyOutput)
+        
+        return if (output.contains("time=")) {
+            val ms = output.split("time=").getOrNull(1)
+                ?.split(" ")?.getOrNull(0)
+                ?.toFloatOrNull()
+                ?.roundToInt() ?: 0
+            if (ms > 0) {
+                PingResult(ms, MetricReadStatus.Ok)
+            } else {
+                PingResult(0, MetricReadStatus.ParseFailed)
+            }
+        } else {
+            PingResult(0, MetricReadStatus.NoData)
         }
     }
 
     private fun executePing(): String {
         return try {
-            val process = Runtime.getRuntime().exec("ping -c 1 8.8.8.8")
+            val process = Runtime.getRuntime().exec("ping -c 1 -w 2 8.8.8.8")
             try {
                 process.inputStream.bufferedReader().use { it.readText() }
             } finally {
