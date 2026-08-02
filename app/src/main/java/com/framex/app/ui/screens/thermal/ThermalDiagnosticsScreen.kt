@@ -493,7 +493,8 @@ fun ThermalDiagnosticsScreen(
                     val tempRef = (filteredSnapshots.map { it.state.thermalCpuC } + filteredSnapshots.map { it.state.thermalSkinC })
                         .maxOrNull()?.coerceAtLeast(40f) ?: 80f
                     val jankRef = (filteredSnapshots.maxOfOrNull { it.state.jankyFrames.toFloat() } ?: 10f).coerceAtLeast(10f)
-                    seriesForMode(selectedGraphMode, fpsRef, tempRef, jankRef)
+                    val hasGpu = filteredSnapshots.any { it.state.hasThermalGpu || it.state.thermalGpuC > 0f }
+                    seriesForMode(selectedGraphMode, fpsRef, tempRef, jankRef, hasGpu = hasGpu)
                 }
                 GraphLegend(series = activeSeries, modifier = Modifier.padding(bottom = 10.dp))
 

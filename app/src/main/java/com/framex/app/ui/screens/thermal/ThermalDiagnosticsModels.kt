@@ -16,7 +16,7 @@ enum class GraphMetricMode(val label: String) {
     FPS_THERMAL("FPS vs Thermal (CPU + Skin)"),
     FPS_JANK("FPS + Jank Frames"),
     FPS_ONLY("FPS Only"),
-    THERMAL_ONLY("Thermal Only (CPU, GPU, Skin)"),
+    THERMAL_ONLY("Thermal Only (CPU, GPU, Skin, Battery)"),
     FPS_TOP_PROCESS("FPS + Top Process CPU%")
 }
 

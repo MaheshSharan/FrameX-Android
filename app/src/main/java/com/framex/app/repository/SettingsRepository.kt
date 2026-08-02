@@ -215,9 +215,13 @@ class SettingsRepository @Inject constructor(
         setGamingModeWhitelist(current)
     }
 
+    private val _isGamingModeActiveFlow = MutableStateFlow(prefs.getBoolean(KEY_GAMING_MODE_ACTIVE, false))
+    val isGamingModeActiveFlow: StateFlow<Boolean> = _isGamingModeActiveFlow.asStateFlow()
+
     /** Whether Gaming Mode was active when the app was last killed. Used for recovery. */
     fun setGamingModeActive(active: Boolean) {
         prefs.edit().putBoolean(KEY_GAMING_MODE_ACTIVE, active).apply()
+        _isGamingModeActiveFlow.value = active
     }
 
     fun isGamingModeActive(): Boolean = prefs.getBoolean(KEY_GAMING_MODE_ACTIVE, false)

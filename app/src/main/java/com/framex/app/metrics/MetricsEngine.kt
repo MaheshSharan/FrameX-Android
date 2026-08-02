@@ -133,8 +133,15 @@ class MetricsEngine @Inject constructor(
         engineScope.launch {
             combine(
                 settingsRepository.enabledModules,
-                screenOverrideModules
-            ) { persisted, override -> persisted + override }
+                screenOverrideModules,
+                settingsRepository.isGamingModeActiveFlow
+            ) { persisted, override, gamingActive ->
+                if (gamingActive) {
+                    persisted + override + setOf("temp", "thermal")
+                } else {
+                    persisted + override
+                }
+            }
                 .collect { enabled ->
                 toggleModule("cpu", enabled) {
                     coroutineScope {
