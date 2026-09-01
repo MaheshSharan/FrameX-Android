@@ -30,6 +30,10 @@ data class GamingOptimizationSnapshot(
     val speedModeApps: SettingValue?,
     val vivoHighRefreshApps: SettingValue?,
     val vivoScreenRefreshAppsList: SettingValue?,
+
+    // Vivo system settings (system namespace)
+    val gamecubeCompetitionMode: SettingValue?,
+    val gameScreenResolutionSwitch: SettingValue?,
     
     // App state tracking
     val affectedPackages: Set<String>
@@ -52,6 +56,9 @@ data class GamingOptimizationSnapshot(
         json.put("speedModeApps", speedModeApps?.toJson() ?: JSONObject.NULL)
         json.put("vivoHighRefreshApps", vivoHighRefreshApps?.toJson() ?: JSONObject.NULL)
         json.put("vivoScreenRefreshAppsList", vivoScreenRefreshAppsList?.toJson() ?: JSONObject.NULL)
+
+        json.put("gamecubeCompetitionMode", gamecubeCompetitionMode?.toJson() ?: JSONObject.NULL)
+        json.put("gameScreenResolutionSwitch", gameScreenResolutionSwitch?.toJson() ?: JSONObject.NULL)
         
         val pkgsArray = JSONArray()
         affectedPackages.forEach { pkgsArray.put(it) }
@@ -87,6 +94,8 @@ data class GamingOptimizationSnapshot(
                     speedModeApps = if (json.isNull("speedModeApps")) null else SettingValue.fromJson(json.getJSONObject("speedModeApps")),
                     vivoHighRefreshApps = if (json.isNull("vivoHighRefreshApps")) null else SettingValue.fromJson(json.getJSONObject("vivoHighRefreshApps")),
                     vivoScreenRefreshAppsList = if (json.isNull("vivoScreenRefreshAppsList")) null else SettingValue.fromJson(json.getJSONObject("vivoScreenRefreshAppsList")),
+                    gamecubeCompetitionMode = if (json.has("gamecubeCompetitionMode") && !json.isNull("gamecubeCompetitionMode")) SettingValue.fromJson(json.getJSONObject("gamecubeCompetitionMode")) else null,
+                    gameScreenResolutionSwitch = if (json.has("gameScreenResolutionSwitch") && !json.isNull("gameScreenResolutionSwitch")) SettingValue.fromJson(json.getJSONObject("gameScreenResolutionSwitch")) else null,
                     affectedPackages = affectedPkgs
                 )
             } catch (e: Exception) {

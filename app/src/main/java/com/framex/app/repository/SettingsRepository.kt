@@ -238,10 +238,16 @@ class SettingsRepository @Inject constructor(
         prefs.getStringSet(KEY_GAMING_AFFECTED_PKGS, emptySet()) ?: emptySet()
 
     fun needsThermalOverrideRecovery(): Boolean =
+        prefs.getBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, false) ||
         prefs.getInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, 0) < THERMAL_OVERRIDE_RECOVERY_VERSION
+
+    fun setNeedsThermalOverrideActive(active: Boolean) {
+        prefs.edit().putBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, active).apply()
+    }
 
     fun markThermalOverrideRecoveryComplete() {
         prefs.edit()
+            .putBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, false)
             .putInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, THERMAL_OVERRIDE_RECOVERY_VERSION)
             .apply()
     }
@@ -428,6 +434,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_GAMING_WHITELIST = "gaming_mode_whitelist"
         private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
         private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"
+        private const val KEY_THERMAL_OVERRIDE_ACTIVE = "thermal_override_active"
         private const val KEY_THERMAL_OVERRIDE_RECOVERY_VERSION = "thermal_override_recovery_version"
         private const val THERMAL_OVERRIDE_RECOVERY_VERSION = 1
         private const val KEY_LAUNCHER_GAMES = "launcher_games"

@@ -73,12 +73,14 @@ class EsportsOptimizationEngine @Inject constructor(
         }
         val userPreferredDisplayModeId = SettingValue.fromCommandOutput(displayModeResult.output)
 
-        // Capture Vivo global settings
+        // Capture Vivo global & system settings
         var vivoRefreshMode: SettingValue? = null
         var gameCubeApps: SettingValue? = null
         var speedModeApps: SettingValue? = null
         var vivoHighRefreshApps: SettingValue? = null
         var vivoScreenRefreshAppsList: SettingValue? = null
+        var gamecubeCompetitionMode: SettingValue? = null
+        var gameScreenResolutionSwitch: SettingValue? = null
 
         if (isVivo) {
             val vivoRrRes = shizukuManager.executeCommandWithResult("settings get global vivo_screen_refresh_rate_mode")
@@ -86,9 +88,11 @@ class EsportsOptimizationEngine @Inject constructor(
             val smAppsRes = shizukuManager.executeCommandWithResult("settings get global speed_mode_apps")
             val hrAppsRes = shizukuManager.executeCommandWithResult("settings get global vivo_high_refresh_rate_apps")
             val srAppsRes = shizukuManager.executeCommandWithResult("settings get global vivo_screen_refresh_rate_apps_list")
+            val compModeRes = shizukuManager.executeCommandWithResult("settings get system gamecube_competition_mode_state")
+            val resSwitchRes = shizukuManager.executeCommandWithResult("settings get system game_screen_resolution_switch")
 
-            if (vivoRrRes == null || gcAppsRes == null || smAppsRes == null || hrAppsRes == null || srAppsRes == null) {
-                FrameXLog.e("IPC failure capturing Vivo OEM global settings, aborting optimization", tag = TAG)
+            if (vivoRrRes == null || gcAppsRes == null || smAppsRes == null || hrAppsRes == null || srAppsRes == null || compModeRes == null || resSwitchRes == null) {
+                FrameXLog.e("IPC failure capturing Vivo OEM settings, aborting optimization", tag = TAG)
                 return null
             }
 
@@ -97,6 +101,8 @@ class EsportsOptimizationEngine @Inject constructor(
             speedModeApps = SettingValue.fromCommandOutput(smAppsRes.output)
             vivoHighRefreshApps = SettingValue.fromCommandOutput(hrAppsRes.output)
             vivoScreenRefreshAppsList = SettingValue.fromCommandOutput(srAppsRes.output)
+            gamecubeCompetitionMode = SettingValue.fromCommandOutput(compModeRes.output)
+            gameScreenResolutionSwitch = SettingValue.fromCommandOutput(resSwitchRes.output)
         }
 
         val existingSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
@@ -116,6 +122,8 @@ class EsportsOptimizationEngine @Inject constructor(
             speedModeApps = speedModeApps,
             vivoHighRefreshApps = vivoHighRefreshApps,
             vivoScreenRefreshAppsList = vivoScreenRefreshAppsList,
+            gamecubeCompetitionMode = gamecubeCompetitionMode,
+            gameScreenResolutionSwitch = gameScreenResolutionSwitch,
             affectedPackages = existingAffected
         )
     }
@@ -136,11 +144,13 @@ class EsportsOptimizationEngine @Inject constructor(
         val isVivo = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
         FrameXLog.i("Applying Esports Optimizations (pkg=$packageName, uid=$uid, isVivo=$isVivo)", tag = TAG)
 
-        // 0. RAM Cache Pre-Trimming, ART Heap Compaction & Framework Pinning
+        // 0. RAM Cache Pre-Trimming, ART Heap Compaction, Framework Pinning & Thermal Override
         shizukuManager.executeCommand("pm trim-caches 4G")
         shizukuManager.executeCommand("am compact background")
         runCatching { shizukuManager.executeCommand("cmd pinner repin /system/framework/framework.jar") }
-        FrameXLog.i("RAM cache pre-trimming & ART heap compaction executed", tag = TAG)
+        shizukuManager.executeCommand("cmd thermalservice override-status 0")
+        settingsRepository.setNeedsThermalOverrideActive(true)
+        FrameXLog.i("RAM cache pre-trimming, ART heap compaction & thermal throttle override executed", tag = TAG)
 
         // 1. CPU Priority & Memory Lock
         if (settingsRepository.cpuPriorityLock.value && packageName != null) {
@@ -180,8 +190,24 @@ class EsportsOptimizationEngine @Inject constructor(
             if (isVivo) {
                 // Lock hardware display to Group 1 Mode 4 (1080x2400 @ 120Hz)
                 val modeResult = shizukuManager.executeCommandWithResult("settings put secure user_preferred_display_mode_id 4")
-                // Lock Vivo OEM display refresh rate mode
-                shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode 1")
+                // Lock Vivo OEM display refresh rate mode (120Hz locked, NOT 1)
+                shizukuManager.executeCommand("settings put global vivo_screen_refresh_rate_mode 120")
+                // Competition mode state & screen resolution switch
+                shizukuManager.executeCommand("settings put system gamecube_competition_mode_state 1")
+                shizukuManager.executeCommand("settings put system game_screen_resolution_switch 1")
+                // Global RMS frame rate lock
+                shizukuManager.executeCommand("service call rms 33 i32 0 i32 120 s16 \"framex\" i32 1")
+
+                // PID-linked RMS frame rate lock
+                val gamePid = if (!packageName.isNullOrBlank()) {
+                    val pidResult = shizukuManager.executeCommandWithResult("pidof $packageName")
+                    pidResult?.output?.trim()?.split("\\s+".toRegex())?.firstOrNull()?.toIntOrNull() ?: 0
+                } else 0
+
+                if (gamePid > 0) {
+                    shizukuManager.executeCommand("service call rms 33 i32 $gamePid i32 120 s16 \"framex\" i32 1")
+                    FrameXLog.i("Vivo PID-linked RMS lock applied for PID $gamePid (pkg=$packageName)", tag = TAG)
+                }
 
                 if (!packageName.isNullOrBlank()) {
                     shizukuManager.executeCommand("cmd game set --fps ${maxHz.toInt()} --downscale 0.9 $packageName")
@@ -289,8 +315,10 @@ class EsportsOptimizationEngine @Inject constructor(
             }
         }
 
-        // Restore Vivo global settings
+        // Restore Vivo global & system settings
         snapshot.vivoRefreshRateMode?.let { restoreSetting("global", "vivo_screen_refresh_rate_mode", it) }
+        snapshot.gamecubeCompetitionMode?.let { restoreSetting("system", "gamecube_competition_mode_state", it) }
+        snapshot.gameScreenResolutionSwitch?.let { restoreSetting("system", "game_screen_resolution_switch", it) }
 
         // Strip pkg from Vivo CSV whitelists or restore captured baseline
         if (pkg != null) {
@@ -306,6 +334,9 @@ class EsportsOptimizationEngine @Inject constructor(
             snapshot.vivoScreenRefreshAppsList?.let { restoreSetting("global", "vivo_screen_refresh_rate_apps_list", it) }
             FrameXLog.i("Restored Vivo CSV whitelists to snapshot baseline", tag = TAG)
         }
+
+        shizukuManager.executeCommand("cmd thermalservice reset")
+        settingsRepository.markThermalOverrideRecoveryComplete()
 
         // Clear snapshot only after successful restoration
         settingsRepository.clearGamingOptimizationSnapshot()
@@ -347,7 +378,10 @@ class EsportsOptimizationEngine @Inject constructor(
         shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id -1")
         shizukuManager.executeCommand("settings delete global vivo_screen_refresh_rate_mode")
         shizukuManager.executeCommand("settings delete system touch_response_speed")
+        shizukuManager.executeCommand("settings put system gamecube_competition_mode_state 0")
+        shizukuManager.executeCommand("settings put system game_screen_resolution_switch 0")
         shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
+        shizukuManager.executeCommand("cmd thermalservice reset")
         shizukuManager.executeCommand("cmd deviceidle unforce")
         _vivoOptimizationResult.value = null
     }
@@ -381,8 +415,8 @@ class EsportsOptimizationEngine @Inject constructor(
             "settings delete system touch_response_speed",
             "settings delete global com.vivo.vtouch.persist",
             "settings delete system com.vivo.vtouch.persist",
-            "settings delete system game_screen_resolution_switch",
-            "settings delete system gamecube_competition_mode_state",
+            "settings put system game_screen_resolution_switch 0",
+            "settings put system gamecube_competition_mode_state 0",
             "cmd power set-fixed-performance-mode-enabled false",
             "cmd thermalservice reset"
         )
@@ -419,6 +453,8 @@ class EsportsOptimizationEngine @Inject constructor(
             "settings delete global speed_mode_apps",
             "settings delete global vivo_high_refresh_rate_apps",
             "settings delete global vivo_screen_refresh_rate_apps_list",
+            "settings put system gamecube_competition_mode_state 0",
+            "settings put system game_screen_resolution_switch 0",
             "cmd power set-fixed-performance-mode-enabled false",
             "cmd thermalservice reset",
             "cmd deviceidle unforce"
