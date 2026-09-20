@@ -22,6 +22,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -38,6 +41,7 @@ class GamingModeService : Service() {
     lateinit var gamingModeEngine: GamingModeEngine
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var maintenanceJob: Job? = null
 
     // =========================================================================
     // Lifecycle Callbacks
@@ -48,6 +52,7 @@ class GamingModeService : Service() {
         _isRunning.value = true
         createNotificationChannel()
         startForegroundServiceCompat()
+        startPeriodicMaintenanceLoop()
         FrameXLog.i("GamingModeService created and foregrounded", tag = TAG)
     }
 
@@ -58,6 +63,7 @@ class GamingModeService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         _isRunning.value = false
+        maintenanceJob?.cancel()
         serviceScope.cancel()
         FrameXLog.i("GamingModeService destroyed", tag = TAG)
     }
@@ -91,6 +97,21 @@ class GamingModeService : Service() {
                 FrameXLog.e("Emergency deactivation failed on task removal", error, tag = TAG)
             }
             stopSelf()
+        }
+    }
+
+    private fun startPeriodicMaintenanceLoop() {
+        maintenanceJob?.cancel()
+        maintenanceJob = serviceScope.launch(Dispatchers.IO) {
+            FrameXLog.i("Starting 2-minute periodic maintenance loop", tag = TAG)
+            while (isActive) {
+                delay(120_000L)
+                runCatching {
+                    gamingModeEngine.runPeriodicMaintenance()
+                }.onFailure { error ->
+                    FrameXLog.w("Periodic maintenance pulse encountered an error", error, tag = TAG)
+                }
+            }
         }
     }
 

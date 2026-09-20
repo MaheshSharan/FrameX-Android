@@ -188,6 +188,25 @@ fun PerformanceScreen(
                 )
             }
 
+            // Dedicated Vivo & iQOO Hardware Suite (AOT Speed Compile & Game Space Whitelist)
+            if (viewModel.isVivoDevice) {
+                item {
+                    val perfGameList by viewModel.vivoPerfGameList.collectAsState()
+                    val rawPerfGameList by viewModel.rawPerfGameList.collectAsState()
+                    VivoPerformanceToolsSection(
+                        launcherGames = launcherGames,
+                        perfGameList = perfGameList,
+                        rawPerfGameList = rawPerfGameList,
+                        onRefreshPerfList = { viewModel.refreshVivoPerfGameList() },
+                        onAddAllToPerfList = { pkgs, cb -> viewModel.addAllLauncherGamesToPerfList(pkgs, cb) },
+                        onRemoveAllFromPerfList = { pkgs, cb -> viewModel.removeAllLauncherGamesFromPerfList(pkgs, cb) },
+                        onCompileAll = { pkgs, cb -> viewModel.compileAllLauncherGamesSpeed(pkgs, cb) }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+
+
             // System Health Gauges
             item {
                 SystemHealthGaugesSection(
@@ -273,7 +292,8 @@ fun PerformanceScreen(
                     launcherGames = launcherGames,
                     userApps = userApps,
                     onAddGameClicked = { showAddGameSheet = true },
-                    onGameConfigClicked = { pkg -> configGamePkg = pkg }
+                    onGameConfigClicked = { pkg -> configGamePkg = pkg },
+                    onRemoveGame = { pkg -> viewModel.toggleLauncherGame(pkg) }
                 )
             }
 
@@ -299,6 +319,20 @@ fun PerformanceScreen(
             // OEM Suspended Packages
             item {
                 OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
+            }
+
+            // Vivo System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
+            if (viewModel.isVivoDevice) {
+                item {
+                    val auditLogs by viewModel.vivoAuditLogs.collectAsState()
+                    val isAuditLoggingEnabled by viewModel.auditLoggingEnabled.collectAsState()
+                    com.framex.app.ui.screens.performance.sections.SystemAuditLogSection(
+                        isLoggingEnabled = isAuditLoggingEnabled,
+                        onToggleLogging = { viewModel.setAuditLoggingEnabled(it) },
+                        auditLogs = auditLogs,
+                        onClearLogs = { viewModel.clearVivoAuditLogs() }
+                    )
+                }
             }
         }
 
@@ -326,7 +360,9 @@ fun PerformanceScreen(
                     configGamePkg = null
                     activeDeployingGamePkg = tPkg
                 },
-                onDismiss = { configGamePkg = null }
+                onDismiss = { configGamePkg = null },
+                isVivo = viewModel.isVivoDevice,
+                onToggleMemc = { p, v, cb -> viewModel.toggleMemc(p, v, cb) }
             )
         }
 

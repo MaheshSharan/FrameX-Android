@@ -59,6 +59,7 @@ class GamingModeEngine @Inject constructor(
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
+    private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val oemPackageResolver: OemPackageResolver,
     private val deviceDiagnosticManager: DeviceDiagnosticManager
 ) {
@@ -330,8 +331,11 @@ class GamingModeEngine @Inject constructor(
 
     private suspend fun applyPlatformOptimizations(isVivo: Boolean, activeGamePkg: String?): Boolean {
         if (isVivo) {
-            FrameXLog.i("Vivo/iQOO device detected: Safeguard active, skipping generic esports overrides", tag = TAG)
-            return true
+            FrameXLog.i("Vivo/iQOO device detected: Applying hardware-verified Vivo gaming suite", tag = TAG)
+            val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
+            return vivoGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
+                _state.value = GamingModeState.Enabling(progress, statusText)
+            }
         }
         return try {
             val uid = activeGamePkg?.let {
@@ -444,8 +448,27 @@ class GamingModeEngine @Inject constructor(
                 FrameXLog.w("Esports revert incomplete during deactivation", tag = TAG)
             }
         } else {
-            FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports revert", tag = TAG)
+            FrameXLog.i("Vivo/iQOO device detected: Reverting Vivo gaming suite...", tag = TAG)
+            vivoGamingOptimizer.revertOptimizations()
             settingsRepository.clearGamingOptimizationSnapshot()
+        }
+    }
+
+    suspend fun runPeriodicMaintenance() {
+        if (deviceDiagnosticManager.isVivoOrIqoo()) {
+            vivoGamingOptimizer.runPeriodicMaintenance()
+        }
+    }
+
+    suspend fun resolveProcessPid(packageName: String): Int {
+        val res = shizukuManager.executeCommandWithResult("pidof $packageName")
+        val out = res?.output?.trim().orEmpty()
+        return out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
+    }
+
+    suspend fun promoteGamePid(packageName: String, pid: Int) {
+        if (deviceDiagnosticManager.isVivoOrIqoo()) {
+            vivoGamingOptimizer.promoteGamePid(packageName, pid)
         }
     }
 

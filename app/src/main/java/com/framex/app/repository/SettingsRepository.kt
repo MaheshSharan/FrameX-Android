@@ -292,6 +292,14 @@ class SettingsRepository @Inject constructor(
 
     // ---- Esports Optimizations ----------------------------------------------
 
+    private val _auditLoggingEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUDIT_LOGGING_ENABLED, false))
+    val auditLoggingEnabled: StateFlow<Boolean> = _auditLoggingEnabled.asStateFlow()
+
+    fun setAuditLoggingEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUDIT_LOGGING_ENABLED, enabled).apply()
+        _auditLoggingEnabled.value = enabled
+    }
+
     private val _vivoOptEnabled = MutableStateFlow(prefs.getBoolean(KEY_VIVO_OPT_ENABLED, true))
     val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
 
@@ -438,6 +446,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_THERMAL_OVERRIDE_RECOVERY_VERSION = "thermal_override_recovery_version"
         private const val THERMAL_OVERRIDE_RECOVERY_VERSION = 1
         private const val KEY_LAUNCHER_GAMES = "launcher_games"
+        private const val KEY_AUDIT_LOGGING_ENABLED = "audit_logging_enabled"
         private const val KEY_VIVO_OPT_ENABLED = "esports_vivo_opt_enabled"
         private const val KEY_CPU_PRIORITY_LOCK = "esports_cpu_priority_lock"
         private const val KEY_NETWORK_FIREWALL = "esports_network_firewall"
