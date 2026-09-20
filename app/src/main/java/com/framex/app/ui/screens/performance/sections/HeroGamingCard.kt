@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
@@ -24,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.gaming.GamingModeState
-import com.framex.app.gaming.VivoOptimizationResult
 import com.framex.app.ui.screens.performance.components.EsportsStatusRow
 
 @Composable
@@ -36,7 +33,6 @@ fun HeroGamingCard(
     isBusy: Boolean,
     activeColor: Color,
     primaryRed: Color,
-    vivoOptResult: VivoOptimizationResult?,
     onActivate: () -> Unit,
     onDeactivate: () -> Unit
 ) {
@@ -235,12 +231,6 @@ fun HeroGamingCard(
                             }
                         }
 
-                        // Vivo / iQOO Hardware Boost — only visible on Vivo devices with vivoOpt enabled
-                        if (vivoOptResult != null) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            VivoBoostStatusCard(result = vivoOptResult)
-                        }
-
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
@@ -327,84 +317,3 @@ fun HeroGamingCard(
     }
 }
 
-// ── Vivo / iQOO Hardware Boost status card ───────────────────────────────────
-
-@Composable
-private fun VivoBoostStatusCard(result: VivoOptimizationResult) {
-    val accentColor = Color(0xFF3D9BE0) // Vivo brand blue
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.07f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, accentColor.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(accentColor)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Vivo T3 Ultra Hardware Boost",
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            }
-            HorizontalDivider(color = accentColor.copy(alpha = 0.15f))
-            VivoStatusRow(
-                "Display Mode Lock (Mode 4)",
-                "1080p @ ${result.maxHzApplied} Hz Locked",
-                result.displayModeLock
-            )
-            VivoStatusRow("Touch Latency Boost", "vtouch.persist Active", result.touchBoost)
-            VivoStatusRow("OEM Game Whitelists", "4 Whitelists Appended", result.whitelistApplied)
-        }
-    }
-}
-
-@Composable
-private fun VivoStatusRow(label: String, detail: String, ok: Boolean) {
-    val okColor = Color(0xFF22C55E)
-    val failColor = Color(0xFFEF4444)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = if (ok) Icons.Default.Check else Icons.Default.Close,
-            contentDescription = null,
-            tint = if (ok) okColor else failColor,
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                label,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                detail,
-                color = if (ok) Color.Gray else failColor.copy(alpha = 0.8f),
-                fontSize = 10.sp
-            )
-        }
-        Text(
-            text = if (ok) "ON" else "FAIL",
-            color = if (ok) okColor else failColor,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}

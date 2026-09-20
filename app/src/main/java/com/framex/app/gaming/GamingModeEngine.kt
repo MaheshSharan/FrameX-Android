@@ -261,9 +261,7 @@ class GamingModeEngine @Inject constructor(
             }
         }
         
-        // OriginOS 6 "Final Boss" Fix: Force re-bind the Notification Listener.
-        // On Vivo/Oppo, the listener can fall into a 'coma' if unused. 
-        // Disabling and re-enabling it right before use wakes it up 100% of the time.
+        // Force re-bind the Notification Listener to ensure it is active before use.
         if (!isAlreadyActive) {
             try {
                 val component = ComponentName(context, GamingNotificationListener::class.java)
@@ -422,7 +420,7 @@ class GamingModeEngine @Inject constructor(
             com.framex.app.utils.FrameXLog.i("Package unsuspension completed successfully (${allToUnsuspend.size} packages unsuspended)", tag = "GamingMode")
             settingsRepository.setGamingAffectedPackages(emptySet())
 
-            // Purge spawned background processes after unsuspending to prevent Vivo PEM battery drain
+            // Purge spawned background processes after unsuspending
             shizukuManager.executeCommand("am kill-all")
             com.framex.app.utils.FrameXLog.i("Background process purge (am kill-all) executed", tag = "GamingMode")
 

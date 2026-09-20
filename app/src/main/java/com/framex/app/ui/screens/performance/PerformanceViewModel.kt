@@ -10,7 +10,6 @@ import com.framex.app.gaming.EsportsOptimizationEngine
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeService
 import com.framex.app.gaming.GamingModeState
-import com.framex.app.gaming.VivoOptimizationResult
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -70,9 +69,6 @@ class PerformanceViewModel @Inject constructor(
 
     val fixedPerformanceMode = settingsRepository.fixedPerformanceMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val vivoOptimizationResult = esportsOptimizationEngine.vivoOptimizationResult
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
     fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)
