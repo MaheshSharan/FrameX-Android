@@ -54,7 +54,8 @@ class GamingModeEngine @Inject constructor(
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
-    private val oemPackageResolver: OemPackageResolver
+    private val oemPackageResolver: OemPackageResolver,
+    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager
 ) {
 
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -334,14 +335,20 @@ class GamingModeEngine @Inject constructor(
                 }
             }
 
-            val optimizationsApplied = try {
-                val uid = activeGamePkg?.let {
-                    runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+            val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
+            val optimizationsApplied = if (isVivo) {
+                com.framex.app.utils.FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports optimizations", tag = "GamingMode")
+                true // No generic system settings on Vivo devices
+            } else {
+                try {
+                    val uid = activeGamePkg?.let {
+                        runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+                    }
+                    esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
+                } catch (e: Exception) {
+                    com.framex.app.utils.FrameXLog.w("Esports optimization failed", e, tag = "GamingMode")
+                    false
                 }
-                esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Esports optimization failed", e, tag = "GamingMode")
-                false
             }
 
             if (!optimizationsApplied) {
@@ -358,8 +365,8 @@ class GamingModeEngine @Inject constructor(
                 return
             }
 
-            // Update snapshot with affected packages (only if we suspended new packages)
-            if (!isAlreadyActive || affectedPkgs.isNotEmpty()) {
+            // Update snapshot with affected packages (only if not Vivo and we suspended new packages)
+            if (!isVivo && (!isAlreadyActive || affectedPkgs.isNotEmpty())) {
                 val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
                 currentSnapshot?.let { snapshot ->
                     val updatedSnapshot = snapshot.copy(affectedPackages = affectedPkgs)
@@ -463,17 +470,21 @@ class GamingModeEngine @Inject constructor(
                 }
             }
 
-            val revertSuccess = try {
-                esportsOptimizationEngine.revertOptimizations()
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e, tag = "GamingMode")
-                false
-            }
+            if (!deviceDiagnosticManager.isVivoOrIqoo()) {
+                val revertSuccess = try {
+                    esportsOptimizationEngine.revertOptimizations()
+                } catch (e: Exception) {
+                    com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e, tag = "GamingMode")
+                    false
+                }
 
-            if (revertSuccess) {
-                com.framex.app.utils.FrameXLog.i("Esports optimizations reverted successfully", tag = "GamingMode")
+                if (revertSuccess) {
+                    com.framex.app.utils.FrameXLog.i("Esports optimizations reverted successfully", tag = "GamingMode")
+                } else {
+                    com.framex.app.utils.FrameXLog.w("Esports revert incomplete during deactivation", tag = "GamingMode")
+                }
             } else {
-                com.framex.app.utils.FrameXLog.w("Esports revert incomplete during deactivation", tag = "GamingMode")
+                com.framex.app.utils.FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports revert", tag = "GamingMode")
             }
 
             settingsRepository.setGamingModeActive(false)
