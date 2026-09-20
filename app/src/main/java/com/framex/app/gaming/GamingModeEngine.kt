@@ -569,8 +569,12 @@ class GamingModeEngine @Inject constructor(
     }
 
     suspend fun promoteGamePid(packageName: String, pid: Int) {
+        _activeGamePackage.value = packageName
         if (deviceDiagnosticManager.isVivoOrIqoo()) {
             vivoGamingOptimizer.promoteGamePid(packageName, pid)
+        } else {
+            val uid = runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()
+            esportsOptimizationEngine.attachGame(packageName, uid)
         }
     }
 

@@ -6,13 +6,14 @@ import androidx.compose.runtime.Immutable
 enum class Stage(val label: String) {
     MEMORY("Memory & RAM"),
     APPS("Background Apps"),
-    POWER("Power & Monster"),
+    POWER("Power & Performance"),
+    NETWORK("Network & Doze"),
     DISPLAY("Display & Thermal"),
     TOUCH("Touch & Sampling"),
     GYRO("Hardware Gyro"),
     KERNEL("Kernel & Sched"),
-    DND("Do Not Disturb"),
-    HANDSHAKE("Live Handshake")
+    HANDSHAKE("Live Handshake"),
+    DND("Do Not Disturb")
 }
 
 enum class OpStatus {

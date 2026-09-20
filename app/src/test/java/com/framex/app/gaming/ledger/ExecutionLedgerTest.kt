@@ -171,4 +171,264 @@ class ExecutionLedgerTest {
         assertEquals(1, apps.appliedCount)
         assertEquals(1, apps.failedCount)
     }
+
+    @Test
+    fun stageLabels_verifyRenamedPowerAndAddedNetwork() {
+        assertEquals("Power & Performance", Stage.POWER.label)
+        assertEquals("Network & Doze", Stage.NETWORK.label)
+    }
+
+    @Test
+    fun getSummary_withNetworkStage_summarizesAndSortsCorrectly() {
+        val ledger = ExecutionLedger()
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.NETWORK,
+                key = "netpolicy:add",
+                displayValue = "restrict-background-whitelist 10234",
+                rawCommand = "cmd netpolicy add restrict-background-whitelist 10234",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY
+            )
+        )
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.NETWORK,
+                key = "deviceidle:whitelist",
+                displayValue = "+com.example.game",
+                rawCommand = "cmd deviceidle whitelist +com.example.game",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.DETAIL
+            )
+        )
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.NETWORK,
+                key = "deviceidle:force-idle",
+                displayValue = "",
+                rawCommand = "cmd deviceidle force-idle",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.DETAIL
+            )
+        )
+
+        val summary = ledger.getSummary()
+        assertEquals(1, summary.stages.size)
+        val netStage = summary.stages[0]
+        assertEquals(Stage.NETWORK, netStage.stage)
+        assertEquals(StageStatus.ACTIVE, netStage.status)
+        assertEquals(3, netStage.totalCount)
+        assertEquals(3, netStage.appliedCount)
+        assertEquals(1, netStage.primaryOps.size)
+        assertEquals(2, netStage.detailOps.size)
+    }
+
+    @Test
+    fun getSummary_genericDeviceExpectedStageOrder() {
+        val ledger = ExecutionLedger()
+        val stages = listOf(
+            Stage.MEMORY, Stage.APPS, Stage.POWER, Stage.NETWORK, Stage.DISPLAY, Stage.TOUCH, Stage.DND
+        )
+        stages.forEach { stage ->
+            ledger.upsert(
+                AppliedOp(
+                    stage = stage,
+                    key = "test_key",
+                    displayValue = "active",
+                    rawCommand = "",
+                    status = OpStatus.APPLIED,
+                    priority = OpPriority.PRIMARY
+                )
+            )
+        }
+
+        val summary = ledger.getSummary()
+        val resultStages = summary.stages.map { it.stage }
+        assertEquals(stages, resultStages)
+    }
+
+    @Test
+    fun getSummary_vivoDeviceExpectedStageOrder() {
+        val ledger = ExecutionLedger()
+        val stages = listOf(
+            Stage.MEMORY, Stage.APPS, Stage.POWER, Stage.DISPLAY, Stage.TOUCH, Stage.GYRO, Stage.KERNEL, Stage.HANDSHAKE, Stage.DND
+        )
+        stages.forEach { stage ->
+            ledger.upsert(
+                AppliedOp(
+                    stage = stage,
+                    key = "test_key",
+                    displayValue = "active",
+                    rawCommand = "",
+                    status = OpStatus.APPLIED,
+                    priority = OpPriority.PRIMARY
+                )
+            )
+        }
+
+        val summary = ledger.getSummary()
+        val resultStages = summary.stages.map { it.stage }
+        assertEquals(stages, resultStages)
+    }
+
+    @Test
+    fun getSummary_genericDeviceWithSkippedNetwork_retainsInPlaceOrder() {
+        val ledger = ExecutionLedger()
+        val stages = listOf(
+            Stage.MEMORY, Stage.APPS, Stage.POWER, Stage.NETWORK, Stage.DISPLAY, Stage.TOUCH, Stage.DND
+        )
+        stages.forEach { stage ->
+            val status = if (stage == Stage.NETWORK) OpStatus.SKIPPED else OpStatus.APPLIED
+            ledger.upsert(
+                AppliedOp(
+                    stage = stage,
+                    key = "test_key",
+                    displayValue = if (status == OpStatus.SKIPPED) "skipped" else "active",
+                    rawCommand = "",
+                    status = status,
+                    priority = OpPriority.PRIMARY
+                )
+            )
+        }
+
+        val initialSummary = ledger.getSummary()
+        assertEquals(stages, initialSummary.stages.map { it.stage })
+        assertEquals(StageStatus.SKIPPED, initialSummary.stages.first { it.stage == Stage.NETWORK }.status)
+
+        // Game launched: Network flips to APPLIED
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.NETWORK,
+                key = "test_key",
+                displayValue = "10234",
+                rawCommand = "cmd netpolicy add restrict-background-whitelist 10234",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY
+            )
+        )
+
+        val updatedSummary = ledger.getSummary()
+        assertEquals(stages, updatedSummary.stages.map { it.stage })
+        assertEquals(StageStatus.ACTIVE, updatedSummary.stages.first { it.stage == Stage.NETWORK }.status)
+    }
+
+    @Test
+    fun getSummary_vivoDeviceWithSkippedGyroAndHandshake_retainsInPlaceOrder() {
+        val ledger = ExecutionLedger()
+        val stages = listOf(
+            Stage.MEMORY, Stage.APPS, Stage.POWER, Stage.DISPLAY, Stage.TOUCH, Stage.GYRO, Stage.KERNEL, Stage.HANDSHAKE, Stage.DND
+        )
+        stages.forEach { stage ->
+            val status = if (stage == Stage.GYRO || stage == Stage.HANDSHAKE) OpStatus.SKIPPED else OpStatus.APPLIED
+            ledger.upsert(
+                AppliedOp(
+                    stage = stage,
+                    key = "test_key",
+                    displayValue = if (status == OpStatus.SKIPPED) "skipped" else "active",
+                    rawCommand = "",
+                    status = status,
+                    priority = OpPriority.PRIMARY
+                )
+            )
+        }
+
+        val initialSummary = ledger.getSummary()
+        assertEquals(stages, initialSummary.stages.map { it.stage })
+        assertEquals(StageStatus.SKIPPED, initialSummary.stages.first { it.stage == Stage.GYRO }.status)
+        assertEquals(StageStatus.SKIPPED, initialSummary.stages.first { it.stage == Stage.HANDSHAKE }.status)
+
+        // Game launched: Gyro & Handshake flip to APPLIED
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.GYRO,
+                key = "test_key",
+                displayValue = "1@com.example.game",
+                rawCommand = "",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY
+            )
+        )
+        ledger.upsert(
+            AppliedOp(
+                stage = Stage.HANDSHAKE,
+                key = "test_key",
+                displayValue = "com.example.game_1234_120",
+                rawCommand = "",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY
+            )
+        )
+
+        val updatedSummary = ledger.getSummary()
+        assertEquals(stages, updatedSummary.stages.map { it.stage })
+        assertEquals(StageStatus.ACTIVE, updatedSummary.stages.first { it.stage == Stage.GYRO }.status)
+        assertEquals(StageStatus.ACTIVE, updatedSummary.stages.first { it.stage == Stage.HANDSHAKE }.status)
+    }
+
+    @Test
+    fun skippedAndRealCommands_shareParsedKeysAndFlipInPlace() {
+        val ledger = ExecutionLedger()
+
+        // 1. Skipped specs with <no active game> placeholder
+        val skippedActivityCmd = "cmd activity set-bg-restriction-level --user 0 <no active game> unrestricted"
+        val skippedNetpolicyCmd = "cmd netpolicy add restrict-background-whitelist <no active game>"
+        val skippedDeviceidleCmd = "cmd deviceidle whitelist +<no active game>"
+
+        // 2. Real specs when game launches
+        val realActivityCmd = "cmd activity set-bg-restriction-level --user 0 com.example.game unrestricted"
+        val realNetpolicyCmd = "cmd netpolicy add restrict-background-whitelist 10234"
+        val realDeviceidleCmd = "cmd deviceidle whitelist +com.example.game"
+
+        val parsedSkippedActivity = CommandLabelParser.parse(skippedActivityCmd)
+        val parsedRealActivity = CommandLabelParser.parse(realActivityCmd)
+        assertEquals("activity:set-bg-restriction-level", parsedSkippedActivity.key)
+        assertEquals(parsedSkippedActivity.key, parsedRealActivity.key)
+
+        val parsedSkippedNet = CommandLabelParser.parse(skippedNetpolicyCmd)
+        val parsedRealNet = CommandLabelParser.parse(realNetpolicyCmd)
+        assertEquals("netpolicy:add", parsedSkippedNet.key)
+        assertEquals(parsedSkippedNet.key, parsedRealNet.key)
+
+        val parsedSkippedIdle = CommandLabelParser.parse(skippedDeviceidleCmd)
+        val parsedRealIdle = CommandLabelParser.parse(realDeviceidleCmd)
+        assertEquals("deviceidle:whitelist", parsedSkippedIdle.key)
+        assertEquals(parsedSkippedIdle.key, parsedRealIdle.key)
+
+        // 3. Upsert skipped ops
+        ledger.upsert(
+            AppliedOp(Stage.POWER, parsedSkippedActivity.key, parsedSkippedActivity.value, skippedActivityCmd, OpStatus.SKIPPED, OpPriority.PRIMARY)
+        )
+        ledger.upsert(
+            AppliedOp(Stage.NETWORK, parsedSkippedNet.key, parsedSkippedNet.value, skippedNetpolicyCmd, OpStatus.SKIPPED, OpPriority.PRIMARY)
+        )
+        ledger.upsert(
+            AppliedOp(Stage.NETWORK, parsedSkippedIdle.key, parsedSkippedIdle.value, skippedDeviceidleCmd, OpStatus.SKIPPED, OpPriority.DETAIL)
+        )
+
+        assertEquals(3, ledger.ops.value.size)
+        val initialSummary = ledger.getSummary()
+        assertEquals(StageStatus.SKIPPED, initialSummary.stages.first { it.stage == Stage.POWER }.status)
+        assertEquals(StageStatus.SKIPPED, initialSummary.stages.first { it.stage == Stage.NETWORK }.status)
+
+        // 4. Game launches: real commands executed and upserted
+        ledger.upsert(
+            AppliedOp(Stage.POWER, parsedRealActivity.key, parsedRealActivity.value, realActivityCmd, OpStatus.APPLIED, OpPriority.PRIMARY)
+        )
+        ledger.upsert(
+            AppliedOp(Stage.NETWORK, parsedRealNet.key, parsedRealNet.value, realNetpolicyCmd, OpStatus.APPLIED, OpPriority.PRIMARY)
+        )
+        ledger.upsert(
+            AppliedOp(Stage.NETWORK, parsedRealIdle.key, parsedRealIdle.value, realDeviceidleCmd, OpStatus.APPLIED, OpPriority.DETAIL)
+        )
+
+        // Must still be 3 ops (in-place replacement, NO duplicates)
+        assertEquals(3, ledger.ops.value.size)
+        val flippedSummary = ledger.getSummary()
+        val powerStage = flippedSummary.stages.first { it.stage == Stage.POWER }
+        val netStage = flippedSummary.stages.first { it.stage == Stage.NETWORK }
+        assertEquals(StageStatus.ACTIVE, powerStage.status)
+        assertEquals(StageStatus.ACTIVE, netStage.status)
+        assertEquals(1, powerStage.appliedCount)
+        assertEquals(2, netStage.appliedCount)
+    }
 }

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +23,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.gaming.ledger.Stage
 import com.framex.app.ui.screens.performance.ActiveGamingSession
 import com.framex.app.ui.screens.performance.components.StatusBlock
 
@@ -285,16 +293,26 @@ fun HeroGamingCard(
     }
 }
 
+private val SessionCardShape = RoundedCornerShape(16.dp)
+private val HeaderTagShape = RoundedCornerShape(4.dp)
+
 @Composable
 private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
     val accentColor = Color(0xFF10B981)
+    val stages = session?.summary?.stages.orEmpty()
+
+    var userExpandedOverrides by remember { mutableStateOf<Map<Stage, Boolean>>(emptyMap()) }
+
+    val allExpanded = stages.isNotEmpty() && stages.all { stageSummary ->
+        userExpandedOverrides[stageSummary.stage] == true
+    }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = SessionCardShape,
         colors = CardDefaults.cardColors(containerColor = accentColor.copy(0.08f)),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, accentColor.copy(0.2f), RoundedCornerShape(16.dp))
+            .border(1.dp, accentColor.copy(0.2f), SessionCardShape)
     ) {
         Column(
             modifier = Modifier
@@ -302,56 +320,121 @@ private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(accentColor)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = session?.title ?: "Gaming Mode Active",
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            }
+            ActiveSessionHeaderRow(
+                title = session?.title ?: "Gaming Mode Active",
+                hasStages = stages.isNotEmpty(),
+                allExpanded = allExpanded,
+                onToggleExpandAll = {
+                    val target = !allExpanded
+                    userExpandedOverrides = stages.associate { it.stage to target }
+                },
+                accentColor = accentColor
+            )
+
             session?.summary?.let { summary ->
-                if (summary.totalOps > 0) {
-                    val statsText = buildString {
-                        append("Applied ${summary.totalApplied}/${summary.totalOps}")
-                        if (summary.totalFailed > 0) {
-                            append(" · ${summary.totalFailed} failed")
-                        }
-                        if (summary.totalSkipped > 0) {
-                            append(" · ${summary.totalSkipped} skipped")
-                        }
-                    }
-                    Text(
-                        text = statsText,
-                        color = Color.Gray,
-                        fontSize = 11.sp
-                    )
-                }
+                ActiveSessionStatsSummary(summary = summary)
             }
+
             HorizontalDivider(color = accentColor.copy(0.15f))
 
-            val stages = session?.summary?.stages.orEmpty()
-            if (stages.isNotEmpty()) {
-                stages.forEach { stageSummary ->
-                    key(stageSummary.stage) {
-                        StatusBlock(stageSummary = stageSummary)
-                    }
+            ActiveSessionStagesList(
+                stages = stages,
+                userExpandedOverrides = userExpandedOverrides,
+                onToggleStage = { stage, targetExpanded ->
+                    userExpandedOverrides = userExpandedOverrides + (stage to targetExpanded)
                 }
-            } else {
-                Text(
-                    text = "No execution data for this session",
-                    color = Color.Gray,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(vertical = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActiveSessionStatsSummary(summary: com.framex.app.gaming.ledger.LedgerSummary) {
+    if (summary.totalOps <= 0) return
+    val statsText = buildString {
+        append("Applied ${summary.totalApplied}/${summary.totalOps}")
+        if (summary.totalFailed > 0) {
+            append(" · ${summary.totalFailed} failed")
+        }
+        if (summary.totalSkipped > 0) {
+            append(" · ${summary.totalSkipped} skipped")
+        }
+    }
+    Text(
+        text = statsText,
+        color = Color.Gray,
+        fontSize = 11.sp
+    )
+}
+
+@Composable
+private fun ActiveSessionStagesList(
+    stages: List<com.framex.app.gaming.ledger.StageSummary>,
+    userExpandedOverrides: Map<Stage, Boolean>,
+    onToggleStage: (Stage, Boolean) -> Unit
+) {
+    if (stages.isEmpty()) {
+        Text(
+            text = "No execution data for this session",
+            color = Color.Gray,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+    } else {
+        stages.forEach { stageSummary ->
+            key(stageSummary.stage) {
+                val isExpanded = userExpandedOverrides[stageSummary.stage] ?: false
+                StatusBlock(
+                    stageSummary = stageSummary,
+                    isExpanded = isExpanded,
+                    onToggleExpand = { onToggleStage(stageSummary.stage, !isExpanded) }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ActiveSessionHeaderRow(
+    title: String,
+    hasStages: Boolean,
+    allExpanded: Boolean,
+    onToggleExpandAll: () -> Unit,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(accentColor)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = accentColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+        }
+
+        if (hasStages) {
+            Text(
+                text = if (allExpanded) "Collapse all" else "Expand all",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 36.dp)
+                    .clip(HeaderTagShape)
+                    .clickable(role = Role.Button, onClick = onToggleExpandAll)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
         }
     }
 }

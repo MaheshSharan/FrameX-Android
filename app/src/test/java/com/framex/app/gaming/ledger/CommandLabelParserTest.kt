@@ -85,4 +85,36 @@ class CommandLabelParserTest {
         assertEquals(25, truncated.length)
         assert(truncated.contains("..."))
     }
+
+    @Test
+    fun parse_cmdNetpolicy_extractsKeyAndValue() {
+        val cmd = "cmd netpolicy add restrict-background-whitelist 10234"
+        val parsed = CommandLabelParser.parse(cmd)
+        assertEquals("netpolicy:add", parsed.key)
+        assertEquals("restrict-background-whitelist 10234", parsed.value)
+    }
+
+    @Test
+    fun parse_cmdDeviceidleWhitelist_extractsKeyAndValue() {
+        val cmd = "cmd deviceidle whitelist +com.example.game"
+        val parsed = CommandLabelParser.parse(cmd)
+        assertEquals("deviceidle:whitelist", parsed.key)
+        assertEquals("+com.example.game", parsed.value)
+    }
+
+    @Test
+    fun parse_cmdDeviceidleForceIdle_extractsKeyAndValue() {
+        val cmd = "cmd deviceidle force-idle"
+        val parsed = CommandLabelParser.parse(cmd)
+        assertEquals("deviceidle:force-idle", parsed.key)
+        assertEquals("", parsed.value)
+    }
+
+    @Test
+    fun parse_cmdActivitySetBgRestrictionLevel_extractsKeyAndValue() {
+        val cmd = "cmd activity set-bg-restriction-level --user 0 com.example.game unrestricted"
+        val parsed = CommandLabelParser.parse(cmd)
+        assertEquals("activity:set-bg-restriction-level", parsed.key)
+        assertEquals("--user 0 com.example.game unrestricted", parsed.value)
+    }
 }

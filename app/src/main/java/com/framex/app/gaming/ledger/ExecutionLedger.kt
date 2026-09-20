@@ -78,8 +78,7 @@ class ExecutionLedger @Inject constructor() {
                 { when (it.status) {
                     StageStatus.FAILED -> 0
                     StageStatus.PARTIAL -> 1
-                    StageStatus.ACTIVE -> 2
-                    StageStatus.SKIPPED -> 3
+                    StageStatus.ACTIVE, StageStatus.SKIPPED -> 2
                 } },
                 { it.stage.ordinal }
             )

@@ -50,6 +50,27 @@ class EsportsOptimizationEngine @Inject constructor(
     }
 
     /**
+     * Attaches an active game package to an already-active session without re-capturing settings,
+     * protecting the user's baseline display/touch settings against overwrite data loss.
+     */
+    suspend fun attachGame(packageName: String, uid: Int?): Boolean {
+        if (!isShizukuReady()) return false
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return false
+
+        val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
+        if (currentSnapshot != null) {
+            settingsRepository.saveGamingOptimizationSnapshot(
+                currentSnapshot.copy(activeGamePackage = safePkg, activeGameUid = uid)
+            )
+        }
+
+        FrameXLog.i("Attaching game $safePkg (uid=$uid) to existing session", tag = TAG)
+        applyProcessPriorities(safePkg)
+        applyNetworkAndDozeExemptions(safePkg, uid)
+        return true
+    }
+
+    /**
      * Reverts all modified settings using the saved snapshot baseline.
      */
     suspend fun revertOptimizations(): Boolean {
@@ -170,28 +191,39 @@ class EsportsOptimizationEngine @Inject constructor(
     }
 
     private suspend fun applyProcessPriorities(packageName: String?) {
+        if (!settingsRepository.cpuPriorityLock.value) return
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
-        if (!settingsRepository.cpuPriorityLock.value || safePkg == null) return
+        val targetPkg = safePkg ?: "<no active game>"
         val specs = listOf(
-            CommandSpec("cmd activity set-bg-restriction-level --user 0 $safePkg unrestricted", OpPriority.PRIMARY),
-            CommandSpec("am set-standby-bucket --user 0 $safePkg active", OpPriority.DETAIL)
+            CommandSpec("cmd activity set-bg-restriction-level --user 0 $targetPkg unrestricted", OpPriority.PRIMARY),
+            CommandSpec("am set-standby-bucket --user 0 $targetPkg active", OpPriority.DETAIL)
         )
-        ledgerExecutor.executeBatch(Stage.POWER, specs)
-        FrameXLog.i("CPU Priority & Standby Bucket active set for $safePkg", tag = TAG)
+        if (safePkg != null) {
+            ledgerExecutor.executeBatch(Stage.POWER, specs)
+            FrameXLog.i("CPU Priority & Standby Bucket active set for $safePkg", tag = TAG)
+        } else {
+            ledgerExecutor.recordSkipped(Stage.POWER, specs)
+            FrameXLog.i("CPU Priority & Standby Bucket recorded as skipped (no active game)", tag = TAG)
+        }
     }
 
     private suspend fun applyNetworkAndDozeExemptions(packageName: String?, uid: Int?) {
-        if (!settingsRepository.networkFirewall.value || uid == null) return
-        val specs = mutableListOf(
-            CommandSpec("cmd netpolicy add restrict-background-whitelist $uid", OpPriority.DETAIL)
-        )
+        if (!settingsRepository.networkFirewall.value) return
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
-        if (safePkg != null) {
-            specs.add(CommandSpec("cmd deviceidle whitelist +$safePkg", OpPriority.DETAIL))
+        val targetUid = uid?.toString() ?: "<no active game>"
+        val targetPkg = safePkg ?: "<no active game>"
+        val specs = listOf(
+            CommandSpec("cmd netpolicy add restrict-background-whitelist $targetUid", OpPriority.PRIMARY),
+            CommandSpec("cmd deviceidle whitelist +$targetPkg", OpPriority.DETAIL),
+            CommandSpec("cmd deviceidle force-idle", OpPriority.DETAIL)
+        )
+        if (safePkg != null && uid != null) {
+            ledgerExecutor.executeBatch(Stage.NETWORK, specs)
+            FrameXLog.i("Network Firewall & Deep Doze exemption applied (uid=$uid, pkg=$safePkg)", tag = TAG)
+        } else {
+            ledgerExecutor.recordSkipped(Stage.NETWORK, specs)
+            FrameXLog.i("Network Firewall & Deep Doze recorded as skipped (uid=$uid, pkg=$safePkg)", tag = TAG)
         }
-        specs.add(CommandSpec("cmd deviceidle force-idle", OpPriority.DETAIL))
-        ledgerExecutor.executeBatch(Stage.POWER, specs)
-        FrameXLog.i("Network Firewall & Deep Doze exemption applied (uid=$uid, pkg=$safePkg)", tag = TAG)
     }
 
     private suspend fun applyPerformanceGovernor() {

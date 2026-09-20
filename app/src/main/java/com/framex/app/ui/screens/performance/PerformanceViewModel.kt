@@ -260,16 +260,22 @@ class PerformanceViewModel @Inject constructor(
             if (launchIntent != null) {
                 context.startActivity(launchIntent)
 
-                // Only poll and promote PID if Gaming Mode is actively running on Vivo/iQOO
-                if (isGamingModeActive && deviceDiagnosticManager.isVivoOrIqoo()) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        for (i in 1..10) {
-                            delay(500L)
-                            val pid = gamingModeEngine.resolveProcessPid(packageName)
-                            if (pid > 0) {
-                                gamingModeEngine.promoteGamePid(packageName, pid)
-                                break
+                // Promote PID and attach per-game optimizations if Gaming Mode is actively running
+                if (isGamingModeActive) {
+                    if (deviceDiagnosticManager.isVivoOrIqoo()) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            for (i in 1..10) {
+                                delay(500L)
+                                val pid = gamingModeEngine.resolveProcessPid(packageName)
+                                if (pid > 0) {
+                                    gamingModeEngine.promoteGamePid(packageName, pid)
+                                    break
+                                }
                             }
+                        }
+                    } else {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            gamingModeEngine.promoteGamePid(packageName, 0)
                         }
                     }
                 }
