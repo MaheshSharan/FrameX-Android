@@ -255,10 +255,10 @@ class PerformanceViewModel @Inject constructor(
     suspend fun resetToDeviceDefaults(): Boolean =
         esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)
 
-    val safeToSuspendList: List<String> get() = gamingModeEngine.SAFE_TO_SUSPEND
-    val googleSafeToSuspendList: List<String> get() = gamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
+    val safeToSuspendList: List<String> get() = gamingModeEngine.safeToSuspendPackages
+    val googleSafeToSuspendList: List<String> get() = GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
     val gamingDaemonsList: List<String>
-        get() = if (deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value) gamingModeEngine.GAMING_DAEMONS else emptyList()
+        get() = if (deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value) GamingModeEngine.GAMING_DAEMONS else emptyList()
 
     companion object {
         private const val BYTES_TO_MB = 1024L * 1024L

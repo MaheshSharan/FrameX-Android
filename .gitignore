@@ -56,3 +56,7 @@ docs/VIVO/vivo_t3_ultra_full_device_audit.md
 docs/VIVO/*
 scratch/*
 scratch/vivo_framework/framework/framework/abx.jar.fsv_meta
+audt/*
+audt/**
+/audit/
+scripts/

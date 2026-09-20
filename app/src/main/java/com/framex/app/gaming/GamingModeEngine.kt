@@ -1,18 +1,25 @@
 package com.framex.app.gaming
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import androidx.core.app.NotificationCompat
+import com.framex.app.MainActivity
+import com.framex.app.R
+import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +33,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 // ---------------------------------------------------------------------------
-// State model
+// State Models
 // ---------------------------------------------------------------------------
 
 sealed class GamingModeState {
@@ -43,7 +50,7 @@ data class AppInfo(
 )
 
 // ---------------------------------------------------------------------------
-// Engine
+// Engine Implementation
 // ---------------------------------------------------------------------------
 
 @Singleton
@@ -53,95 +60,29 @@ class GamingModeEngine @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val oemPackageResolver: OemPackageResolver,
-    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager
+    private val deviceDiagnosticManager: DeviceDiagnosticManager
 ) {
 
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var thermalRecoveryJob: Job? = null
 
-    // ---- Public state -------------------------------------------------------
+    // ---- Public State -------------------------------------------------------
 
     private val _state = MutableStateFlow<GamingModeState>(GamingModeState.Idle)
     val state: StateFlow<GamingModeState> = _state.asStateFlow()
 
-    // Companion-level flag so GamingNotificationListener can read it without DI.
-    companion object {
-        private val _isActive = MutableStateFlow(false)
-        val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
-
-        internal const val RECOVERY_NOTIFICATION_ID = 3
-    }
-
-    val SAFE_TO_SUSPEND: List<String>
+    val safeToSuspendPackages: List<String>
         get() = oemPackageResolver.getOemPackagesToSuspend()
-
-    val GOOGLE_SAFE_TO_SUSPEND = listOf(
-        // Google user-facing apps — safe to freeze during gaming
-        "com.google.android.youtube",
-        "com.google.android.apps.photos",
-        "com.google.android.apps.maps",
-        "com.google.android.gm",                    // Gmail
-        "com.google.android.apps.messaging",        // Google Messages
-        "com.google.android.calendar",
-        "com.google.android.googlequicksearchbox",  // Google Search / Assistant
-        "com.google.android.apps.bard",             // Gemini
-        "com.google.android.apps.nbu.files",        // Files by Google
-        "com.google.android.apps.wellbeing",        // Digital Wellbeing
-        "com.google.android.projection.gearhead",   // Android Auto
-        "com.google.android.apps.authenticator2",   // Authenticator
-        "com.google.android.apps.restore",          // Google Restore
-        "com.android.chrome"                        // Chrome browser
-    )
-
-    val SYSTEM_CRITICAL = listOf(
-        // Core Daemons — suspending these causes soft-reboot on OriginOS
-        "com.vivo.pem",                // Power Event Manager — restarts force-stopped apps
-        "com.vivo.abe",                // App Behavior Engine
-        "com.vivo.daemonService",      // Hardware daemon
-        "com.vivo.sps",                // System Power Service
-        "com.vivo.pie",                // Framework extension
-
-        // Hardware & UI Modules
-        "com.vivo.fingerprintui",
-        "com.vivo.fingerprint",
-        "com.vivo.fingerprintvit",
-        "com.vivo.faceui",
-        "com.vivo.faceunlock",
-        "com.vivo.systemuiplugin",
-        "com.vivo.networkstate",
-        "com.vivo.connbase",
-        "com.android.systemui",
-        "com.android.phone",
-        "com.mediatek.ims"              // VoLTE — kills calls if suspended
-    )
-
-    val GAMING_DAEMONS = listOf(
-        "com.vivo.gamecube",
-        "com.vivo.gamewatch",
-        "com.vivo.game",
-        "com.iqoo.powersaving",        // Prevents thermal throttling
-        "com.microsoft.deviceintegrationservice"  // ThermalInfoService bridge
-    )
-
-    // Always protected — losing Shizuku = losing the ADB bridge.
-    private val HARD_WHITELIST = setOf(
-        "moe.shizuku.privileged.api",  // Shizuku itself
-        context.packageName,           // FrameX itself
-        "com.adguard.android",
-        "com.adguard.vpn"
-    )
 
     // ---- Public API ---------------------------------------------------------
 
     /**
-     * Enumerate all installed non-system user apps that are candidates for
-     * the AppOps / force-stop treatment.  Returns them sorted by label.
+     * Enumerate all installed non-system user apps eligible for freezing.
      */
     fun getInstalledUserApps(): List<AppInfo> {
         val pm = context.packageManager
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
             .filter { ai ->
-                // Keep only user-installed apps (no FLAG_SYSTEM)
                 (ai.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
                     ai.packageName !in SYSTEM_CRITICAL &&
                     ai.packageName !in GAMING_DAEMONS &&
@@ -158,8 +99,7 @@ class GamingModeEngine @Inject constructor(
     }
 
     /**
-     * Returns the Google apps from GOOGLE_SAFE_TO_SUSPEND that are actually
-     * installed on this device, so the whitelist UI can show them as toggleable.
+     * Returns the Google apps from GOOGLE_SAFE_TO_SUSPEND that are actually installed.
      */
     fun getGoogleAppsForWhitelist(): List<AppInfo> {
         val pm = context.packageManager
@@ -171,175 +111,63 @@ class GamingModeEngine @Inject constructor(
                     label = pm.getApplicationLabel(ai).toString()
                 )
             } catch (_: PackageManager.NameNotFoundException) {
-                null  // Not installed on this device
+                null
             }
         }.sortedBy { it.label.lowercase() }
     }
 
-    private fun isPackageInstalled(pkg: String): Boolean {
-        return try {
-            context.packageManager.getApplicationInfo(pkg, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        }
-    }
-
     /**
      * Full Gaming Mode activation sequence.
-     *
-     * 1. pm suspend --user 0 on SAFE_TO_SUSPEND
-     * 2. AppOps ignore + am force-stop on non-whitelisted user apps
-     * 3. am kill-all
-     * 4. Enable DND (if policy access is granted)
      */
     suspend fun enableGamingMode(userWhitelist: Set<String>, activeGamePkg: String? = null) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!isShizukuReady()) {
             _state.value = GamingModeState.Error("Shizuku not available or permission not granted")
             return
         }
 
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
-        com.framex.app.utils.FrameXLog.i("Starting Gaming Mode activation (activeGamePkg=$activeGamePkg)...", tag = "GamingMode")
-
-        var finalWhitelist = userWhitelist + settingsRepository.launcherGames.value
-        var boostRam = true
-
-        if (activeGamePkg != null) {
-            finalWhitelist = finalWhitelist + activeGamePkg
-            boostRam = settingsRepository.getGameConfigBoostRam(activeGamePkg)
-        }
+        FrameXLog.i("Starting Gaming Mode activation (activeGamePkg=$activeGamePkg)...", tag = TAG)
 
         val isAlreadyActive = _isActive.value
+        val shouldBoostRam = activeGamePkg?.let { settingsRepository.getGameConfigBoostRam(it) } ?: true
+        val resolvedWhitelist = buildFinalWhitelist(userWhitelist, activeGamePkg)
 
-        if (boostRam) {
-            // Phase 0 — Deep Cache Purge (Instantly clear system caches to free RAM block)
-            try {
-                shizukuManager.executeCommand("pm trim-caches 4G")
-                com.framex.app.utils.FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) completed", tag = "GamingMode")
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Deep cache purge failed", e, tag = "GamingMode")
-            }
+        if (shouldBoostRam) {
+            executeRamCachePurge()
         }
-        
-        // Force re-bind the Notification Listener to ensure it is active before use.
+
         if (!isAlreadyActive) {
-            try {
-                val component = ComponentName(context, GamingNotificationListener::class.java)
-                context.packageManager.setComponentEnabledSetting(
-                    component, 
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
-                    PackageManager.DONT_KILL_APP
-                )
-                // Small delay to allow the system to process the unbind before re-binding
-                kotlinx.coroutines.delay(100)
-                context.packageManager.setComponentEnabledSetting(
-                    component, 
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
-                    PackageManager.DONT_KILL_APP
-                )
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Notification listener reset failed", e)
-            }
+            restartNotificationListener()
         }
 
         try {
-            val affectedPkgs = mutableSetOf<String>()
-            val installedSafeToSuspend = SAFE_TO_SUSPEND.filter { isPackageInstalled(it) }
+            val installedSafeToSuspend = safeToSuspendPackages.filter { isPackageInstalled(it) }
+            val newlySuspendedPkgs = mutableSetOf<String>()
 
-            if (boostRam && !isAlreadyActive) {
-                // ----------------------------------------------------------------
-                // Phase 1 & 2 — Batch Suspend OEM, Google, and User Apps
-                // ----------------------------------------------------------------
-                val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist && isPackageInstalled(it) }
-                val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
-                    .filter { it.packageName !in finalWhitelist }
-                val userTargets = userApps.map { it.packageName }
-
-                val allTargets = (installedSafeToSuspend + googleTargets + userTargets).distinct()
-                val preSuspended = shizukuManager.getSuspendedPackages(allTargets)
-                val targetsToFreeze = allTargets.filterNot { it in preSuspended }
-
-                com.framex.app.utils.FrameXLog.i("Suspending ${targetsToFreeze.size} background apps (${preSuspended.size} pre-suspended by external tools ignored)...", tag = "GamingMode")
-
-                _state.value = GamingModeState.Enabling(0.5f, "Suspending ${targetsToFreeze.size} background apps…")
-                val suspendResult = if (targetsToFreeze.isNotEmpty()) shizukuManager.suspendPackages(targetsToFreeze, true) else null
-                val failedPkgs = suspendResult?.failedPackages?.toSet().orEmpty()
-
-                affectedPkgs.addAll(targetsToFreeze.filter { it !in failedPkgs })
-                com.framex.app.utils.FrameXLog.i("Package suspension finished: ${affectedPkgs.size} apps successfully suspended by FrameX, ${failedPkgs.size} failed", tag = "GamingMode")
+            if (shouldBoostRam && !isAlreadyActive) {
+                val suspended = suspendBackgroundBloat(resolvedWhitelist, installedSafeToSuspend)
+                newlySuspendedPkgs.addAll(suspended)
             }
 
-            // Persist the affected list so disableGamingMode restores only what we changed.
             if (!isAlreadyActive) {
-                settingsRepository.setGamingAffectedPackages(affectedPkgs)
-            }
-
-            if (boostRam) {
-                // ----------------------------------------------------------------
-                // Phase 3 — Kill cached background processes
-                // ----------------------------------------------------------------
-                _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
-                shizukuManager.executeCommand("am kill-all")
-                com.framex.app.utils.FrameXLog.i("Background process purge (am kill-all) executed", tag = "GamingMode")
-            }
-
-            // ----------------------------------------------------------------
-            // Phase 4 — Enable DND via NotificationManager policy
-            // ----------------------------------------------------------------
-            if (!isAlreadyActive) {
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                if (nm.isNotificationPolicyAccessGranted) {
-                    nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-                    com.framex.app.utils.FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE", tag = "GamingMode")
-                }
+                settingsRepository.setGamingAffectedPackages(newlySuspendedPkgs)
+                executeBackgroundProcessPurge(shouldBoostRam)
+                applyNotificationSuppression()
             }
 
             val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
-            val optimizationsApplied = if (isVivo) {
-                com.framex.app.utils.FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports optimizations", tag = "GamingMode")
-                true // No generic system settings on Vivo devices
-            } else {
-                try {
-                    val uid = activeGamePkg?.let {
-                        runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
-                    }
-                    esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
-                } catch (e: Exception) {
-                    com.framex.app.utils.FrameXLog.w("Esports optimization failed", e, tag = "GamingMode")
-                    false
-                }
-            }
+            val optimizationsApplied = applyPlatformOptimizations(isVivo, activeGamePkg)
 
             if (!optimizationsApplied) {
-                // Esports snapshot capture failed, abort gaming mode activation
-                _state.value = GamingModeState.Error("Failed to capture system settings snapshot")
-                com.framex.app.utils.FrameXLog.e("Esports optimizations failed to apply, aborting activation", tag = "GamingMode")
-                // Clean up what we've done so far
-                if (!isAlreadyActive) {
-                    val allToUnsuspend = (installedSafeToSuspend + affectedPkgs).distinct()
-                    shizukuManager.suspendPackages(allToUnsuspend, false)
-                }
-                settingsRepository.setGamingModeActive(false)
-                _isActive.value = false
+                handleActivationFailure(isAlreadyActive, installedSafeToSuspend, newlySuspendedPkgs)
                 return
             }
 
-            // Update snapshot with affected packages (only if not Vivo and we suspended new packages)
-            if (!isVivo && (!isAlreadyActive || affectedPkgs.isNotEmpty())) {
-                val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
-                currentSnapshot?.let { snapshot ->
-                    val updatedSnapshot = snapshot.copy(affectedPackages = affectedPkgs)
-                    settingsRepository.saveGamingOptimizationSnapshot(updatedSnapshot)
-                }
-            }
-
-            settingsRepository.setGamingModeActive(true)
-            _isActive.value = true
-            _state.value = GamingModeState.Active
-            com.framex.app.utils.FrameXLog.i("Gaming Mode activation complete! Active game: $activeGamePkg", tag = "GamingMode")
+            updateSnapshotIfNeeded(isVivo, isAlreadyActive, newlySuspendedPkgs)
+            finalizeActivation(activeGamePkg)
 
         } catch (e: Exception) {
+            FrameXLog.e("Unexpected error during Gaming Mode activation", e, tag = TAG)
             _state.value = GamingModeState.Error(e.message ?: "Unexpected error during activation")
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
@@ -348,129 +176,267 @@ class GamingModeEngine @Inject constructor(
 
     /**
      * Full Gaming Mode deactivation sequence.
-     *
-     * 1. pm unsuspend on SAFE_TO_SUSPEND
-     * 2. pm unsuspend + restore AppOps on previously-affected user packages
-     * 3. Disable DND
-     * 4. Restore esports optimizations from snapshot
      */
     suspend fun disableGamingMode() {
         _state.value = GamingModeState.Disabling
-        com.framex.app.utils.FrameXLog.i("Starting Gaming Mode deactivation...", tag = "GamingMode")
+        FrameXLog.i("Starting Gaming Mode deactivation...", tag = TAG)
 
         try {
-            // Load snapshot to get strictly packages FrameX suspended during this session
             val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
-            val allToUnsuspend = snapshot?.affectedPackages?.toList() ?: settingsRepository.getGamingAffectedPackages().toList()
+            val targetsToUnsuspend = snapshot?.affectedPackages?.toList()
+                ?: settingsRepository.getGamingAffectedPackages().toList()
 
-            if (allToUnsuspend.isNotEmpty()) {
-                com.framex.app.utils.FrameXLog.i("Attempting to unsuspend ${allToUnsuspend.size} FrameX-managed packages...", tag = "GamingMode")
-                val suspendResult = shizukuManager.suspendPackages(allToUnsuspend, false)
-                if (suspendResult == null) {
-                    com.framex.app.utils.FrameXLog.e("Deactivation failed: Shizuku IPC binder unavailable", tag = "GamingMode")
-                    _state.value = GamingModeState.Error("Deactivation incomplete: Shizuku service unavailable. Tap to retry.")
-                    return
-                }
+            val unsuspendedSuccessfully = revertPackageSuspensions(targetsToUnsuspend, snapshot)
+            if (!unsuspendedSuccessfully) return
 
-                val failedPkgs = suspendResult.failedPackages?.toSet().orEmpty()
-                if (failedPkgs.isNotEmpty()) {
-                    com.framex.app.utils.FrameXLog.w("Deactivation partial failure: ${failedPkgs.size}/${allToUnsuspend.size} packages failed to unsuspend: $failedPkgs", tag = "GamingMode")
-                    settingsRepository.setGamingAffectedPackages(failedPkgs)
-                    snapshot?.let {
-                        settingsRepository.saveGamingOptimizationSnapshot(it.copy(affectedPackages = failedPkgs))
-                    }
-                    _state.value = GamingModeState.Error("Deactivation incomplete: ${failedPkgs.size} apps still suspended. Tap to retry.")
-                    return
-                }
-            }
-
-            com.framex.app.utils.FrameXLog.i("Package unsuspension completed successfully (${allToUnsuspend.size} packages unsuspended)", tag = "GamingMode")
-            settingsRepository.setGamingAffectedPackages(emptySet())
-
-            // Purge spawned background processes after unsuspending
-            shizukuManager.executeCommand("am kill-all")
-            com.framex.app.utils.FrameXLog.i("Background process purge (am kill-all) executed", tag = "GamingMode")
-
-            // Restore DND
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (nm.isNotificationPolicyAccessGranted) {
-                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-                com.framex.app.utils.FrameXLog.i("DND filter restored to INTERRUPTION_FILTER_ALL", tag = "GamingMode")
-            }
-
-            // Clean up any legacy override preferences if present
-            val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-            prefs.edit()
-                .remove("orig_ringtone_val")
-                .remove("orig_brightness_mode")
-                .remove("orig_rotation_mode")
-                .apply()
-
-            if (!deviceDiagnosticManager.isVivoOrIqoo()) {
-                val revertSuccess = try {
-                    esportsOptimizationEngine.revertOptimizations()
-                } catch (e: Exception) {
-                    com.framex.app.utils.FrameXLog.w("Esports optimization cleanup failed", e, tag = "GamingMode")
-                    false
-                }
-
-                if (revertSuccess) {
-                    com.framex.app.utils.FrameXLog.i("Esports optimizations reverted successfully", tag = "GamingMode")
-                } else {
-                    com.framex.app.utils.FrameXLog.w("Esports revert incomplete during deactivation", tag = "GamingMode")
-                }
-            } else {
-                com.framex.app.utils.FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports revert", tag = "GamingMode")
-                settingsRepository.clearGamingOptimizationSnapshot()
-            }
+            purgeProcessesPostUnsuspension()
+            revertNotificationSuppression()
+            cleanupLegacyPreferences()
+            revertPlatformOptimizations()
 
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
             _state.value = GamingModeState.Idle
-            com.framex.app.utils.FrameXLog.i("Gaming Mode deactivation complete!", tag = "GamingMode")
+            FrameXLog.i("Gaming Mode deactivation complete!", tag = TAG)
 
         } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.w("Error during Gaming Mode deactivation", e, tag = "GamingMode")
+            FrameXLog.w("Error during Gaming Mode deactivation", e, tag = TAG)
             _state.value = GamingModeState.Error(e.message ?: "Unexpected error during deactivation")
         }
     }
 
-    /** Called on app start-up to recover state that was active before a kill. */
+    /**
+     * Recovers persisted state on application startup.
+     */
     fun recoverPersistedState() {
         recoverThermalOverrideIfNeeded()
         recoverLegacySettingsIfNeeded()
 
-        // Check for orphaned gaming optimization snapshot
         if (settingsRepository.hasActiveGamingSnapshot()) {
-            com.framex.app.utils.FrameXLog.w("Detected orphaned gaming optimization snapshot, will recover on Shizuku connect", tag = "GamingMode")
+            FrameXLog.w("Detected orphaned gaming optimization snapshot, scheduling recovery", tag = TAG)
             _isActive.value = true
             _state.value = GamingModeState.Active
 
-            if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
-                recoveryScope.launch {
-                    disableGamingMode()
-                }
+            if (isShizukuReady()) {
+                recoveryScope.launch { disableGamingMode() }
             } else {
                 showRecoveryNotification()
             }
         } else if (settingsRepository.isGamingModeActive()) {
             _isActive.value = true
             _state.value = GamingModeState.Active
-            if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+            if (!isShizukuReady()) {
                 showRecoveryNotification()
             }
         }
     }
+
+    // =========================================================================
+    // Granular Activation Steps (IDE / GitHub Symbol Navigation)
+    // =========================================================================
+
+    private fun buildFinalWhitelist(userWhitelist: Set<String>, activeGamePkg: String?): Set<String> {
+        val list = (userWhitelist + settingsRepository.launcherGames.value).toMutableSet()
+        if (activeGamePkg != null) list.add(activeGamePkg)
+        return list
+    }
+
+    private suspend fun executeRamCachePurge() {
+        try {
+            shizukuManager.executeCommand("pm trim-caches 4G")
+            FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) completed", tag = TAG)
+        } catch (e: Exception) {
+            FrameXLog.w("Deep cache purge failed", e, tag = TAG)
+        }
+    }
+
+    private suspend fun restartNotificationListener() {
+        try {
+            val component = ComponentName(context, GamingNotificationListener::class.java)
+            context.packageManager.setComponentEnabledSetting(
+                component,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            delay(100)
+            context.packageManager.setComponentEnabledSetting(
+                component,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+        } catch (e: Exception) {
+            FrameXLog.w("Notification listener reset failed", e, tag = TAG)
+        }
+    }
+
+    private suspend fun suspendBackgroundBloat(
+        finalWhitelist: Set<String>,
+        installedSafeToSuspend: List<String>
+    ): Set<String> {
+        val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist && isPackageInstalled(it) }
+        val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
+            .filter { it.packageName !in finalWhitelist }
+            .map { it.packageName }
+
+        val allTargets = (installedSafeToSuspend + googleTargets + userApps).distinct()
+        val preSuspended = shizukuManager.getSuspendedPackages(allTargets)
+        val targetsToFreeze = allTargets.filterNot { it in preSuspended }
+
+        FrameXLog.i("Suspending ${targetsToFreeze.size} background apps (${preSuspended.size} externally pre-suspended ignored)...", tag = TAG)
+        _state.value = GamingModeState.Enabling(0.5f, "Suspending ${targetsToFreeze.size} background apps…")
+
+        val suspendResult = if (targetsToFreeze.isNotEmpty()) shizukuManager.suspendPackages(targetsToFreeze, true) else null
+        val failedPkgs = suspendResult?.failedPackages?.toSet().orEmpty()
+
+        val successful = targetsToFreeze.filter { it !in failedPkgs }.toSet()
+        FrameXLog.i("Package suspension finished: ${successful.size} apps suspended, ${failedPkgs.size} failed", tag = TAG)
+        return successful
+    }
+
+    private suspend fun executeBackgroundProcessPurge(boostRam: Boolean) {
+        if (!boostRam) return
+        _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
+        shizukuManager.executeCommand("am kill-all")
+        FrameXLog.i("Background process purge (am kill-all) executed", tag = TAG)
+    }
+
+    private fun applyNotificationSuppression() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.isNotificationPolicyAccessGranted) {
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+            FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE", tag = TAG)
+        }
+    }
+
+    private suspend fun applyPlatformOptimizations(isVivo: Boolean, activeGamePkg: String?): Boolean {
+        if (isVivo) {
+            FrameXLog.i("Vivo/iQOO device detected: Safeguard active, skipping generic esports overrides", tag = TAG)
+            return true
+        }
+        return try {
+            val uid = activeGamePkg?.let {
+                runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+            }
+            esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
+        } catch (e: Exception) {
+            FrameXLog.w("Esports optimization failed", e, tag = TAG)
+            false
+        }
+    }
+
+    private suspend fun handleActivationFailure(
+        isAlreadyActive: Boolean,
+        installedSafeToSuspend: List<String>,
+        affectedPkgs: Set<String>
+    ) {
+        _state.value = GamingModeState.Error("Failed to capture system settings snapshot")
+        FrameXLog.e("Esports optimizations failed to apply, aborting activation", tag = TAG)
+
+        if (!isAlreadyActive) {
+            val allToUnsuspend = (installedSafeToSuspend + affectedPkgs).distinct()
+            shizukuManager.suspendPackages(allToUnsuspend, false)
+        }
+        settingsRepository.setGamingModeActive(false)
+        _isActive.value = false
+    }
+
+    private fun updateSnapshotIfNeeded(isVivo: Boolean, isAlreadyActive: Boolean, affectedPkgs: Set<String>) {
+        if (!isVivo && (!isAlreadyActive || affectedPkgs.isNotEmpty())) {
+            val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
+            currentSnapshot?.let {
+                val updatedSnapshot = it.copy(affectedPackages = affectedPkgs)
+                settingsRepository.saveGamingOptimizationSnapshot(updatedSnapshot)
+            }
+        }
+    }
+
+    private fun finalizeActivation(activeGamePkg: String?) {
+        settingsRepository.setGamingModeActive(true)
+        _isActive.value = true
+        _state.value = GamingModeState.Active
+        FrameXLog.i("Gaming Mode activation complete! Active game: $activeGamePkg", tag = TAG)
+    }
+
+    // =========================================================================
+    // Granular Deactivation Steps (IDE / GitHub Symbol Navigation)
+    // =========================================================================
+
+    private suspend fun revertPackageSuspensions(
+        targetsToUnsuspend: List<String>,
+        snapshot: GamingOptimizationSnapshot?
+    ): Boolean {
+        if (targetsToUnsuspend.isEmpty()) return true
+
+        FrameXLog.i("Attempting to unsuspend ${targetsToUnsuspend.size} FrameX-managed packages...", tag = TAG)
+        val suspendResult = shizukuManager.suspendPackages(targetsToUnsuspend, false)
+        if (suspendResult == null) {
+            FrameXLog.e("Deactivation failed: Shizuku IPC binder unavailable", tag = TAG)
+            _state.value = GamingModeState.Error("Deactivation incomplete: Shizuku service unavailable. Tap to retry.")
+            return false
+        }
+
+        val failedPkgs = suspendResult.failedPackages?.toSet().orEmpty()
+        if (failedPkgs.isNotEmpty()) {
+            FrameXLog.w("Deactivation partial failure: ${failedPkgs.size}/${targetsToUnsuspend.size} failed: $failedPkgs", tag = TAG)
+            settingsRepository.setGamingAffectedPackages(failedPkgs)
+            snapshot?.let {
+                settingsRepository.saveGamingOptimizationSnapshot(it.copy(affectedPackages = failedPkgs))
+            }
+            _state.value = GamingModeState.Error("Deactivation incomplete: ${failedPkgs.size} apps still suspended. Tap to retry.")
+            return false
+        }
+
+        FrameXLog.i("Package unsuspension completed successfully (${targetsToUnsuspend.size} apps)", tag = TAG)
+        settingsRepository.setGamingAffectedPackages(emptySet())
+        return true
+    }
+
+    private suspend fun purgeProcessesPostUnsuspension() {
+        shizukuManager.executeCommand("am kill-all")
+        FrameXLog.i("Background process purge (am kill-all) executed", tag = TAG)
+    }
+
+    private fun revertNotificationSuppression() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.isNotificationPolicyAccessGranted) {
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            FrameXLog.i("DND filter restored to INTERRUPTION_FILTER_ALL", tag = TAG)
+        }
+    }
+
+    private fun cleanupLegacyPreferences() {
+        val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove("orig_ringtone_val")
+            .remove("orig_brightness_mode")
+            .remove("orig_rotation_mode")
+            .apply()
+    }
+
+    private suspend fun revertPlatformOptimizations() {
+        if (!deviceDiagnosticManager.isVivoOrIqoo()) {
+            val revertSuccess = runCatching { esportsOptimizationEngine.revertOptimizations() }.getOrDefault(false)
+            if (revertSuccess) {
+                FrameXLog.i("Esports optimizations reverted successfully", tag = TAG)
+            } else {
+                FrameXLog.w("Esports revert incomplete during deactivation", tag = TAG)
+            }
+        } else {
+            FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports revert", tag = TAG)
+            settingsRepository.clearGamingOptimizationSnapshot()
+        }
+    }
+
+    // =========================================================================
+    // Startup & Thermal Recovery Helpers
+    // =========================================================================
 
     private fun recoverThermalOverrideIfNeeded() {
         if (deviceDiagnosticManager.isVivoOrIqoo()) return
         if (!settingsRepository.needsThermalOverrideRecovery() || thermalRecoveryJob?.isActive == true) return
 
         thermalRecoveryJob = recoveryScope.launch {
-            combine(
-                shizukuManager.isShizukuAvailable,
-                shizukuManager.hasPermission
-            ) { available, granted ->
+            combine(shizukuManager.isShizukuAvailable, shizukuManager.hasPermission) { available, granted ->
                 available && granted
             }
                 .distinctUntilChanged()
@@ -484,10 +450,7 @@ class GamingModeEngine @Inject constructor(
         if (!settingsRepository.needsLegacySettingsCleanup()) return
 
         recoveryScope.launch {
-            combine(
-                shizukuManager.isShizukuAvailable,
-                shizukuManager.hasPermission
-            ) { available, granted ->
+            combine(shizukuManager.isShizukuAvailable, shizukuManager.hasPermission) { available, granted ->
                 available && granted
             }
                 .distinctUntilChanged()
@@ -498,25 +461,102 @@ class GamingModeEngine @Inject constructor(
 
     private fun showRecoveryNotification() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val tapIntent = Intent(context, com.framex.app.MainActivity::class.java).apply {
+        val tapIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pi = android.app.PendingIntent.getActivity(
-            context, 0, tapIntent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val pi = PendingIntent.getActivity(
+            context,
+            0,
+            tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = androidx.core.app.NotificationCompat.Builder(context, GamingModeService.CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, GamingModeService.CHANNEL_ID)
             .setContentTitle("Gaming Mode Interrupted")
             .setContentText("Tap to connect Shizuku and restore your apps.")
-            .setSmallIcon(com.framex.app.R.drawable.ic_notification)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
-            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_ERROR)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
             .setAutoCancel(true)
             .setOngoing(true)
             .setContentIntent(pi)
             .build()
 
         nm.notify(RECOVERY_NOTIFICATION_ID, notification)
+    }
+
+    private fun isPackageInstalled(pkg: String): Boolean {
+        return try {
+            context.packageManager.getApplicationInfo(pkg, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun isShizukuReady(): Boolean =
+        shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value
+
+    // =========================================================================
+    // Static Declarations & Whitelists
+    // =========================================================================
+
+    companion object {
+        private const val TAG = "GamingMode"
+
+        private val _isActive = MutableStateFlow(false)
+        val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
+
+        internal const val RECOVERY_NOTIFICATION_ID = 3
+
+        val GOOGLE_SAFE_TO_SUSPEND = listOf(
+            "com.google.android.youtube",
+            "com.google.android.apps.photos",
+            "com.google.android.apps.maps",
+            "com.google.android.gm",
+            "com.google.android.apps.messaging",
+            "com.google.android.calendar",
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.apps.bard",
+            "com.google.android.apps.nbu.files",
+            "com.google.android.apps.wellbeing",
+            "com.google.android.projection.gearhead",
+            "com.google.android.apps.authenticator2",
+            "com.google.android.apps.restore",
+            "com.android.chrome"
+        )
+
+        val SYSTEM_CRITICAL = listOf(
+            "com.vivo.pem",
+            "com.vivo.abe",
+            "com.vivo.daemonService",
+            "com.vivo.sps",
+            "com.vivo.pie",
+            "com.vivo.fingerprintui",
+            "com.vivo.fingerprint",
+            "com.vivo.fingerprintvit",
+            "com.vivo.faceui",
+            "com.vivo.faceunlock",
+            "com.vivo.systemuiplugin",
+            "com.vivo.networkstate",
+            "com.vivo.connbase",
+            "com.android.systemui",
+            "com.android.phone",
+            "com.mediatek.ims"
+        )
+
+        val GAMING_DAEMONS = listOf(
+            "com.vivo.gamecube",
+            "com.vivo.gamewatch",
+            "com.vivo.game",
+            "com.iqoo.powersaving",
+            "com.microsoft.deviceintegrationservice"
+        )
+
+        val HARD_WHITELIST = setOf(
+            "moe.shizuku.privileged.api",
+            "com.adguard.android",
+            "com.adguard.vpn"
+        )
     }
 }
