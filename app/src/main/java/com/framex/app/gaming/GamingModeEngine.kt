@@ -6,8 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.media.AudioManager
-import android.provider.Settings
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -203,9 +201,6 @@ class GamingModeEngine @Inject constructor(
 
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
         com.framex.app.utils.FrameXLog.i("Starting Gaming Mode activation (activeGamePkg=$activeGamePkg)...", tag = "GamingMode")
-        
-        val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         var finalWhitelist = userWhitelist + settingsRepository.launcherGames.value
         var boostRam = true
@@ -213,41 +208,6 @@ class GamingModeEngine @Inject constructor(
         if (activeGamePkg != null) {
             finalWhitelist = finalWhitelist + activeGamePkg
             boostRam = settingsRepository.getGameConfigBoostRam(activeGamePkg)
-
-            // Save original ringtone volume
-            val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_RING)
-            prefs.edit().putInt("orig_ringtone_val", currentVol).apply()
-
-            // Change Ringtone volume
-            val targetVolPct = settingsRepository.getGameConfigRingtoneVol(activeGamePkg)
-            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)
-            val targetVol = (targetVolPct / 100f * maxVol).toInt().coerceIn(0, maxVol)
-            try {
-                audioManager.setStreamVolume(AudioManager.STREAM_RING, targetVol, 0)
-                com.framex.app.utils.FrameXLog.i("Ringtone volume set to $targetVol/$maxVol (original: $currentVol)", tag = "GamingMode")
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Failed to set ringtone volume", e, tag = "GamingMode")
-            }
-
-            // Settings Overrides (auto-brightness, auto-rotate)
-            val canWrite = Settings.System.canWrite(context)
-            if (canWrite) {
-                // Brightness override
-                if (settingsRepository.getGameConfigDisableBrightness(activeGamePkg)) {
-                    val origBrightnessMode = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
-                    prefs.edit().putInt("orig_brightness_mode", origBrightnessMode).apply()
-                    Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
-                    com.framex.app.utils.FrameXLog.i("Screen brightness mode set to MANUAL (original mode: $origBrightnessMode)", tag = "GamingMode")
-                }
-
-                // Rotation override
-                if (settingsRepository.getGameConfigDisableRotate(activeGamePkg)) {
-                    val origRotation = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1)
-                    prefs.edit().putInt("orig_rotation_mode", origRotation).apply()
-                    Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) // Lock orientation
-                    com.framex.app.utils.FrameXLog.i("Auto-rotation locked to 0 (original: $origRotation)", tag = "GamingMode")
-                }
-            }
         }
 
         val isAlreadyActive = _isActive.value
@@ -438,37 +398,13 @@ class GamingModeEngine @Inject constructor(
                 com.framex.app.utils.FrameXLog.i("DND filter restored to INTERRUPTION_FILTER_ALL", tag = "GamingMode")
             }
 
-            // Restore original settings/overrides
+            // Clean up any legacy override preferences if present
             val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-            // 1. Ringtone volume
-            val origVol = prefs.getInt("orig_ringtone_val", -1)
-            if (origVol != -1) {
-                try {
-                    audioManager.setStreamVolume(AudioManager.STREAM_RING, origVol, 0)
-                    com.framex.app.utils.FrameXLog.i("Ringtone volume restored to $origVol", tag = "GamingMode")
-                } catch (e: Exception) {
-                    com.framex.app.utils.FrameXLog.w("Failed to restore ringtone volume", e, tag = "GamingMode")
-                }
-                prefs.edit().remove("orig_ringtone_val").apply()
-            }
-
-            // 2. Settings (brightness, rotation)
-            if (Settings.System.canWrite(context)) {
-                val origMode = prefs.getInt("orig_brightness_mode", -1)
-                if (origMode != -1) {
-                    Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, origMode)
-                    prefs.edit().remove("orig_brightness_mode").apply()
-                    com.framex.app.utils.FrameXLog.i("Screen brightness mode restored to $origMode", tag = "GamingMode")
-                }
-                val origRotate = prefs.getInt("orig_rotation_mode", -1)
-                if (origRotate != -1) {
-                    Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, origRotate)
-                    prefs.edit().remove("orig_rotation_mode").apply()
-                    com.framex.app.utils.FrameXLog.i("Auto-rotation mode restored to $origRotate", tag = "GamingMode")
-                }
-            }
+            prefs.edit()
+                .remove("orig_ringtone_val")
+                .remove("orig_brightness_mode")
+                .remove("orig_rotation_mode")
+                .apply()
 
             if (!deviceDiagnosticManager.isVivoOrIqoo()) {
                 val revertSuccess = try {
@@ -485,6 +421,7 @@ class GamingModeEngine @Inject constructor(
                 }
             } else {
                 com.framex.app.utils.FrameXLog.i("Vivo/iQOO device detected: Skipping generic esports revert", tag = "GamingMode")
+                settingsRepository.clearGamingOptimizationSnapshot()
             }
 
             settingsRepository.setGamingModeActive(false)
@@ -526,6 +463,7 @@ class GamingModeEngine @Inject constructor(
     }
 
     private fun recoverThermalOverrideIfNeeded() {
+        if (deviceDiagnosticManager.isVivoOrIqoo()) return
         if (!settingsRepository.needsThermalOverrideRecovery() || thermalRecoveryJob?.isActive == true) return
 
         thermalRecoveryJob = recoveryScope.launch {
@@ -542,6 +480,7 @@ class GamingModeEngine @Inject constructor(
     }
 
     private fun recoverLegacySettingsIfNeeded() {
+        if (deviceDiagnosticManager.isVivoOrIqoo()) return
         if (!settingsRepository.needsLegacySettingsCleanup()) return
 
         recoveryScope.launch {

@@ -318,15 +318,8 @@ fun PerformanceScreen(
             GameConfigModal(
                 pkg = targetPkg,
                 userApps = userApps,
-                canWriteSettings = hasWriteSettingsAccess,
                 getGameConfigBoostRam = { p -> viewModel.getGameConfigBoostRam(p) },
                 setGameConfigBoostRam = { p, v -> viewModel.setGameConfigBoostRam(p, v) },
-                getGameConfigDisableBrightness = { p -> viewModel.getGameConfigDisableBrightness(p) },
-                setGameConfigDisableBrightness = { p, v -> viewModel.setGameConfigDisableBrightness(p, v) },
-                getGameConfigDisableRotate = { p -> viewModel.getGameConfigDisableRotate(p) },
-                setGameConfigDisableRotate = { p, v -> viewModel.setGameConfigDisableRotate(p, v) },
-                getGameConfigRingtoneVol = { p -> viewModel.getGameConfigRingtoneVol(p) },
-                setGameConfigRingtoneVol = { p, v -> viewModel.setGameConfigRingtoneVol(p, v) },
                 onBoostClicked = { tPkg ->
                     configGamePkg = null
                     activeDeployingGamePkg = tPkg
