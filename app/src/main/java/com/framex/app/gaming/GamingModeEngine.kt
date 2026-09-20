@@ -278,23 +278,11 @@ class GamingModeEngine @Inject constructor(
     }
 
     private suspend fun executeRamCachePurge() {
-        try {
-            ledgerExecutor.executeBatch(
-                Stage.MEMORY,
-                listOf(CommandSpec("pm trim-caches 4G", OpPriority.PRIMARY))
-            )
-            FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) executed", tag = TAG)
-        } catch (e: Exception) {
-            FrameXLog.w("Deep cache purge failed", e, tag = TAG)
-            ledgerExecutor.recordManual(
-                stage = Stage.MEMORY,
-                key = "pm trim-caches 4G",
-                displayValue = "Failed",
-                status = OpStatus.FAILED,
-                priority = OpPriority.PRIMARY,
-                rawCommand = "pm trim-caches 4G"
-            )
-        }
+        ledgerExecutor.executeBatch(
+            Stage.MEMORY,
+            listOf(CommandSpec("pm trim-caches 4G", OpPriority.PRIMARY))
+        )
+        FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) executed", tag = TAG)
     }
 
     private suspend fun restartNotificationListener() {
@@ -343,25 +331,44 @@ class GamingModeEngine @Inject constructor(
         val successful = targetsToFreeze.filter { it !in failedPkgs }.toSet()
         FrameXLog.i("Package suspension finished: ${successful.size} apps suspended, ${failedPkgs.size} failed", tag = TAG)
 
-        val status = when {
-            targetsToFreeze.isEmpty() -> OpStatus.APPLIED
-            successful.isEmpty() -> OpStatus.FAILED
-            failedPkgs.isNotEmpty() -> OpStatus.FAILED
-            else -> OpStatus.APPLIED
-        }
-        val displayVal = if (targetsToFreeze.isEmpty()) {
-            "0 suspended"
+        if (targetsToFreeze.isEmpty()) {
+            ledgerExecutor.recordManual(
+                stage = Stage.APPS,
+                key = "suspended_apps",
+                displayValue = "0 apps",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "No background apps to suspend"
+            )
+        } else if (successful.isEmpty()) {
+            ledgerExecutor.recordManual(
+                stage = Stage.APPS,
+                key = "suspended_apps",
+                displayValue = "0 apps (${failedPkgs.size} failed)",
+                status = OpStatus.FAILED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "Failed to suspend: ${failedPkgs.joinToString(", ")}"
+            )
         } else {
-            "${successful.size} suspended" + if (failedPkgs.isNotEmpty()) " (${failedPkgs.size} failed)" else ""
+            ledgerExecutor.recordManual(
+                stage = Stage.APPS,
+                key = "suspended_apps",
+                displayValue = "${successful.size} apps",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "pm suspend --user 0 (${successful.size} packages)"
+            )
+            if (failedPkgs.isNotEmpty()) {
+                ledgerExecutor.recordManual(
+                    stage = Stage.APPS,
+                    key = "suspension_failures",
+                    displayValue = "${failedPkgs.size} failed",
+                    status = OpStatus.FAILED,
+                    priority = OpPriority.DETAIL,
+                    rawCommand = "Failed to suspend: ${failedPkgs.joinToString(", ")}"
+                )
+            }
         }
-        ledgerExecutor.recordManual(
-            stage = Stage.APPS,
-            key = "suspended_apps",
-            displayValue = displayVal,
-            status = status,
-            priority = OpPriority.PRIMARY,
-            rawCommand = "pm suspend --user 0 (${successful.size} packages)"
-        )
 
         return successful
     }
@@ -376,19 +383,41 @@ class GamingModeEngine @Inject constructor(
         FrameXLog.i("Background process purge (am kill-all) executed", tag = TAG)
     }
 
-    private fun applyNotificationSuppression() {
+    private suspend fun applyNotificationSuppression() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.isNotificationPolicyAccessGranted) {
             nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-            FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE", tag = TAG)
-            ledgerExecutor.recordManual(
-                stage = Stage.DND,
-                key = "notification_filter",
-                displayValue = "Total Silence",
-                status = OpStatus.APPLIED,
-                priority = OpPriority.PRIMARY,
-                rawCommand = "NotificationManager.setInterruptionFilter(INTERRUPTION_FILTER_NONE)"
-            )
+            FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE, verifying application...", tag = TAG)
+
+            var filterApplied = false
+            for (attempt in 1..5) {
+                if (nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+                    filterApplied = true
+                    break
+                }
+                delay(100)
+            }
+
+            if (filterApplied) {
+                ledgerExecutor.recordManual(
+                    stage = Stage.DND,
+                    key = "notification_filter",
+                    displayValue = "Total Silence",
+                    status = OpStatus.APPLIED,
+                    priority = OpPriority.PRIMARY,
+                    rawCommand = "NotificationManager.setInterruptionFilter(INTERRUPTION_FILTER_NONE)"
+                )
+            } else {
+                FrameXLog.w("DND filter did not settle to INTERRUPTION_FILTER_NONE after 500ms (current: ${nm.currentInterruptionFilter})", tag = TAG)
+                ledgerExecutor.recordManual(
+                    stage = Stage.DND,
+                    key = "notification_filter",
+                    displayValue = "Filter Failed (${nm.currentInterruptionFilter})",
+                    status = OpStatus.FAILED,
+                    priority = OpPriority.PRIMARY,
+                    rawCommand = "currentInterruptionFilter != INTERRUPTION_FILTER_NONE"
+                )
+            }
         } else {
             FrameXLog.w("DND policy access not granted", tag = TAG)
             ledgerExecutor.recordManual(

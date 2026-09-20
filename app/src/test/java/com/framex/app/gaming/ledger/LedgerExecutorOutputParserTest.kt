@@ -63,4 +63,46 @@ class LedgerExecutorOutputParserTest {
         assertFalse(results[0].hasErrorIndicator)
         assertEquals("debug trace: thread #0:0 active", results[0].outputChunk)
     }
+
+    @Test
+    fun parseBatchOutput_fakeMarkerInStdout_selectsLastMarker() {
+        // Command stdout echoes a fake marker "__FX#0:0" before printing more logs and the real marker
+        val output = "echoing fake __FX#0:0 inside output\nsecond line\n__FX#0:0"
+        val results = LedgerExecutor.parseBatchOutput(output, 1)
+
+        assertEquals(1, results.size)
+        assertEquals(0, results[0].exitCode)
+        assertFalse(results[0].hasErrorIndicator)
+        assertEquals("echoing fake __FX#0:0 inside output\nsecond line", results[0].outputChunk)
+    }
+
+    @Test
+    fun parseBatchOutput_exitCodeZeroWithSecurityException_detectedAsError() {
+        val output = "java.lang.SecurityException: Permission denial: writing to settings requires WRITE_SECURE_SETTINGS\n__FX#0:0"
+        val results = LedgerExecutor.parseBatchOutput(output, 1)
+
+        assertEquals(1, results.size)
+        assertEquals(0, results[0].exitCode)
+        assertTrue(results[0].hasErrorIndicator)
+    }
+
+    @Test
+    fun parseBatchOutput_exitCodeZeroWithErrorAccessingProvider_detectedAsError() {
+        val output = "Error while accessing provider:settings\n__FX#0:0"
+        val results = LedgerExecutor.parseBatchOutput(output, 1)
+
+        assertEquals(1, results.size)
+        assertEquals(0, results[0].exitCode)
+        assertTrue(results[0].hasErrorIndicator)
+    }
+
+    @Test
+    fun parseBatchOutput_benignText_notDetectedAsError() {
+        val output = "Broadcast completed successfully: result=0\n__FX#0:0"
+        val results = LedgerExecutor.parseBatchOutput(output, 1)
+
+        assertEquals(1, results.size)
+        assertEquals(0, results[0].exitCode)
+        assertFalse(results[0].hasErrorIndicator)
+    }
 }

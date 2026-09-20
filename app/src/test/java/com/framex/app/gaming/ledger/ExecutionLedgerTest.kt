@@ -144,4 +144,31 @@ class ExecutionLedgerTest {
         assertEquals(0, gyro.appliedCount)
         assertEquals(1, gyro.skippedCount)
     }
+
+    @Test
+    fun upsert_distinguishesKeysWithDifferentNamespacesInSameStage() {
+        val ledger = ExecutionLedger()
+        ledger.upsert(AppliedOp(Stage.POWER, "system:power_save_type", "0", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.POWER, "secure:power_save_type", "0", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+
+        // Different namespaces must remain distinct rows in the same stage
+        assertEquals(2, ledger.ops.value.size)
+        val keys = ledger.ops.value.map { it.key }
+        assert(keys.contains("system:power_save_type"))
+        assert(keys.contains("secure:power_save_type"))
+    }
+
+    @Test
+    fun getSummary_suspensionSplit_computesPartialStageStatus() {
+        val ledger = ExecutionLedger()
+        ledger.upsert(AppliedOp(Stage.APPS, "suspended_apps", "33 apps", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.APPS, "suspension_failures", "1 failed", "", OpStatus.FAILED, OpPriority.DETAIL))
+
+        val summary = ledger.getSummary()
+        val apps = summary.stages.first { it.stage == Stage.APPS }
+        assertEquals(StageStatus.PARTIAL, apps.status)
+        assertEquals(2, apps.totalCount)
+        assertEquals(1, apps.appliedCount)
+        assertEquals(1, apps.failedCount)
+    }
 }

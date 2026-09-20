@@ -287,7 +287,6 @@ fun HeroGamingCard(
 
 @Composable
 private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
-    val isVivo = session?.isVivoDevice == true
     val accentColor = Color(0xFF10B981)
 
     Card(
@@ -312,11 +311,29 @@ private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = session?.title ?: if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
+                    text = session?.title ?: "Gaming Mode Active",
                     color = accentColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
+            }
+            session?.summary?.let { summary ->
+                if (summary.totalOps > 0) {
+                    val statsText = buildString {
+                        append("Applied ${summary.totalApplied}/${summary.totalOps}")
+                        if (summary.totalFailed > 0) {
+                            append(" · ${summary.totalFailed} failed")
+                        }
+                        if (summary.totalSkipped > 0) {
+                            append(" · ${summary.totalSkipped} skipped")
+                        }
+                    }
+                    Text(
+                        text = statsText,
+                        color = Color.Gray,
+                        fontSize = 11.sp
+                    )
+                }
             }
             HorizontalDivider(color = accentColor.copy(0.15f))
 

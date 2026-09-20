@@ -92,7 +92,7 @@ class PerformanceViewModel @Inject constructor(
         } else {
             val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
             ActiveGamingSession(
-                title = if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
+                title = "Gaming Mode Active",
                 isVivoDevice = isVivo,
                 activeGamePackage = activePkg,
                 suspendedAppsCount = suspendedCount,

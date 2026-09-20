@@ -162,30 +162,42 @@ class LedgerExecutor @Inject constructor(
         private const val TAG = "LedgerExecutor"
         private const val MARKER_PREFIX = "__FX#"
         private val MARKER_REGEX = Regex("""__FX#(\d+):(\d+)""")
+        private val FATAL_ERROR_REGEX = Regex("""(?i)(Error while accessing provider|java\.lang\.\w*Exception|SecurityException|\[ERROR\])""")
 
         /**
          * Pure function for parsing `__FX#N:$?` output chunks.
+         * Indexes by captured N and selects the last match for each N to defend against
+         * fake markers printed in stdout, computing chunks from previous marker end.
          */
         fun parseBatchOutput(output: String, expectedCount: Int): List<SingleCommandResult> {
-            val matches = MARKER_REGEX.findAll(output).toList()
-            val results = mutableListOf<SingleCommandResult>()
-
-            var lastEnd = 0
-            matches.forEach { match ->
-                val chunk = output.substring(lastEnd, match.range.first)
-                lastEnd = match.range.last + 1
-
-                val exitCode = match.groupValues[2].toIntOrNull() ?: -1
-                val hasErrorIndicator = chunk.contains("[ERROR]") ||
-                    chunk.contains("Error:") ||
-                    chunk.contains("Exception")
-
-                results.add(SingleCommandResult(exitCode, hasErrorIndicator, chunk.trim()))
+            val allMatches = MARKER_REGEX.findAll(output).toList()
+            val lastMatchByIndex = mutableMapOf<Int, MatchResult>()
+            for (match in allMatches) {
+                val n = match.groupValues[1].toIntOrNull() ?: continue
+                if (n in 0 until expectedCount) {
+                    lastMatchByIndex[n] = match
+                }
             }
 
-            // If markers were missing due to fatal termination or shell cut off
-            while (results.size < expectedCount) {
-                results.add(SingleCommandResult(exitCode = -1, hasErrorIndicator = true, outputChunk = "Missing marker"))
+            val results = mutableListOf<SingleCommandResult>()
+            var lastEnd = 0
+
+            for (i in 0 until expectedCount) {
+                val match = lastMatchByIndex[i]
+                if (match != null && match.range.first >= lastEnd) {
+                    val chunk = output.substring(lastEnd, match.range.first)
+                    lastEnd = match.range.last + 1
+
+                    val exitCode = match.groupValues[2].toIntOrNull() ?: -1
+                    val hasErrorIndicator = FATAL_ERROR_REGEX.containsMatchIn(chunk)
+
+                    results.add(SingleCommandResult(exitCode, hasErrorIndicator, chunk.trim()))
+                } else if (match != null) {
+                    val exitCode = match.groupValues[2].toIntOrNull() ?: -1
+                    results.add(SingleCommandResult(exitCode, hasErrorIndicator = exitCode != 0, outputChunk = ""))
+                } else {
+                    results.add(SingleCommandResult(exitCode = -1, hasErrorIndicator = true, outputChunk = "Missing marker"))
+                }
             }
 
             return results
