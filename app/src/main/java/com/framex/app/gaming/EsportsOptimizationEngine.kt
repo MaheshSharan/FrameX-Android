@@ -255,29 +255,65 @@ class EsportsOptimizationEngine @Inject constructor(
 
         FrameXLog.i("User-triggered device defaults reset", tag = TAG)
 
-        val resetCommands = listOf(
-            "settings delete system min_refresh_rate",
-            "settings delete system peak_refresh_rate",
-            "settings put secure user_preferred_display_mode_id -1",
-            "settings delete system touch_response_speed",
-            "cmd power set-fixed-performance-mode-enabled false",
-            "cmd thermalservice reset",
-            "cmd deviceidle unforce"
-        )
+        val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
+        val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
 
-        var successCount = 0
-        for (cmd in resetCommands) {
-            val result = shizukuManager.executeCommandWithResult(cmd)
-            if (result != null && result.exitCode == 0) {
-                successCount++
+        // 1. Unsuspend any packages recorded in snapshot or settings
+        val packagesToUnsuspend = snapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
+        if (packagesToUnsuspend.isNotEmpty()) {
+            FrameXLog.i("Resetting suspended packages: ${packagesToUnsuspend.size} apps", tag = TAG)
+            shizukuManager.suspendPackages(packagesToUnsuspend.toList(), false)
+            settingsRepository.setGamingAffectedPackages(emptySet())
+        }
+
+        // 2. On Vivo/iQOO devices, do NOT execute generic display/power/thermal reset commands
+        if (isVivo) {
+            FrameXLog.i("Vivo/iQOO device detected: Skipping generic system reset commands", tag = TAG)
+            settingsRepository.markLegacySettingsCleanupComplete()
+            settingsRepository.clearGamingOptimizationSnapshot()
+            return true
+        }
+
+        // 3. For non-Vivo devices: restore only what was actually snapshotted if available
+        var success = true
+        if (snapshot != null) {
+            snapshot.minRefreshRate?.let { restoreSetting("system", "min_refresh_rate", it) }
+            snapshot.peakRefreshRate?.let { restoreSetting("system", "peak_refresh_rate", it) }
+            snapshot.touchResponseSpeed?.let { restoreSetting("system", "touch_response_speed", it) }
+            snapshot.userPreferredDisplayModeId?.let { setting ->
+                if (setting.existed && setting.value.isNotBlank()) {
+                    shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id ${setting.value}")
+                } else {
+                    shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id -1")
+                }
+            }
+            shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
+            shizukuManager.executeCommand("cmd thermalservice reset")
+            shizukuManager.executeCommand("cmd deviceidle unforce")
+        } else {
+            // Fallback for non-Vivo devices if forced reset without snapshot
+            val resetCommands = listOf(
+                "settings delete system min_refresh_rate",
+                "settings delete system peak_refresh_rate",
+                "settings put secure user_preferred_display_mode_id -1",
+                "settings delete system touch_response_speed",
+                "cmd power set-fixed-performance-mode-enabled false",
+                "cmd thermalservice reset",
+                "cmd deviceidle unforce"
+            )
+            for (cmd in resetCommands) {
+                val result = shizukuManager.executeCommandWithResult(cmd)
+                if (result == null || result.exitCode != 0) {
+                    success = false
+                }
             }
         }
 
         settingsRepository.markLegacySettingsCleanupComplete()
         settingsRepository.clearGamingOptimizationSnapshot()
 
-        FrameXLog.i("Device defaults reset: $successCount/${resetCommands.size} commands succeeded", tag = TAG)
-        return successCount == resetCommands.size
+        FrameXLog.i("Device defaults reset complete (success=$success)", tag = TAG)
+        return success
     }
 
     fun calculateFramePacingDeltaMs(actualFps: Int): Float {
