@@ -14,6 +14,12 @@ import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import com.framex.app.utils.FrameXLog
+import com.framex.app.gaming.ledger.CommandSpec
+import com.framex.app.gaming.ledger.ExecutionLedger
+import com.framex.app.gaming.ledger.LedgerExecutor
+import com.framex.app.gaming.ledger.OpPriority
+import com.framex.app.gaming.ledger.OpStatus
+import com.framex.app.gaming.ledger.Stage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +67,9 @@ class GamingModeEngine @Inject constructor(
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val oemPackageResolver: OemPackageResolver,
-    private val deviceDiagnosticManager: DeviceDiagnosticManager
+    private val deviceDiagnosticManager: DeviceDiagnosticManager,
+    private val executionLedger: ExecutionLedger,
+    private val ledgerExecutor: LedgerExecutor
 ) {
 
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -141,6 +149,9 @@ class GamingModeEngine @Inject constructor(
         val shouldBoostRam = activeGamePkg?.let { settingsRepository.getGameConfigBoostRam(it) } ?: true
         val resolvedWhitelist = buildFinalWhitelist(userWhitelist, activeGamePkg)
 
+        // Clear previous session execution records on new activation
+        executionLedger.clear()
+
         if (shouldBoostRam) {
             executeRamCachePurge()
         }
@@ -156,6 +167,14 @@ class GamingModeEngine @Inject constructor(
             if (shouldBoostRam && !isAlreadyActive) {
                 val suspended = suspendBackgroundBloat(resolvedWhitelist, installedSafeToSuspend)
                 newlySuspendedPkgs.addAll(suspended)
+            } else if (!shouldBoostRam) {
+                ledgerExecutor.recordManual(
+                    stage = Stage.APPS,
+                    key = "suspended_apps",
+                    displayValue = "Skipped (RAM Boost Disabled)",
+                    status = OpStatus.SKIPPED,
+                    priority = OpPriority.PRIMARY
+                )
             }
 
             if (!isAlreadyActive) {
@@ -208,6 +227,7 @@ class GamingModeEngine @Inject constructor(
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
             _state.value = GamingModeState.Idle
+            executionLedger.clear()
             FrameXLog.i("Gaming Mode deactivation complete!", tag = TAG)
 
         } catch (e: Exception) {
@@ -259,10 +279,21 @@ class GamingModeEngine @Inject constructor(
 
     private suspend fun executeRamCachePurge() {
         try {
-            shizukuManager.executeCommand("pm trim-caches 4G")
-            FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) completed", tag = TAG)
+            ledgerExecutor.executeBatch(
+                Stage.MEMORY,
+                listOf(CommandSpec("pm trim-caches 4G", OpPriority.PRIMARY))
+            )
+            FrameXLog.i("Deep RAM cache purge (pm trim-caches 4G) executed", tag = TAG)
         } catch (e: Exception) {
             FrameXLog.w("Deep cache purge failed", e, tag = TAG)
+            ledgerExecutor.recordManual(
+                stage = Stage.MEMORY,
+                key = "pm trim-caches 4G",
+                displayValue = "Failed",
+                status = OpStatus.FAILED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "pm trim-caches 4G"
+            )
         }
     }
 
@@ -311,13 +342,37 @@ class GamingModeEngine @Inject constructor(
 
         val successful = targetsToFreeze.filter { it !in failedPkgs }.toSet()
         FrameXLog.i("Package suspension finished: ${successful.size} apps suspended, ${failedPkgs.size} failed", tag = TAG)
+
+        val status = when {
+            targetsToFreeze.isEmpty() -> OpStatus.APPLIED
+            successful.isEmpty() -> OpStatus.FAILED
+            failedPkgs.isNotEmpty() -> OpStatus.FAILED
+            else -> OpStatus.APPLIED
+        }
+        val displayVal = if (targetsToFreeze.isEmpty()) {
+            "0 suspended"
+        } else {
+            "${successful.size} suspended" + if (failedPkgs.isNotEmpty()) " (${failedPkgs.size} failed)" else ""
+        }
+        ledgerExecutor.recordManual(
+            stage = Stage.APPS,
+            key = "suspended_apps",
+            displayValue = displayVal,
+            status = status,
+            priority = OpPriority.PRIMARY,
+            rawCommand = "pm suspend --user 0 (${successful.size} packages)"
+        )
+
         return successful
     }
 
     private suspend fun executeBackgroundProcessPurge(boostRam: Boolean) {
         if (!boostRam) return
         _state.value = GamingModeState.Enabling(0.96f, "Purging background cache…")
-        shizukuManager.executeCommand("am kill-all")
+        ledgerExecutor.executeBatch(
+            Stage.MEMORY,
+            listOf(CommandSpec("am kill-all", OpPriority.DETAIL))
+        )
         FrameXLog.i("Background process purge (am kill-all) executed", tag = TAG)
     }
 
@@ -326,6 +381,24 @@ class GamingModeEngine @Inject constructor(
         if (nm.isNotificationPolicyAccessGranted) {
             nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
             FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE", tag = TAG)
+            ledgerExecutor.recordManual(
+                stage = Stage.DND,
+                key = "notification_filter",
+                displayValue = "Total Silence",
+                status = OpStatus.APPLIED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "NotificationManager.setInterruptionFilter(INTERRUPTION_FILTER_NONE)"
+            )
+        } else {
+            FrameXLog.w("DND policy access not granted", tag = TAG)
+            ledgerExecutor.recordManual(
+                stage = Stage.DND,
+                key = "notification_filter",
+                displayValue = "Access Missing",
+                status = OpStatus.SKIPPED,
+                priority = OpPriority.PRIMARY,
+                rawCommand = "isNotificationPolicyAccessGranted == false"
+            )
         }
     }
 

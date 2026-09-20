@@ -1,6 +1,10 @@
 package com.framex.app.gaming
 
 import com.framex.app.device.DeviceDiagnosticManager
+import com.framex.app.gaming.ledger.CommandSpec
+import com.framex.app.gaming.ledger.LedgerExecutor
+import com.framex.app.gaming.ledger.OpPriority
+import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
 import com.framex.app.utils.FrameXLog
@@ -12,7 +16,8 @@ import kotlin.math.abs
 class EsportsOptimizationEngine @Inject constructor(
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
-    private val deviceDiagnosticManager: DeviceDiagnosticManager
+    private val deviceDiagnosticManager: DeviceDiagnosticManager,
+    private val ledgerExecutor: LedgerExecutor
 ) {
 
     // =========================================================================
@@ -149,34 +154,52 @@ class EsportsOptimizationEngine @Inject constructor(
     // =========================================================================
 
     private suspend fun applyMemoryAndThermalOptimizations() {
-        shizukuManager.executeCommand("pm trim-caches 4G")
-        shizukuManager.executeCommand("am compact background")
-        runCatching { shizukuManager.executeCommand("cmd pinner repin /system/framework/framework.jar") }
-        shizukuManager.executeCommand("cmd thermalservice override-status 0")
+        val memSpecs = listOf(
+            CommandSpec("pm trim-caches 4G", OpPriority.PRIMARY),
+            CommandSpec("am compact background", OpPriority.DETAIL),
+            CommandSpec("cmd pinner repin /system/framework/framework.jar", OpPriority.DETAIL)
+        )
+        ledgerExecutor.executeBatch(Stage.MEMORY, memSpecs)
+
+        val powerSpecs = listOf(
+            CommandSpec("cmd thermalservice override-status 0", OpPriority.PRIMARY)
+        )
+        ledgerExecutor.executeBatch(Stage.POWER, powerSpecs)
         settingsRepository.setNeedsThermalOverrideActive(true)
         FrameXLog.i("RAM cache pre-trimming, ART heap compaction & thermal throttle override executed", tag = TAG)
     }
 
     private suspend fun applyProcessPriorities(packageName: String?) {
-        if (!settingsRepository.cpuPriorityLock.value || packageName.isNullOrBlank()) return
-        shizukuManager.executeCommand("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
-        shizukuManager.executeCommand("am set-standby-bucket --user 0 $packageName active")
-        FrameXLog.i("CPU Priority & Standby Bucket active set for $packageName", tag = TAG)
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        if (!settingsRepository.cpuPriorityLock.value || safePkg == null) return
+        val specs = listOf(
+            CommandSpec("cmd activity set-bg-restriction-level --user 0 $safePkg unrestricted", OpPriority.PRIMARY),
+            CommandSpec("am set-standby-bucket --user 0 $safePkg active", OpPriority.DETAIL)
+        )
+        ledgerExecutor.executeBatch(Stage.POWER, specs)
+        FrameXLog.i("CPU Priority & Standby Bucket active set for $safePkg", tag = TAG)
     }
 
     private suspend fun applyNetworkAndDozeExemptions(packageName: String?, uid: Int?) {
         if (!settingsRepository.networkFirewall.value || uid == null) return
-        shizukuManager.executeCommand("cmd netpolicy add restrict-background-whitelist $uid")
-        if (!packageName.isNullOrBlank()) {
-            shizukuManager.executeCommand("cmd deviceidle whitelist +$packageName")
+        val specs = mutableListOf(
+            CommandSpec("cmd netpolicy add restrict-background-whitelist $uid", OpPriority.DETAIL)
+        )
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        if (safePkg != null) {
+            specs.add(CommandSpec("cmd deviceidle whitelist +$safePkg", OpPriority.DETAIL))
         }
-        shizukuManager.executeCommand("cmd deviceidle force-idle")
-        FrameXLog.i("Network Firewall & Deep Doze exemption applied (uid=$uid, pkg=$packageName)", tag = TAG)
+        specs.add(CommandSpec("cmd deviceidle force-idle", OpPriority.DETAIL))
+        ledgerExecutor.executeBatch(Stage.POWER, specs)
+        FrameXLog.i("Network Firewall & Deep Doze exemption applied (uid=$uid, pkg=$safePkg)", tag = TAG)
     }
 
     private suspend fun applyPerformanceGovernor() {
         if (settingsRepository.fixedPerformanceMode.value) {
-            shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled true")
+            val specs = listOf(
+                CommandSpec("cmd power set-fixed-performance-mode-enabled true", OpPriority.PRIMARY)
+            )
+            ledgerExecutor.executeBatch(Stage.POWER, specs)
             FrameXLog.i("Fixed performance mode enabled", tag = TAG)
         }
     }
@@ -184,15 +207,21 @@ class EsportsOptimizationEngine @Inject constructor(
     private suspend fun applyDisplayRefreshRate() {
         val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
         if (settingsRepository.refreshRateLock.value) {
-            shizukuManager.executeCommand("settings put system peak_refresh_rate $maxHz")
-            shizukuManager.executeCommand("settings put system min_refresh_rate $maxHz")
+            val specs = listOf(
+                CommandSpec("settings put system peak_refresh_rate $maxHz", OpPriority.PRIMARY),
+                CommandSpec("settings put system min_refresh_rate $maxHz", OpPriority.DETAIL)
+            )
+            ledgerExecutor.executeBatch(Stage.DISPLAY, specs)
             FrameXLog.i("Refresh rate set to peak/min $maxHz Hz", tag = TAG)
         }
     }
 
     private suspend fun applyTouchResponseLatency() {
         if (settingsRepository.touchBoost.value) {
-            shizukuManager.executeCommand("settings put system touch_response_speed 2")
+            val specs = listOf(
+                CommandSpec("settings put system touch_response_speed 2", OpPriority.PRIMARY)
+            )
+            ledgerExecutor.executeBatch(Stage.TOUCH, specs)
             FrameXLog.i("Touch response latency boost applied", tag = TAG)
         }
     }

@@ -28,23 +28,22 @@ import javax.inject.Singleton
 class VivoGamingOptimizer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager,
-    private val settingsRepository: com.framex.app.repository.SettingsRepository
+    private val settingsRepository: com.framex.app.repository.SettingsRepository,
+    private val ledgerExecutor: com.framex.app.gaming.ledger.LedgerExecutor,
+    private val auditLogRepository: SystemAuditLogRepository
 ) {
 
     private var activeGamePackage: String? = null
     private var activeGamePid: Int = 0
 
-    private val _auditLogs = MutableStateFlow<List<SystemAuditLog>>(emptyList())
-    val auditLogs: StateFlow<List<SystemAuditLog>> = _auditLogs.asStateFlow()
+    val auditLogs: StateFlow<List<SystemAuditLog>> = auditLogRepository.logs
 
     private fun addLog(action: String, details: String, status: LogStatus) {
-        if (!settingsRepository.auditLoggingEnabled.value) return
-        val entry = SystemAuditLog(action = action, details = details, status = status)
-        _auditLogs.value = (listOf(entry) + _auditLogs.value).take(100)
+        auditLogRepository.addLog(action, details, status)
     }
 
     fun clearAuditLogs() {
-        _auditLogs.value = emptyList()
+        auditLogRepository.clear()
     }
 
     // Captured baseline snapshot to ensure safe rollback
@@ -131,72 +130,90 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     private suspend fun executePowerAndThermalPayload() {
-        val payload = listOf(
-            "content insert --uri content://settings/secure --bind name:s:system_property_power_mode_type --bind value:s:5",
-            "content insert --uri content://settings/global --bind name:s:bbb_perf_mode --bind value:s:1",
-            "content insert --uri content://settings/system --bind name:s:power_save_type --bind value:s:5",
-            "content insert --uri content://settings/secure --bind name:s:power_save_type --bind value:s:5",
-            "content insert --uri content://settings/system --bind name:s:power_save_auto_exit --bind value:s:0",
-            "content insert --uri content://settings/system --bind name:s:power_sleep_mode_enabled --bind value:s:0",
-            "content insert --uri content://settings/global --bind name:s:low_power_mode_opened --bind value:s:0"
-        ).joinToString("; ")
-        shizukuManager.executeCommand(payload)
+        val specs = listOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:system_property_power_mode_type --bind value:s:5", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:bbb_perf_mode --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:power_save_type --bind value:s:5", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:power_save_type --bind value:s:5", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:power_save_auto_exit --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:power_sleep_mode_enabled --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:low_power_mode_opened --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL)
+        )
+        ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.POWER, specs)
     }
 
     private suspend fun executeDisplayAndGameSpacePayload() {
-        val payload = listOf(
-            "content insert --uri content://settings/system --bind name:s:com.vivo.vivoconsole.icon.status --bind value:s:2",
-            "content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:0",
-            "content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0"
-        ).joinToString("; ")
-        shizukuManager.executeCommand(payload)
+        val specs = listOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:com.vivo.vivoconsole.icon.status --bind value:s:2", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.PRIMARY)
+        )
+        ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.DISPLAY, specs)
     }
 
     private suspend fun executeLiveHandshakePayload(packageName: String?, pid: Int) {
-        val targetPkg = packageName ?: "com.vivo.game"
-        val payload = listOf(
-            "content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_120\"",
-            "content insert --uri content://settings/system --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"",
-            "content insert --uri content://settings/secure --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\""
-        ).joinToString("; ")
-        shizukuManager.executeCommand(payload)
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        val targetPkg = safePkg ?: "com.vivo.game"
+        val specs = listOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_120\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.DETAIL)
+        )
+        if (safePkg != null && pid > 0) {
+            ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.HANDSHAKE, specs)
+        } else {
+            ledgerExecutor.recordSkipped(com.framex.app.gaming.ledger.Stage.HANDSHAKE, specs)
+        }
     }
 
     private suspend fun executeHardwareGyroPayload(packageName: String?) {
-        val targetPkg = packageName ?: return
-        val payload = listOf(
-            "content insert --uri content://settings/system --bind name:s:vivo_game_gyro_promotion --bind value:s:\"1@$targetPkg\"",
-            "content insert --uri content://settings/system --bind name:s:vivo_game_gyro_dealy_promotion --bind value:s:\"$targetPkg#2\"",
-            "content insert --uri content://settings/system --bind name:s:vivo_game_gyro_anti_shake_promotion --bind value:s:\"$targetPkg#1\"",
-            "content insert --uri content://settings/system --bind name:s:vivo_game_gyro_data_prediction --bind value:s:1"
-        ).joinToString("; ")
-        shizukuManager.executeCommand(payload)
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        val targetPkg = safePkg ?: "com.vivo.game"
+        val specs = listOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_gyro_promotion --bind value:s:\"1@$targetPkg\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_gyro_dealy_promotion --bind value:s:\"$targetPkg#2\"", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_gyro_anti_shake_promotion --bind value:s:\"$targetPkg#1\"", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_gyro_data_prediction --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.DETAIL)
+        )
+        if (safePkg != null) {
+            ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.GYRO, specs)
+        } else {
+            ledgerExecutor.recordSkipped(com.framex.app.gaming.ledger.Stage.GYRO, specs)
+        }
     }
 
     private suspend fun executeTouchDigitizerPayload(packageName: String?) {
-        val commands = mutableListOf(
-            "content insert --uri content://settings/system --bind name:s:vts_game_para_adjust --bind value:s:\"1,5,5,5\"",
-            "content insert --uri content://settings/system --bind name:s:touch_smooth --bind value:s:1",
-            "content insert --uri content://settings/global --bind name:s:game_memc_request_touch_rate --bind value:s:180"
+        val specs = mutableListOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vts_game_para_adjust --bind value:s:\"1,5,5,5\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:touch_smooth --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:game_memc_request_touch_rate --bind value:s:180", com.framex.app.gaming.ledger.OpPriority.PRIMARY)
         )
-        if (packageName != null) {
-            commands.add("content insert --uri content://settings/system --bind name:s:vivo_game_click_delay_promotion --bind value:s:\"$packageName#2\"")
-            commands.add("content insert --uri content://settings/system --bind name:s:vivo_game_touch_delay_promotion --bind value:s:\"$packageName#2\"")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        if (safePkg != null) {
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_click_delay_promotion --bind value:s:\"$safePkg#2\"", com.framex.app.gaming.ledger.OpPriority.DETAIL))
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_touch_delay_promotion --bind value:s:\"$safePkg#2\"", com.framex.app.gaming.ledger.OpPriority.DETAIL))
+        } else {
+            val skippedPerGame = listOf(
+                com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_click_delay_promotion --bind value:s:\"none#2\"", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+                com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:vivo_game_touch_delay_promotion --bind value:s:\"none#2\"", com.framex.app.gaming.ledger.OpPriority.DETAIL)
+            )
+            ledgerExecutor.recordSkipped(com.framex.app.gaming.ledger.Stage.TOUCH, skippedPerGame)
         }
-        shizukuManager.executeCommand(commands.joinToString("; "))
+        ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.TOUCH, specs)
     }
 
     private suspend fun executeKernelSchedulerPayload(packageName: String?) {
-        val commands = mutableListOf(
-            "content insert --uri content://settings/global --bind name:s:game_cube_vip_thread --bind value:s:1",
-            "cmd device_config put activity_manager max_phantom_processes 2147483647",
-            "settings put global settings_enable_monitor_phantom_procs false"
+        val specs = mutableListOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:game_cube_vip_thread --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("cmd device_config put activity_manager max_phantom_processes 2147483647", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("settings put global settings_enable_monitor_phantom_procs false", com.framex.app.gaming.ledger.OpPriority.DETAIL)
         )
-        if (packageName != null) {
-            commands.add("cmd activity set-bg-restriction-level --user 0 $packageName unrestricted")
-            commands.add("content insert --uri content://settings/global --bind name:s:speed_mode_apps --bind value:s:$packageName")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        if (safePkg != null) {
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("cmd activity set-bg-restriction-level --user 0 $safePkg unrestricted", com.framex.app.gaming.ledger.OpPriority.DETAIL))
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:speed_mode_apps --bind value:s:$safePkg", com.framex.app.gaming.ledger.OpPriority.DETAIL))
         }
-        shizukuManager.executeCommand(commands.joinToString("; "))
+        ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.KERNEL, specs)
     }
 
     // =========================================================================
@@ -215,12 +232,12 @@ class VivoGamingOptimizer @Inject constructor(
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return@withContext
         FrameXLog.d("Executing 2-minute Vivo gaming maintenance pulse...", tag = TAG)
 
-        val maintenancePayload = listOf(
-            "content insert --uri content://settings/system --bind name:s:game_plus_mode_key --bind value:s:1",
-            "content insert --uri content://settings/system --bind name:s:game_standard_promotion_mode --bind value:s:1",
-            "content insert --uri content://settings/system --bind name:s:game_scene_more_fps --bind value:s:1"
-        ).joinToString("; ")
-        val exitCode = shizukuManager.executeCommandWithExitCode(maintenancePayload)
+        val specs = listOf(
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_plus_mode_key --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_standard_promotion_mode --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.DETAIL),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_scene_more_fps --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.PRIMARY)
+        )
+        val allPassed = ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.POWER, specs)
 
         activeGamePackage?.let { pkg ->
             if (activeGamePid <= 0) {
@@ -231,18 +248,17 @@ class VivoGamingOptimizer @Inject constructor(
             }
         }
 
-        val flagsOk = (exitCode == 0)
         val pidStatus = if (activeGamePid > 0) "PID $activeGamePid ✓" else "Standby"
         addLog(
             "2-Min Maintenance Pulse",
             "Monster Flags (plus/mode/fps) re-asserted | Game: ${activeGamePackage ?: "None"} ($pidStatus)",
-            if (flagsOk) LogStatus.SUCCESS else LogStatus.FAILED
+            if (allPassed) LogStatus.SUCCESS else LogStatus.FAILED
         )
 
         // Only show debug toast on screen if audit logging is enabled
         if (settingsRepository.auditLoggingEnabled.value) {
             withContext(Dispatchers.Main) {
-                val msg = if (flagsOk) {
+                val msg = if (allPassed) {
                     "FrameX Pulse: Monster Flags (plus/mode/fps) Re-asserted ✓ | $pidStatus"
                 } else {
                     "FrameX Pulse: Monster Flags Re-assert Failed"
@@ -333,9 +349,10 @@ class VivoGamingOptimizer @Inject constructor(
     // =========================================================================
 
     suspend fun injectPerfGameList(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val existingRaw = queryPerfGameListDirect()
         val listTokens = existingRaw.split(":").map { it.trim() }.filter { it.isNotBlank() }
-        val updatedTokens = if (packageName in listTokens) listTokens else listTokens + packageName
+        val updatedTokens = if (safePkg in listTokens) listTokens else listTokens + safePkg
         val updatedList = updatedTokens.joinToString(":", postfix = ":")
         // \\: in the runtime string → sh sees \: → content CLI receives : as literal separator
         val escapedValue = updatedList.replace(":", "\\\\:")
@@ -343,10 +360,10 @@ class VivoGamingOptimizer @Inject constructor(
         val payload = listOf(
             "content delete --uri content://settings/system/perf_game_list",
             "content insert --uri content://settings/system --bind name:s:perf_game_list --bind value:s:$escapedValue",
-            "content insert --uri content://settings/global --bind name:s:game_cube_apps --bind value:s:$packageName"
+            "content insert --uri content://settings/global --bind name:s:game_cube_apps --bind value:s:$safePkg"
         ).joinToString("; ")
         val exitCode = shizukuManager.executeCommandWithExitCode(payload)
-        FrameXLog.d("injectPerfGameList($packageName): exitCode=$exitCode", tag = TAG)
+        FrameXLog.d("injectPerfGameList($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
 
@@ -359,8 +376,9 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun removePerfGame(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val existingRaw = queryPerfGameListDirect()
-        val listTokens = existingRaw.split(":").map { it.trim() }.filter { it.isNotBlank() && it != packageName }
+        val listTokens = existingRaw.split(":").map { it.trim() }.filter { it.isNotBlank() && it != safePkg }
 
         val payload = if (listTokens.isNotEmpty()) {
             val updatedList = listTokens.joinToString(":", postfix = ":")
@@ -373,7 +391,7 @@ class VivoGamingOptimizer @Inject constructor(
             "content delete --uri content://settings/system/perf_game_list"
         }
         val exitCode = shizukuManager.executeCommandWithExitCode(payload)
-        FrameXLog.d("removePerfGame($packageName): exitCode=$exitCode", tag = TAG)
+        FrameXLog.d("removePerfGame($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
 
@@ -395,30 +413,34 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun getPackageCompileFilter(packageName: String): String = withContext(Dispatchers.IO) {
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $packageName | grep filter=")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
+        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
         val line = dumpRes?.output?.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
         val match = Regex("filter=\\[?([a-zA-Z0-9_-]+)\\]?").find(line)
         match?.groupValues?.getOrNull(1) ?: if (line.isNotBlank()) line else "unknown"
     }
 
     suspend fun compileSpeedAot(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        FrameXLog.i("Starting AOT speed compilation for $packageName...", tag = TAG)
-        val compileRes = shizukuManager.executeCommandWithResult("pm compile -m speed -f $packageName")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
+        FrameXLog.i("Starting AOT speed compilation for $safePkg...", tag = TAG)
+        val compileRes = shizukuManager.executeCommandWithResult("pm compile -m speed -f $safePkg")
         val isCompiled = compileRes?.output?.contains("Success", ignoreCase = true) == true
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $packageName | grep filter=")
+        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
         val filterSpeed = dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
         val success = isCompiled || filterSpeed
-        FrameXLog.i("AOT speed compilation for $packageName: success=$success (filterSpeed=$filterSpeed)", tag = TAG)
+        FrameXLog.i("AOT speed compilation for $safePkg: success=$success (filterSpeed=$filterSpeed)", tag = TAG)
         success
     }
 
     suspend fun isSpeedCompiled(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $packageName | grep filter=")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
+        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
         dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
     }
 
     suspend fun setMemcTargetFps(packageName: String, enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
-        val value = if (enabled) "\"${packageName}_0_120\"" else "\"\""
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
+        val value = if (enabled) "\"${safePkg}_0_120\"" else "\"\""
         val payload = listOf(
             "content insert --uri content://settings/global --bind name:s:cached_memc_sdk_game_target_fps --bind value:s:$value",
             "content insert --uri content://settings/system --bind name:s:cached_memc_sdk_game_target_fps --bind value:s:$value"
@@ -437,7 +459,8 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     private suspend fun queryProcessPid(packageName: String): Int {
-        val res = shizukuManager.executeCommandWithResult("pidof $packageName")
+        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return 0
+        val res = shizukuManager.executeCommandWithResult("pidof $safePkg")
         val out = res?.output?.trim().orEmpty()
         return out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }

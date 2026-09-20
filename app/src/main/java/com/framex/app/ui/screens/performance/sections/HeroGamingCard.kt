@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.ui.screens.performance.ActiveGamingSession
-import com.framex.app.ui.screens.performance.components.EsportsStatusRow
+import com.framex.app.ui.screens.performance.components.StatusBlock
 
 @Composable
 fun HeroGamingCard(
@@ -319,19 +320,20 @@ private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
             }
             HorizontalDivider(color = accentColor.copy(0.15f))
 
-            val items = session?.items.orEmpty()
-            if (items.isNotEmpty()) {
-                items.forEach { item ->
-                    EsportsStatusRow(
-                        label = item.title,
-                        value = item.detail,
-                        isProtectedOrBypassed = item.isProtectedOrBypassed
-                    )
+            val stages = session?.summary?.stages.orEmpty()
+            if (stages.isNotEmpty()) {
+                stages.forEach { stageSummary ->
+                    key(stageSummary.stage) {
+                        StatusBlock(stageSummary = stageSummary)
+                    }
                 }
             } else {
-                EsportsStatusRow("RAM Cache Purge", "Deep 4GB Trim & Process Purge")
-                EsportsStatusRow("Background Apps", "Suspended via pm suspend")
-                EsportsStatusRow("Do Not Disturb", "Active (DND Filter None)")
+                Text(
+                    text = "No execution data for this session",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
             }
         }
     }

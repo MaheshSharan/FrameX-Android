@@ -76,6 +76,12 @@ fun PerformanceScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val shizukuReady = isShizukuAvailable && hasShizukuPermission
     val canActivate = shizukuReady
 

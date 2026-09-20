@@ -34,4 +34,11 @@ class DeviceDiagnosticManager @Inject constructor(
         }
         return maxHz
     }
+
+    fun getAvailableMemoryBytes(): Long {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return 0L
+        val memInfo = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(memInfo)
+        return memInfo.availMem
+    }
 }

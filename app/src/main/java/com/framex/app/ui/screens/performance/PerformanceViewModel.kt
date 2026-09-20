@@ -1,6 +1,5 @@
 package com.framex.app.ui.screens.performance
 
-import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -10,18 +9,20 @@ import com.framex.app.gaming.EsportsOptimizationEngine
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeService
 import com.framex.app.gaming.GamingModeState
-import android.widget.Toast
 import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.gaming.VivoGamingOptimizer
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.gaming.ledger.ExecutionLedger
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -31,15 +32,18 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PerformanceViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context,
     private val gamingModeEngine: GamingModeEngine,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: com.framex.app.metrics.MetricsEngine,
-    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager
+    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager,
+    private val executionLedger: ExecutionLedger
 ) : ViewModel() {
+
+    private val _toastEvent = MutableSharedFlow<String>()
+    val toastEvent = _toastEvent.asSharedFlow()
 
     val gamingModeState = gamingModeEngine.state
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GamingModeState.Idle)
@@ -81,149 +85,21 @@ class PerformanceViewModel @Inject constructor(
         gamingModeEngine.state,
         gamingModeEngine.activeGamePackage,
         gamingModeEngine.suspendedPackagesCount,
-        cpuPriorityLock,
-        networkFirewall,
-        refreshRateLock,
-        touchBoost,
-        fixedPerformanceMode
-    ) { args: Array<Any?> ->
-        val state = args[0] as GamingModeState
-        val activePkg = args[1] as? String
-        val suspendedCount = args[2] as Int
-        val cpu = args[3] as Boolean
-        val net = args[4] as Boolean
-        val refresh = args[5] as Boolean
-        val touch = args[6] as Boolean
-        val perf = args[7] as Boolean
-
+        executionLedger.ops
+    ) { state, activePkg, suspendedCount, _ ->
         if (state !is GamingModeState.Active) {
             null
         } else {
-            buildActiveGamingSession(activePkg, suspendedCount, cpu, net, refresh, touch, perf)
+            val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
+            ActiveGamingSession(
+                title = if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
+                isVivoDevice = isVivo,
+                activeGamePackage = activePkg,
+                suspendedAppsCount = suspendedCount,
+                summary = executionLedger.getSummary()
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    private fun buildActiveGamingSession(
-        activePkg: String?,
-        suspendedCount: Int,
-        cpu: Boolean,
-        net: Boolean,
-        refresh: Boolean,
-        touch: Boolean,
-        perf: Boolean
-    ): ActiveGamingSession {
-        val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
-        val items = mutableListOf<ActiveOptimizationItem>()
-
-        items.add(
-            ActiveOptimizationItem(
-                title = "RAM Cache Purge",
-                detail = "Deep 4GB Trim & Process Purge"
-            )
-        )
-
-        items.add(
-            ActiveOptimizationItem(
-                title = "Background Apps",
-                detail = if (suspendedCount > 0) "$suspendedCount Apps Suspended" else "Background Apps Frozen"
-            )
-        )
-
-        items.add(
-            ActiveOptimizationItem(
-                title = "Do Not Disturb",
-                detail = "Active (Notification Suppression)"
-            )
-        )
-
-        if (isVivo) {
-            items.add(
-                ActiveOptimizationItem(
-                    title = "OriginOS Monster Mode",
-                    detail = "Power Profile 5 & Global Performance (bbb_perf_mode 1)"
-                )
-            )
-            items.add(
-                ActiveOptimizationItem(
-                    title = "Thermal & Display Lock",
-                    detail = "Auto-Exit 0 · Dimming 0 · Vivo Console Active"
-                )
-            )
-            items.add(
-                ActiveOptimizationItem(
-                    title = "Touch Digitizer & 180Hz",
-                    detail = "vts_game_para 1,5,5,5 · Trajectory Smooth 1 · Report 180Hz"
-                )
-            )
-            items.add(
-                ActiveOptimizationItem(
-                    title = "Hardware Gyroscope Engine",
-                    detail = "Delay Promo #2 · Anti-shake #1 · Kalman Prediction"
-                )
-            )
-            items.add(
-                ActiveOptimizationItem(
-                    title = "Kernel VIP Sched & Phantoms",
-                    detail = "game_cube_vip_thread 1 · Max Phantom Ceiling (2147483647)"
-                )
-            )
-            if (activePkg != null) {
-                items.add(
-                    ActiveOptimizationItem(
-                        title = "Active Game Handshake",
-                        detail = "$activePkg (120 FPS Target & Scene Init)"
-                    )
-                )
-            }
-        } else {
-            if (cpu) {
-                items.add(
-                    ActiveOptimizationItem(
-                        title = "CPU Priority",
-                        detail = "Unrestricted (ACTIVE Bucket)"
-                    )
-                )
-            }
-            if (net) {
-                items.add(
-                    ActiveOptimizationItem(
-                        title = "Network Policy",
-                        detail = "Firewall & Force Doze Active"
-                    )
-                )
-            }
-            if (refresh || touch) {
-                val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
-                val detail = when {
-                    refresh && touch -> "Locked ${maxHz}Hz & Touch Boost"
-                    refresh -> "Locked ${maxHz}Hz"
-                    else -> "Touch Latency Boost"
-                }
-                items.add(
-                    ActiveOptimizationItem(
-                        title = "Display & Touch",
-                        detail = detail
-                    )
-                )
-            }
-            if (perf) {
-                items.add(
-                    ActiveOptimizationItem(
-                        title = "PowerHAL Floor",
-                        detail = "Fixed Performance Mode"
-                    )
-                )
-            }
-        }
-
-        return ActiveGamingSession(
-            title = if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
-            isVivoDevice = isVivo,
-            activeGamePackage = activePkg,
-            suspendedAppsCount = suspendedCount,
-            items = items
-        )
-    }
 
     fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
     fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)
@@ -292,10 +168,7 @@ class PerformanceViewModel @Inject constructor(
     fun setGameConfigRingtoneVol(pkg: String, vol: Int) = settingsRepository.setGameConfigRingtoneVol(pkg, vol)
 
     suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> {
-        val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val memInfoBefore = ActivityManager.MemoryInfo()
-        am.getMemoryInfo(memInfoBefore)
-        val availBefore = memInfoBefore.availMem
+        val availBefore = deviceDiagnosticManager.getAvailableMemoryBytes()
 
         var stoppedCount = 0
         if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
@@ -320,9 +193,7 @@ class PerformanceViewModel @Inject constructor(
         }
         System.gc()
 
-        val memInfoAfter = ActivityManager.MemoryInfo()
-        am.getMemoryInfo(memInfoAfter)
-        val availAfter = memInfoAfter.availMem
+        val availAfter = deviceDiagnosticManager.getAvailableMemoryBytes()
 
         val freed = ((availAfter - availBefore) / BYTES_TO_MB).coerceAtLeast(0L)
         return Pair(freed, stoppedCount)
@@ -367,11 +238,7 @@ class PerformanceViewModel @Inject constructor(
             if (gamingModeEngine.state.value == GamingModeState.Active) {
                 context.startForegroundService(Intent(context, GamingModeService::class.java))
                 if (deviceDiagnosticManager.isVivoOrIqoo()) {
-                    Toast.makeText(
-                        context,
-                        "Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    _toastEvent.emit("Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.")
                 }
             }
         }
@@ -478,10 +345,8 @@ class PerformanceViewModel @Inject constructor(
             val raw = vivoGamingOptimizer.getRawPerfGameList()
             _rawPerfGameList.value = raw
             _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
-            withContext(Dispatchers.Main) {
-                val msg = if (allSuccess) "Added ${packages.size} game(s) to Perf List ✓" else "Some games could not be added to Perf List"
-                Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
-            }
+            val msg = if (allSuccess) "Added ${packages.size} game(s) to Perf List ✓" else "Some games could not be added to Perf List"
+            _toastEvent.emit(msg)
             onComplete(allSuccess)
         }
     }
@@ -497,10 +362,8 @@ class PerformanceViewModel @Inject constructor(
             val raw = vivoGamingOptimizer.getRawPerfGameList()
             _rawPerfGameList.value = raw
             _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
-            withContext(Dispatchers.Main) {
-                val msg = if (allSuccess) "Removed ${packages.size} game(s) from Perf List ✓" else "Some games could not be removed from Perf List"
-                Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
-            }
+            val msg = if (allSuccess) "Removed ${packages.size} game(s) from Perf List ✓" else "Some games could not be removed from Perf List"
+            _toastEvent.emit(msg)
             onComplete(allSuccess)
         }
     }
@@ -513,10 +376,8 @@ class PerformanceViewModel @Inject constructor(
                 val ok = vivoGamingOptimizer.compileSpeedAot(pkg)
                 if (!ok) allSuccess = false
             }
-            withContext(Dispatchers.Main) {
-                val msg = if (allSuccess) "AOT compiled ${packages.size} app(s) to speed filter ✓" else "AOT compilation failed for one or more apps"
-                Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
-            }
+            val msg = if (allSuccess) "AOT compiled ${packages.size} app(s) to speed filter ✓" else "AOT compilation failed for one or more apps"
+            _toastEvent.emit(msg)
             onComplete(allSuccess)
         }
     }
