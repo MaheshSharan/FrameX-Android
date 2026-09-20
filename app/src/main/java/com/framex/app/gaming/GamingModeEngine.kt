@@ -81,9 +81,11 @@ class GamingModeEngine @Inject constructor(
      */
     fun getInstalledUserApps(): List<AppInfo> {
         val pm = context.packageManager
+        val selfPkg = context.packageName
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
             .filter { ai ->
                 (ai.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
+                    ai.packageName != selfPkg &&
                     ai.packageName !in SYSTEM_CRITICAL &&
                     ai.packageName !in GAMING_DAEMONS &&
                     ai.packageName !in HARD_WHITELIST &&
@@ -236,7 +238,8 @@ class GamingModeEngine @Inject constructor(
     // =========================================================================
 
     private fun buildFinalWhitelist(userWhitelist: Set<String>, activeGamePkg: String?): Set<String> {
-        val list = (userWhitelist + settingsRepository.launcherGames.value).toMutableSet()
+        val list = (userWhitelist + settingsRepository.launcherGames.value + HARD_WHITELIST).toMutableSet()
+        list.add(context.packageName)
         if (activeGamePkg != null) list.add(activeGamePkg)
         return list
     }
@@ -280,7 +283,12 @@ class GamingModeEngine @Inject constructor(
 
         val allTargets = (installedSafeToSuspend + googleTargets + userApps).distinct()
         val preSuspended = shizukuManager.getSuspendedPackages(allTargets)
-        val targetsToFreeze = allTargets.filterNot { it in preSuspended }
+        val selfPkg = context.packageName
+        val targetsToFreeze = allTargets
+            .map { it.trim() }
+            .filter { it.matches(PACKAGE_NAME_REGEX) }
+            .filterNot { it in preSuspended }
+            .filterNot { it == selfPkg || it in HARD_WHITELIST || it in finalWhitelist }
 
         FrameXLog.i("Suspending ${targetsToFreeze.size} background apps (${preSuspended.size} externally pre-suspended ignored)...", tag = TAG)
         _state.value = GamingModeState.Enabling(0.5f, "Suspending ${targetsToFreeze.size} background apps…")
@@ -553,7 +561,10 @@ class GamingModeEngine @Inject constructor(
             "com.microsoft.deviceintegrationservice"
         )
 
+        private val PACKAGE_NAME_REGEX = Regex("^[a-zA-Z0-9_.]+$")
+
         val HARD_WHITELIST = setOf(
+            "com.framex.app",
             "moe.shizuku.privileged.api",
             "com.adguard.android",
             "com.adguard.vpn"
