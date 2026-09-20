@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,6 +71,123 @@ class PerformanceViewModel @Inject constructor(
 
     val fixedPerformanceMode = settingsRepository.fixedPerformanceMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val activeGamingSession: StateFlow<ActiveGamingSession?> = combine(
+        gamingModeEngine.state,
+        gamingModeEngine.activeGamePackage,
+        gamingModeEngine.suspendedPackagesCount,
+        cpuPriorityLock,
+        networkFirewall,
+        refreshRateLock,
+        touchBoost,
+        fixedPerformanceMode
+    ) { args: Array<Any?> ->
+        val state = args[0] as GamingModeState
+        val activePkg = args[1] as? String
+        val suspendedCount = args[2] as Int
+        val cpu = args[3] as Boolean
+        val net = args[4] as Boolean
+        val refresh = args[5] as Boolean
+        val touch = args[6] as Boolean
+        val perf = args[7] as Boolean
+
+        if (state !is GamingModeState.Active) {
+            null
+        } else {
+            buildActiveGamingSession(activePkg, suspendedCount, cpu, net, refresh, touch, perf)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private fun buildActiveGamingSession(
+        activePkg: String?,
+        suspendedCount: Int,
+        cpu: Boolean,
+        net: Boolean,
+        refresh: Boolean,
+        touch: Boolean,
+        perf: Boolean
+    ): ActiveGamingSession {
+        val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
+        val items = mutableListOf<ActiveOptimizationItem>()
+
+        items.add(
+            ActiveOptimizationItem(
+                title = "RAM Cache Purge",
+                detail = "Deep 4GB Trim & Process Purge"
+            )
+        )
+
+        items.add(
+            ActiveOptimizationItem(
+                title = "Background Apps",
+                detail = if (suspendedCount > 0) "$suspendedCount Apps Suspended" else "Background Apps Frozen"
+            )
+        )
+
+        items.add(
+            ActiveOptimizationItem(
+                title = "Do Not Disturb",
+                detail = "Active (Notification Suppression)"
+            )
+        )
+
+        if (isVivo) {
+            items.add(
+                ActiveOptimizationItem(
+                    title = "OriginOS Stability Safeguard",
+                    detail = "Display & Thermal Overrides Bypassed",
+                    isProtectedOrBypassed = true
+                )
+            )
+        } else {
+            if (cpu) {
+                items.add(
+                    ActiveOptimizationItem(
+                        title = "CPU Priority",
+                        detail = "Unrestricted (ACTIVE Bucket)"
+                    )
+                )
+            }
+            if (net) {
+                items.add(
+                    ActiveOptimizationItem(
+                        title = "Network Policy",
+                        detail = "Firewall & Force Doze Active"
+                    )
+                )
+            }
+            if (refresh || touch) {
+                val maxHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
+                val detail = when {
+                    refresh && touch -> "Locked ${maxHz}Hz & Touch Boost"
+                    refresh -> "Locked ${maxHz}Hz"
+                    else -> "Touch Latency Boost"
+                }
+                items.add(
+                    ActiveOptimizationItem(
+                        title = "Display & Touch",
+                        detail = detail
+                    )
+                )
+            }
+            if (perf) {
+                items.add(
+                    ActiveOptimizationItem(
+                        title = "PowerHAL Floor",
+                        detail = "Fixed Performance Mode"
+                    )
+                )
+            }
+        }
+
+        return ActiveGamingSession(
+            title = if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
+            isVivoDevice = isVivo,
+            activeGamePackage = activePkg,
+            suspendedAppsCount = suspendedCount,
+            items = items
+        )
+    }
 
     fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
     fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)

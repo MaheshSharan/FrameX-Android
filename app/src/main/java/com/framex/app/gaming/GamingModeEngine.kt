@@ -71,6 +71,12 @@ class GamingModeEngine @Inject constructor(
     private val _state = MutableStateFlow<GamingModeState>(GamingModeState.Idle)
     val state: StateFlow<GamingModeState> = _state.asStateFlow()
 
+    private val _activeGamePackage = MutableStateFlow<String?>(null)
+    val activeGamePackage: StateFlow<String?> = _activeGamePackage.asStateFlow()
+
+    private val _suspendedPackagesCount = MutableStateFlow(0)
+    val suspendedPackagesCount: StateFlow<Int> = _suspendedPackagesCount.asStateFlow()
+
     val safeToSuspendPackages: List<String>
         get() = oemPackageResolver.getOemPackagesToSuspend()
 
@@ -166,7 +172,7 @@ class GamingModeEngine @Inject constructor(
             }
 
             updateSnapshotIfNeeded(isVivo, isAlreadyActive, newlySuspendedPkgs)
-            finalizeActivation(activeGamePkg)
+            finalizeActivation(activeGamePkg, newlySuspendedPkgs.size)
 
         } catch (e: Exception) {
             FrameXLog.e("Unexpected error during Gaming Mode activation", e, tag = TAG)
@@ -196,6 +202,8 @@ class GamingModeEngine @Inject constructor(
             cleanupLegacyPreferences()
             revertPlatformOptimizations()
 
+            _activeGamePackage.value = null
+            _suspendedPackagesCount.value = 0
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
             _state.value = GamingModeState.Idle
@@ -214,7 +222,10 @@ class GamingModeEngine @Inject constructor(
         recoverThermalOverrideIfNeeded()
         recoverLegacySettingsIfNeeded()
 
-        if (settingsRepository.hasActiveGamingSnapshot()) {
+        val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
+        if (snapshot != null) {
+            _activeGamePackage.value = snapshot.activeGamePackage
+            _suspendedPackagesCount.value = snapshot.affectedPackages.size
             FrameXLog.w("Detected orphaned gaming optimization snapshot, scheduling recovery", tag = TAG)
             _isActive.value = true
             _state.value = GamingModeState.Active
@@ -225,6 +236,7 @@ class GamingModeEngine @Inject constructor(
                 showRecoveryNotification()
             }
         } else if (settingsRepository.isGamingModeActive()) {
+            _suspendedPackagesCount.value = settingsRepository.getGamingAffectedPackages().size
             _isActive.value = true
             _state.value = GamingModeState.Active
             if (!isShizukuReady()) {
@@ -358,11 +370,13 @@ class GamingModeEngine @Inject constructor(
         }
     }
 
-    private fun finalizeActivation(activeGamePkg: String?) {
+    private fun finalizeActivation(activeGamePkg: String?, suspendedCount: Int = 0) {
+        _activeGamePackage.value = activeGamePkg
+        _suspendedPackagesCount.value = suspendedCount
         settingsRepository.setGamingModeActive(true)
         _isActive.value = true
         _state.value = GamingModeState.Active
-        FrameXLog.i("Gaming Mode activation complete! Active game: $activeGamePkg", tag = TAG)
+        FrameXLog.i("Gaming Mode activation complete! Active game: $activeGamePkg, suspended: $suspendedCount", tag = TAG)
     }
 
     // =========================================================================

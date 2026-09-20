@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.ui.screens.performance.ActiveGamingSession
 import com.framex.app.ui.screens.performance.components.EsportsStatusRow
 
 @Composable
@@ -33,6 +34,7 @@ fun HeroGamingCard(
     isBusy: Boolean,
     activeColor: Color,
     primaryRed: Color,
+    activeSession: ActiveGamingSession? = null,
     onActivate: () -> Unit,
     onDeactivate: () -> Unit
 ) {
@@ -194,42 +196,7 @@ fun HeroGamingCard(
                 // ── Status cards + action button ──────────────────────────────
                 if (!isBusy) {
                     if (isActive) {
-                        // Esports Optimization Engine status card
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF10B981).copy(0.08f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF10B981).copy(0.2f), RoundedCornerShape(16.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF10B981))
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        "Esports Optimization Engine Active",
-                                        color = Color(0xFF10B981),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                HorizontalDivider(color = Color(0xFF10B981).copy(0.15f))
-                                EsportsStatusRow("CPU Priority", "Unrestricted (ACTIVE Bucket)")
-                                EsportsStatusRow("Network Policy", "Firewall & Force Doze Active")
-                                EsportsStatusRow("Display & Touch", "Locked Max Hz & Touch Boost")
-                                EsportsStatusRow("PowerHAL Floor", "Fixed Performance Mode")
-                            }
-                        }
+                        ActiveSessionStatusCard(session = activeSession)
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -317,3 +284,55 @@ fun HeroGamingCard(
     }
 }
 
+@Composable
+private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
+    val isVivo = session?.isVivoDevice == true
+    val accentColor = Color(0xFF10B981)
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = accentColor.copy(0.08f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, accentColor.copy(0.2f), RoundedCornerShape(16.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = session?.title ?: if (isVivo) "Vivo OriginOS Safe Gaming Mode" else "Esports Optimization Engine Active",
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+            HorizontalDivider(color = accentColor.copy(0.15f))
+
+            val items = session?.items.orEmpty()
+            if (items.isNotEmpty()) {
+                items.forEach { item ->
+                    EsportsStatusRow(
+                        label = item.title,
+                        value = item.detail,
+                        isProtectedOrBypassed = item.isProtectedOrBypassed
+                    )
+                }
+            } else {
+                EsportsStatusRow("RAM Cache Purge", "Deep 4GB Trim & Process Purge")
+                EsportsStatusRow("Background Apps", "Suspended via pm suspend")
+                EsportsStatusRow("Do Not Disturb", "Active (DND Filter None)")
+            }
+        }
+    }
+}

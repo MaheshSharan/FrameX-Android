@@ -47,6 +47,7 @@ fun PerformanceScreen(
     val googleApps by viewModel.googleApps.collectAsState()
     val metricsState by viewModel.metricsState.collectAsState()
     val fixedPerformanceMode by viewModel.fixedPerformanceMode.collectAsState()
+    val activeGamingSession by viewModel.activeGamingSession.collectAsState()
 
     val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
@@ -169,6 +170,7 @@ fun PerformanceScreen(
                     isBusy = isBusy,
                     activeColor = activeColor,
                     primaryRed = primaryRed,
+                    activeSession = activeGamingSession,
                     onActivate = { if (canActivate) viewModel.enableGamingMode(context) },
                     onDeactivate = { viewModel.disableGamingMode(context) }
                 )

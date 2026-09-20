@@ -12,13 +12,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun EsportsStatusRow(label: String, value: String) {
+fun EsportsStatusRow(
+    label: String,
+    value: String,
+    isProtectedOrBypassed: Boolean = false
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        Text(value, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = value,
+            color = if (isProtectedOrBypassed) Color(0xFF38BDF8) else Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
