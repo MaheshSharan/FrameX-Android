@@ -541,10 +541,8 @@ class GamingModeEngine @Inject constructor(
             "com.google.android.googlequicksearchbox",
             "com.google.android.apps.bard",
             "com.google.android.apps.nbu.files",
-            "com.google.android.apps.wellbeing",
             "com.google.android.projection.gearhead",
             "com.google.android.apps.authenticator2",
-            "com.google.android.apps.restore",
             "com.android.chrome"
         )
 

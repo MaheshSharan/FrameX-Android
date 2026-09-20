@@ -42,7 +42,6 @@ class OemPackageResolver @Inject constructor(
 
         private val UI_BLOAT_AND_BACKGROUND_POLLERS = listOf(
             "com.vivo.assistant",
-            "com.vivo.hiboard",            // Jovi / Minus-one screen
             "com.vivo.globalsearch",
             "com.vivo.magazine",           // Lockscreen magazine
             "com.bbk.theme",               // Theme store background sync
@@ -52,7 +51,6 @@ class OemPackageResolver @Inject constructor(
 
         private val WIDGETS_AND_SYNCERS = listOf(
             "com.vivo.weather",
-            "com.vivo.weather.provider",
             "com.vivo.healthwidget",
             "com.vivo.stepcount",
             "com.vivo.exhealth",
@@ -65,7 +63,6 @@ class OemPackageResolver @Inject constructor(
          * GameCube perf backend—suspending it breaks perf_lock handshakes.
          */
         private val SECONDARY_SERVICES = listOf(
-            "com.vivo.safecenter",         // Vivo security
             "com.vivo.xspace",
             "com.vivo.doubleinstance",     // App clone daemon
             "com.vivo.musicwidgetmix",
