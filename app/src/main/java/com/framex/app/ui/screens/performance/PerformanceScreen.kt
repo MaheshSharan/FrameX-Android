@@ -23,7 +23,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.framex.app.gaming.GamingModeState
-import com.framex.app.gaming.VivoOptimizationResult
 import com.framex.app.ui.screens.performance.PerformanceViewModel
 import com.framex.app.ui.screens.performance.dialogs.*
 import com.framex.app.ui.screens.performance.sections.*
@@ -47,8 +46,9 @@ fun PerformanceScreen(
     val userApps by viewModel.userApps.collectAsState()
     val googleApps by viewModel.googleApps.collectAsState()
     val metricsState by viewModel.metricsState.collectAsState()
-    val vivoOptResult by viewModel.vivoOptimizationResult.collectAsState()
     val fixedPerformanceMode by viewModel.fixedPerformanceMode.collectAsState()
+    val activeGamingSession by viewModel.activeGamingSession.collectAsState()
+    val isVivoSuiteEnabled by viewModel.isVivoSuiteEnabled.collectAsState()
 
     val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
@@ -75,6 +75,12 @@ fun PerformanceScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     val shizukuReady = isShizukuAvailable && hasShizukuPermission
@@ -171,7 +177,7 @@ fun PerformanceScreen(
                     isBusy = isBusy,
                     activeColor = activeColor,
                     primaryRed = primaryRed,
-                    vivoOptResult = vivoOptResult,
+                    activeSession = activeGamingSession,
                     onActivate = { if (canActivate) viewModel.enableGamingMode(context) },
                     onDeactivate = { viewModel.disableGamingMode(context) }
                 )
@@ -188,6 +194,25 @@ fun PerformanceScreen(
                     hasNotifListenerAccess = hasNotifListenerAccess
                 )
             }
+
+            // Dedicated Vivo & iQOO Hardware Suite (AOT Speed Compile & Game Space Whitelist)
+            if (isVivoSuiteEnabled) {
+                item {
+                    val perfGameList by viewModel.vivoPerfGameList.collectAsState()
+                    val rawPerfGameList by viewModel.rawPerfGameList.collectAsState()
+                    VivoPerformanceToolsSection(
+                        launcherGames = launcherGames,
+                        perfGameList = perfGameList,
+                        rawPerfGameList = rawPerfGameList,
+                        onRefreshPerfList = { viewModel.refreshVivoPerfGameList() },
+                        onAddAllToPerfList = { pkgs, cb -> viewModel.addAllLauncherGamesToPerfList(pkgs, cb) },
+                        onRemoveAllFromPerfList = { pkgs, cb -> viewModel.removeAllLauncherGamesFromPerfList(pkgs, cb) },
+                        onCompileAll = { pkgs, cb -> viewModel.compileAllLauncherGamesSpeed(pkgs, cb) }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+
 
             // System Health Gauges
             item {
@@ -274,7 +299,8 @@ fun PerformanceScreen(
                     launcherGames = launcherGames,
                     userApps = userApps,
                     onAddGameClicked = { showAddGameSheet = true },
-                    onGameConfigClicked = { pkg -> configGamePkg = pkg }
+                    onGameConfigClicked = { pkg -> configGamePkg = pkg },
+                    onRemoveGame = { pkg -> viewModel.toggleLauncherGame(pkg) }
                 )
             }
 
@@ -301,6 +327,18 @@ fun PerformanceScreen(
             item {
                 OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
             }
+
+            // System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
+            item {
+                val auditLogs by viewModel.vivoAuditLogs.collectAsState()
+                val isAuditLoggingEnabled by viewModel.auditLoggingEnabled.collectAsState()
+                com.framex.app.ui.screens.performance.sections.SystemAuditLogSection(
+                    isLoggingEnabled = isAuditLoggingEnabled,
+                    onToggleLogging = { viewModel.setAuditLoggingEnabled(it) },
+                    auditLogs = auditLogs,
+                    onClearLogs = { viewModel.clearVivoAuditLogs() }
+                )
+            }
         }
 
         // Floating Success Banner
@@ -321,20 +359,15 @@ fun PerformanceScreen(
             GameConfigModal(
                 pkg = targetPkg,
                 userApps = userApps,
-                canWriteSettings = hasWriteSettingsAccess,
                 getGameConfigBoostRam = { p -> viewModel.getGameConfigBoostRam(p) },
                 setGameConfigBoostRam = { p, v -> viewModel.setGameConfigBoostRam(p, v) },
-                getGameConfigDisableBrightness = { p -> viewModel.getGameConfigDisableBrightness(p) },
-                setGameConfigDisableBrightness = { p, v -> viewModel.setGameConfigDisableBrightness(p, v) },
-                getGameConfigDisableRotate = { p -> viewModel.getGameConfigDisableRotate(p) },
-                setGameConfigDisableRotate = { p, v -> viewModel.setGameConfigDisableRotate(p, v) },
-                getGameConfigRingtoneVol = { p -> viewModel.getGameConfigRingtoneVol(p) },
-                setGameConfigRingtoneVol = { p, v -> viewModel.setGameConfigRingtoneVol(p, v) },
                 onBoostClicked = { tPkg ->
                     configGamePkg = null
                     activeDeployingGamePkg = tPkg
                 },
-                onDismiss = { configGamePkg = null }
+                onDismiss = { configGamePkg = null },
+                isVivo = isVivoSuiteEnabled,
+                onToggleMemc = { p, v, cb -> viewModel.toggleMemc(p, v, cb) }
             )
         }
 

@@ -9,10 +9,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DeviceDiagnosticManager @Inject constructor(
+open class DeviceDiagnosticManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun isVivoOrIqoo(): Boolean {
+    open fun isVivoOrIqoo(): Boolean {
         val manufacturer = Build.MANUFACTURER?.lowercase() ?: ""
         val brand = Build.BRAND?.lowercase() ?: ""
         return manufacturer.contains("vivo") || manufacturer.contains("iqoo") ||
@@ -33,5 +33,12 @@ class DeviceDiagnosticManager @Inject constructor(
             }
         }
         return maxHz
+    }
+
+    fun getAvailableMemoryBytes(): Long {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return 0L
+        val memInfo = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(memInfo)
+        return memInfo.availMem
     }
 }

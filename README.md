@@ -8,8 +8,8 @@
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
     <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
   </a>
-  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.23">
-    <img src="https://img.shields.io/badge/Version-1.5.23-orange?style=for-the-badge&logo=github" alt="Version"/>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.24">
+    <img src="https://img.shields.io/badge/Version-1.5.24-orange?style=for-the-badge&logo=github" alt="Version"/>
   </a>
   <a href="https://developer.android.com/about/versions/oreo">
     <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>
@@ -23,8 +23,11 @@
 </p>
 
 ---
->  [!NOTE]
-> **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices (featuring hardware Mode 4 1080p @ 120Hz lock and 4 OEM Whitelists engine). For Vivo devices, enable **Vivo T3 Ultra Hardware Optimizations** in Settings (About) to unlock maximum gaming performance. Behavior on other Android skins may vary.
+> [!NOTE]
+> **Gaming Performance Mode** adapts dynamically based on your device hardware:
+> - **Generic / Non-Vivo Devices:** Applies standard AOSP optimizations (RAM cache purge, CPU process priority locks, network/doze bypass, and display/touch boosts).
+> - **Vivo / iQOO (Hardware Optimizations ON):** Activates the verified OriginOS/FuntouchOS hardware suite (1080p @ 120Hz Mode 4 lock, RMS display arbitration, touch boost, and OEM daemon whitelisting).
+> - **Vivo / iQOO (Hardware Optimizations OFF):** Safely executes **only non-invasive baseline tweaks** (RAM cache purge, background app suspension, and DND). Generic AOSP display/thermal overrides are deliberately bypassed to protect against 60Hz lockouts and RMS arbitration conflicts.
 
 > [!IMPORTANT]
 > **Encountering "Parse Failed" or "Unsupported Hardware"?**

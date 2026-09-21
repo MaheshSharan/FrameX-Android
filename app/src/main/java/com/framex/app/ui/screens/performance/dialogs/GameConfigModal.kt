@@ -1,15 +1,11 @@
 package com.framex.app.ui.screens.performance.dialogs
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,17 +31,12 @@ import kotlinx.coroutines.withContext
 fun GameConfigModal(
     pkg: String,
     userApps: List<AppInfo>,
-    canWriteSettings: Boolean,
     getGameConfigBoostRam: (String) -> Boolean,
     setGameConfigBoostRam: (String, Boolean) -> Unit,
-    getGameConfigDisableBrightness: (String) -> Boolean,
-    setGameConfigDisableBrightness: (String, Boolean) -> Unit,
-    getGameConfigDisableRotate: (String) -> Boolean,
-    setGameConfigDisableRotate: (String, Boolean) -> Unit,
-    getGameConfigRingtoneVol: (String) -> Int,
-    setGameConfigRingtoneVol: (String, Int) -> Unit,
     onBoostClicked: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isVivo: Boolean = false,
+    onToggleMemc: ((String, Boolean, (Boolean) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val app = remember(pkg, userApps) {
@@ -53,9 +44,6 @@ fun GameConfigModal(
     }
 
     var boostRam by remember(pkg) { mutableStateOf(getGameConfigBoostRam(pkg)) }
-    var disableBrightness by remember(pkg) { mutableStateOf(getGameConfigDisableBrightness(pkg)) }
-    var disableRotate by remember(pkg) { mutableStateOf(getGameConfigDisableRotate(pkg)) }
-    var ringtoneVol by remember(pkg) { mutableFloatStateOf(getGameConfigRingtoneVol(pkg).toFloat()) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -178,130 +166,52 @@ fun GameConfigModal(
                     )
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.BrightnessMedium,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Disable auto brightness",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            "Lock brightness at current level",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = disableBrightness,
-                        onCheckedChange = {
-                            disableBrightness = it
-                            setGameConfigDisableBrightness(pkg, it)
-                            if (it && !canWriteSettings) {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
+                if (isVivo) {
+                    var memcEnabled by remember(pkg) { mutableStateOf(false) }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.ScreenRotation,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Disable auto rotate",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            "Lock display in landscape mode",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = disableRotate,
-                        onCheckedChange = {
-                            disableRotate = it
-                            setGameConfigDisableRotate(pkg, it)
-                            if (it && !canWriteSettings) {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Change ringtone volume",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        "VIVO HARDWARE SUITE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Cyan
                     )
-                }
-                Slider(
-                    value = ringtoneVol,
-                    onValueChange = {
-                        ringtoneVol = it
-                        setGameConfigRingtoneVol(pkg, it.toInt())
-                    },
-                    valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary
-                    )
-                )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    // MEMC Frame Generation
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "MEMC 120 FPS Target",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                "Hardware IC 60->120 FPS interpolation",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = memcEnabled,
+                            onCheckedChange = { checked ->
+                                memcEnabled = checked
+                                onToggleMemc?.invoke(pkg, checked) { }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color.Cyan
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = {

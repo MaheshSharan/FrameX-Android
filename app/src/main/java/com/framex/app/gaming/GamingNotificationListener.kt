@@ -2,6 +2,7 @@ package com.framex.app.gaming
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,79 +12,103 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * Notification Listener Service that intercepts and cancels ALL incoming
+ * Notification Listener Service that intercepts and cancels incoming
  * notifications while Gaming Mode is active.
  *
- * Rationale: OriginOS sometimes bypasses DND for internal "System warnings"
- * and "Battery alerts".  This listener provides a second layer of suppression
- * that operates independently of the NotificationManager DND API.
- *
- * The service must be enabled by the user via
- * Settings → Apps → Special App Access → Notification Access.
+ * OriginOS sometimes bypasses system DND for internal alerts.
+ * This listener acts as an independent suppression layer.
  */
 @AndroidEntryPoint
 class GamingNotificationListener : NotificationListenerService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // =========================================================================
+    // Lifecycle Callbacks
+    // =========================================================================
+
     override fun onListenerConnected() {
         super.onListenerConnected()
-        // Observe Gaming Mode state — when it flips to active, immediately purge
-        // every existing notification in the tray (except our own FGS / recovery ones).
+        FrameXLog.i("GamingNotificationListener connected", tag = TAG)
+        observeGamingModeState()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
+        FrameXLog.i("GamingNotificationListener destroyed", tag = TAG)
+    }
+
+    // =========================================================================
+    // Notification Interception
+    // =========================================================================
+
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        if (sbn == null) return
+        if (shouldSuppressNotification(sbn)) {
+            dismissNotificationSafely(sbn.key)
+        }
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        // No action required on removal
+    }
+
+    // =========================================================================
+    // Core Suppression Logic (IDE & GitHub Symbol Navigation)
+    // =========================================================================
+
+    private fun observeGamingModeState() {
         serviceScope.launch {
-            GamingModeEngine.isActive.collectLatest { active ->
-                if (active) {
+            GamingModeEngine.isActive.collectLatest { isActive ->
+                if (isActive) {
                     purgeExistingNotifications()
                 }
             }
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        serviceScope.cancel()
-    }
-
     /**
-     * Walk the current notification tray and cancel everything that isn't ours.
+     * Walks active notifications and cancels third-party notifications.
      */
     private fun purgeExistingNotifications() {
         try {
-            val current = activeNotifications ?: return
-            for (sbn in current) {
-                if (sbn.packageName == packageName) {
-                    if (sbn.id == GamingModeService.NOTIFICATION_ID ||
-                        sbn.id == GamingModeEngine.RECOVERY_NOTIFICATION_ID) continue
+            val currentNotifications = activeNotifications ?: return
+            for (sbn in currentNotifications) {
+                if (shouldSuppressNotification(sbn)) {
+                    dismissNotificationSafely(sbn.key)
                 }
-                try {
-                    cancelNotification(sbn.key)
-                } catch (_: Exception) { /* non-fatal */ }
             }
-        } catch (_: Exception) { /* service might be disconnected */ }
+            FrameXLog.i("Active notifications tray purged for Gaming Mode", tag = TAG)
+        } catch (e: Exception) {
+            FrameXLog.w("Failed to purge existing notifications", e, tag = TAG)
+        }
+    }
+
+    private fun shouldSuppressNotification(sbn: StatusBarNotification): Boolean {
+        if (!GamingModeEngine.isActive.value) return false
+        return !isProtectedNotification(sbn)
     }
 
     /**
-     * Called whenever a new notification is posted.
-     * If Gaming Mode is active, cancel it immediately.
+     * Prevents self-cancellation of FrameX foreground or recovery alerts.
      */
-    override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        if (sbn == null) return
+    private fun isProtectedNotification(sbn: StatusBarNotification): Boolean {
+        if (sbn.packageName != packageName) return false
+        return sbn.id == GamingModeService.NOTIFICATION_ID ||
+               sbn.id == GamingModeEngine.RECOVERY_NOTIFICATION_ID
+    }
 
-        // Do not touch our own notifications — that would cause a loop or hide recovery alerts.
-        if (sbn.packageName == packageName) {
-            if (sbn.id == GamingModeService.NOTIFICATION_ID || sbn.id == GamingModeEngine.RECOVERY_NOTIFICATION_ID) return
-        }
-
-        if (GamingModeEngine.isActive.value) {
-            try {
-                cancelNotification(sbn.key)
-            } catch (e: Exception) {
-                // Swallow — failing to cancel a notification is non-fatal.
-            }
+    private fun dismissNotificationSafely(key: String) {
+        try {
+            cancelNotification(key)
+        } catch (e: Exception) {
+            // Non-fatal if notification was already dismissed or service disconnected
+            FrameXLog.w("Failed to cancel notification key: $key", e, tag = TAG)
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        // No action needed on removal.
+    private companion object {
+        const val TAG = "GamingNotifListener"
     }
 }

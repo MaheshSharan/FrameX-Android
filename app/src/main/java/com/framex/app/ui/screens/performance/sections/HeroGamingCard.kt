@@ -9,13 +9,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,9 +23,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import com.framex.app.gaming.GamingModeState
-import com.framex.app.gaming.VivoOptimizationResult
-import com.framex.app.ui.screens.performance.components.EsportsStatusRow
+import com.framex.app.gaming.ledger.Stage
+import com.framex.app.ui.screens.performance.ActiveGamingSession
+import com.framex.app.ui.screens.performance.components.StatusBlock
 
 @Composable
 fun HeroGamingCard(
@@ -36,7 +43,7 @@ fun HeroGamingCard(
     isBusy: Boolean,
     activeColor: Color,
     primaryRed: Color,
-    vivoOptResult: VivoOptimizationResult?,
+    activeSession: ActiveGamingSession? = null,
     onActivate: () -> Unit,
     onDeactivate: () -> Unit
 ) {
@@ -198,48 +205,7 @@ fun HeroGamingCard(
                 // ── Status cards + action button ──────────────────────────────
                 if (!isBusy) {
                     if (isActive) {
-                        // Esports Optimization Engine status card
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF10B981).copy(0.08f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF10B981).copy(0.2f), RoundedCornerShape(16.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF10B981))
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        "Esports Optimization Engine Active",
-                                        color = Color(0xFF10B981),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                HorizontalDivider(color = Color(0xFF10B981).copy(0.15f))
-                                EsportsStatusRow("CPU Priority", "Unrestricted (ACTIVE Bucket)")
-                                EsportsStatusRow("Network Policy", "Firewall & Force Doze Active")
-                                EsportsStatusRow("Display & Touch", "Locked Max Hz & Touch Boost")
-                                EsportsStatusRow("PowerHAL Floor", "Fixed Performance Mode")
-                            }
-                        }
-
-                        // Vivo / iQOO Hardware Boost — only visible on Vivo devices with vivoOpt enabled
-                        if (vivoOptResult != null) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            VivoBoostStatusCard(result = vivoOptResult)
-                        }
+                        ActiveSessionStatusCard(session = activeSession)
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -327,17 +293,26 @@ fun HeroGamingCard(
     }
 }
 
-// ── Vivo / iQOO Hardware Boost status card ───────────────────────────────────
+private val SessionCardShape = RoundedCornerShape(16.dp)
+private val HeaderTagShape = RoundedCornerShape(4.dp)
 
 @Composable
-private fun VivoBoostStatusCard(result: VivoOptimizationResult) {
-    val accentColor = Color(0xFF3D9BE0) // Vivo brand blue
+private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
+    val accentColor = Color(0xFF10B981)
+    val stages = session?.summary?.stages.orEmpty()
+
+    var userExpandedOverrides by remember { mutableStateOf<Map<Stage, Boolean>>(emptyMap()) }
+
+    val allExpanded = stages.isNotEmpty() && stages.all { stageSummary ->
+        userExpandedOverrides[stageSummary.stage] == true
+    }
+
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.07f)),
+        shape = SessionCardShape,
+        colors = CardDefaults.cardColors(containerColor = accentColor.copy(0.08f)),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, accentColor.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
+            .border(1.dp, accentColor.copy(0.2f), SessionCardShape)
     ) {
         Column(
             modifier = Modifier
@@ -345,66 +320,121 @@ private fun VivoBoostStatusCard(result: VivoOptimizationResult) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(accentColor)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Vivo T3 Ultra Hardware Boost",
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            }
-            HorizontalDivider(color = accentColor.copy(alpha = 0.15f))
-            VivoStatusRow(
-                "Display Mode Lock (Mode 4)",
-                "1080p @ ${result.maxHzApplied} Hz Locked",
-                result.displayModeLock
+            ActiveSessionHeaderRow(
+                title = session?.title ?: "Gaming Mode Active",
+                hasStages = stages.isNotEmpty(),
+                allExpanded = allExpanded,
+                onToggleExpandAll = {
+                    val target = !allExpanded
+                    userExpandedOverrides = stages.associate { it.stage to target }
+                },
+                accentColor = accentColor
             )
-            VivoStatusRow("Touch Latency Boost", "vtouch.persist Active", result.touchBoost)
-            VivoStatusRow("OEM Game Whitelists", "4 Whitelists Appended", result.whitelistApplied)
+
+            session?.summary?.let { summary ->
+                ActiveSessionStatsSummary(summary = summary)
+            }
+
+            HorizontalDivider(color = accentColor.copy(0.15f))
+
+            ActiveSessionStagesList(
+                stages = stages,
+                userExpandedOverrides = userExpandedOverrides,
+                onToggleStage = { stage, targetExpanded ->
+                    userExpandedOverrides = userExpandedOverrides + (stage to targetExpanded)
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun VivoStatusRow(label: String, detail: String, ok: Boolean) {
-    val okColor = Color(0xFF22C55E)
-    val failColor = Color(0xFFEF4444)
+private fun ActiveSessionStatsSummary(summary: com.framex.app.gaming.ledger.LedgerSummary) {
+    if (summary.totalOps <= 0) return
+    val statsText = buildString {
+        append("Applied ${summary.totalApplied}/${summary.totalOps}")
+        if (summary.totalFailed > 0) {
+            append(" · ${summary.totalFailed} failed")
+        }
+        if (summary.totalSkipped > 0) {
+            append(" · ${summary.totalSkipped} skipped")
+        }
+    }
+    Text(
+        text = statsText,
+        color = Color.Gray,
+        fontSize = 11.sp
+    )
+}
+
+@Composable
+private fun ActiveSessionStagesList(
+    stages: List<com.framex.app.gaming.ledger.StageSummary>,
+    userExpandedOverrides: Map<Stage, Boolean>,
+    onToggleStage: (Stage, Boolean) -> Unit
+) {
+    if (stages.isEmpty()) {
+        Text(
+            text = "No execution data for this session",
+            color = Color.Gray,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+    } else {
+        stages.forEach { stageSummary ->
+            key(stageSummary.stage) {
+                val isExpanded = userExpandedOverrides[stageSummary.stage] ?: false
+                StatusBlock(
+                    stageSummary = stageSummary,
+                    isExpanded = isExpanded,
+                    onToggleExpand = { onToggleStage(stageSummary.stage, !isExpanded) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveSessionHeaderRow(
+    title: String,
+    hasStages: Boolean,
+    allExpanded: Boolean,
+    onToggleExpandAll: () -> Unit,
+    accentColor: Color
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = if (ok) Icons.Default.Check else Icons.Default.Close,
-            contentDescription = null,
-            tint = if (ok) okColor else failColor,
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                label,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(accentColor)
             )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                detail,
-                color = if (ok) Color.Gray else failColor.copy(alpha = 0.8f),
-                fontSize = 10.sp
+                text = title,
+                color = accentColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
             )
         }
-        Text(
-            text = if (ok) "ON" else "FAIL",
-            color = if (ok) okColor else failColor,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
-        )
+
+        if (hasStages) {
+            Text(
+                text = if (allExpanded) "Collapse all" else "Expand all",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 36.dp)
+                    .clip(HeaderTagShape)
+                    .clickable(role = Role.Button, onClick = onToggleExpandAll)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+        }
     }
 }

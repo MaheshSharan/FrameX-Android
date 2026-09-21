@@ -104,6 +104,7 @@ fun PermissionsScreen(
         val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             appOps.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
         } else {
+            @Suppress("DEPRECATION")
             appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
         }
         return mode == android.app.AppOpsManager.MODE_ALLOWED

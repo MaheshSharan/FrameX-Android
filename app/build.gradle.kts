@@ -13,8 +13,8 @@ android {
         applicationId = "com.framex.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 29
-        versionName = "1.5.23"
+        versionCode = 30
+        versionName = "1.5.24"
     }
 
     buildFeatures {
@@ -34,6 +34,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     signingConfigs {
@@ -103,6 +107,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts:1.6.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
 }

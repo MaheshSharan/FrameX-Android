@@ -198,6 +198,7 @@ class OverlayManager @Inject constructor(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
+                @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -271,7 +272,9 @@ class OverlayManager @Inject constructor(
             size.x = bounds.width()
             size.y = bounds.height()
         } else {
+            @Suppress("DEPRECATION")
             val display = windowManager.defaultDisplay
+            @Suppress("DEPRECATION")
             display.getSize(size)
         }
         return size
@@ -299,6 +302,7 @@ fun OverlayContent(
     metricsState: com.framex.app.metrics.MetricsState,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit = {},
+    @Suppress("UNUSED_PARAMETER")
     onModeToggle: () -> Unit = {}
 ) {
     com.framex.app.ui.components.OverlayPreviewContent(

@@ -1,5 +1,6 @@
 package com.framex.app.gaming
 
+import com.framex.app.utils.FrameXLog
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -8,100 +9,100 @@ import org.json.JSONObject
  * Stored before the first modification and restored on deactivation. Allows crash-safe recovery.
  */
 data class GamingOptimizationSnapshot(
-    // Session metadata
     val activeGamePackage: String?,
     val activeGameUid: Int?,
     val timestamp: Long,
-    
-    // Android system settings (system namespace)
     val minRefreshRate: SettingValue?,
     val peakRefreshRate: SettingValue?,
     val touchResponseSpeed: SettingValue?,
-    
-    // Secure settings (secure namespace)
     val userPreferredDisplayModeId: SettingValue?,
-    
-    // Vivo global settings (global namespace)
-    val vivoRefreshRateMode: SettingValue?,
-    val vivoTouchPersist: SettingValue?,
-    
-    // Vivo global whitelist CSV keys
-    val gameCubeApps: SettingValue?,
-    val speedModeApps: SettingValue?,
-    val vivoHighRefreshApps: SettingValue?,
-    val vivoScreenRefreshAppsList: SettingValue?,
-
-    // Vivo system settings (system namespace)
-    val gamecubeCompetitionMode: SettingValue?,
-    val gameScreenResolutionSwitch: SettingValue?,
-    
-    // App state tracking
     val affectedPackages: Set<String>
 ) {
-    
+
+    // =========================================================================
+    // Serialization
+    // =========================================================================
+
     fun toJson(): String {
         val json = JSONObject()
-        json.put("activeGamePackage", activeGamePackage ?: JSONObject.NULL)
-        json.put("activeGameUid", activeGameUid ?: JSONObject.NULL)
-        json.put("timestamp", timestamp)
-        
-        json.put("minRefreshRate", minRefreshRate?.toJson() ?: JSONObject.NULL)
-        json.put("peakRefreshRate", peakRefreshRate?.toJson() ?: JSONObject.NULL)
-        json.put("touchResponseSpeed", touchResponseSpeed?.toJson() ?: JSONObject.NULL)
-        json.put("userPreferredDisplayModeId", userPreferredDisplayModeId?.toJson() ?: JSONObject.NULL)
-        json.put("vivoRefreshRateMode", vivoRefreshRateMode?.toJson() ?: JSONObject.NULL)
-        json.put("vivoTouchPersist", vivoTouchPersist?.toJson() ?: JSONObject.NULL)
-        
-        json.put("gameCubeApps", gameCubeApps?.toJson() ?: JSONObject.NULL)
-        json.put("speedModeApps", speedModeApps?.toJson() ?: JSONObject.NULL)
-        json.put("vivoHighRefreshApps", vivoHighRefreshApps?.toJson() ?: JSONObject.NULL)
-        json.put("vivoScreenRefreshAppsList", vivoScreenRefreshAppsList?.toJson() ?: JSONObject.NULL)
+        json.put(KEY_ACTIVE_GAME_PACKAGE, activeGamePackage ?: JSONObject.NULL)
+        json.put(KEY_ACTIVE_GAME_UID, activeGameUid ?: JSONObject.NULL)
+        json.put(KEY_TIMESTAMP, timestamp)
 
-        json.put("gamecubeCompetitionMode", gamecubeCompetitionMode?.toJson() ?: JSONObject.NULL)
-        json.put("gameScreenResolutionSwitch", gameScreenResolutionSwitch?.toJson() ?: JSONObject.NULL)
-        
-        val pkgsArray = JSONArray()
-        affectedPackages.forEach { pkgsArray.put(it) }
-        json.put("affectedPackages", pkgsArray)
-        
+        serializeSettingValues(json)
+        serializeAffectedPackages(json)
+
         return json.toString()
     }
-    
+
+    private fun serializeSettingValues(json: JSONObject) {
+        json.put(KEY_MIN_REFRESH_RATE, minRefreshRate?.toJson() ?: JSONObject.NULL)
+        json.put(KEY_PEAK_REFRESH_RATE, peakRefreshRate?.toJson() ?: JSONObject.NULL)
+        json.put(KEY_TOUCH_RESPONSE_SPEED, touchResponseSpeed?.toJson() ?: JSONObject.NULL)
+        json.put(KEY_USER_PREFERRED_DISPLAY_MODE_ID, userPreferredDisplayModeId?.toJson() ?: JSONObject.NULL)
+    }
+
+    private fun serializeAffectedPackages(json: JSONObject) {
+        val pkgsArray = JSONArray()
+        affectedPackages.forEach { pkgsArray.put(it) }
+        json.put(KEY_AFFECTED_PACKAGES, pkgsArray)
+    }
+
+    // =========================================================================
+    // Deserialization Factory
+    // =========================================================================
+
     companion object {
+        private const val TAG = "GamingSnapshot"
+
+        private const val KEY_ACTIVE_GAME_PACKAGE = "activeGamePackage"
+        private const val KEY_ACTIVE_GAME_UID = "activeGameUid"
+        private const val KEY_TIMESTAMP = "timestamp"
+        private const val KEY_MIN_REFRESH_RATE = "minRefreshRate"
+        private const val KEY_PEAK_REFRESH_RATE = "peakRefreshRate"
+        private const val KEY_TOUCH_RESPONSE_SPEED = "touchResponseSpeed"
+        private const val KEY_USER_PREFERRED_DISPLAY_MODE_ID = "userPreferredDisplayModeId"
+        private const val KEY_AFFECTED_PACKAGES = "affectedPackages"
+
         fun fromJson(jsonStr: String): GamingOptimizationSnapshot? {
-            return try {
+            return runCatching {
                 val json = JSONObject(jsonStr)
-                
-                val affectedPkgs = mutableSetOf<String>()
-                if (json.has("affectedPackages")) {
-                    val pkgsArray = json.getJSONArray("affectedPackages")
-                    for (i in 0 until pkgsArray.length()) {
-                        affectedPkgs.add(pkgsArray.getString(i))
-                    }
-                }
-                
+
                 GamingOptimizationSnapshot(
-                    activeGamePackage = if (json.isNull("activeGamePackage")) null else json.getString("activeGamePackage"),
-                    activeGameUid = if (json.isNull("activeGameUid")) null else json.getInt("activeGameUid"),
-                    timestamp = json.getLong("timestamp"),
-                    minRefreshRate = if (json.isNull("minRefreshRate")) null else SettingValue.fromJson(json.getJSONObject("minRefreshRate")),
-                    peakRefreshRate = if (json.isNull("peakRefreshRate")) null else SettingValue.fromJson(json.getJSONObject("peakRefreshRate")),
-                    touchResponseSpeed = if (json.isNull("touchResponseSpeed")) null else SettingValue.fromJson(json.getJSONObject("touchResponseSpeed")),
-                    userPreferredDisplayModeId = if (json.isNull("userPreferredDisplayModeId")) null else SettingValue.fromJson(json.getJSONObject("userPreferredDisplayModeId")),
-                    vivoRefreshRateMode = if (json.isNull("vivoRefreshRateMode")) null else SettingValue.fromJson(json.getJSONObject("vivoRefreshRateMode")),
-                    vivoTouchPersist = if (json.isNull("vivoTouchPersist")) null else SettingValue.fromJson(json.getJSONObject("vivoTouchPersist")),
-                    gameCubeApps = if (json.isNull("gameCubeApps")) null else SettingValue.fromJson(json.getJSONObject("gameCubeApps")),
-                    speedModeApps = if (json.isNull("speedModeApps")) null else SettingValue.fromJson(json.getJSONObject("speedModeApps")),
-                    vivoHighRefreshApps = if (json.isNull("vivoHighRefreshApps")) null else SettingValue.fromJson(json.getJSONObject("vivoHighRefreshApps")),
-                    vivoScreenRefreshAppsList = if (json.isNull("vivoScreenRefreshAppsList")) null else SettingValue.fromJson(json.getJSONObject("vivoScreenRefreshAppsList")),
-                    gamecubeCompetitionMode = if (json.has("gamecubeCompetitionMode") && !json.isNull("gamecubeCompetitionMode")) SettingValue.fromJson(json.getJSONObject("gamecubeCompetitionMode")) else null,
-                    gameScreenResolutionSwitch = if (json.has("gameScreenResolutionSwitch") && !json.isNull("gameScreenResolutionSwitch")) SettingValue.fromJson(json.getJSONObject("gameScreenResolutionSwitch")) else null,
-                    affectedPackages = affectedPkgs
+                    activeGamePackage = json.optNullableString(KEY_ACTIVE_GAME_PACKAGE),
+                    activeGameUid = if (json.isNull(KEY_ACTIVE_GAME_UID)) null else json.optInt(KEY_ACTIVE_GAME_UID),
+                    timestamp = json.optLong(KEY_TIMESTAMP, System.currentTimeMillis()),
+                    minRefreshRate = parseSettingValue(json, KEY_MIN_REFRESH_RATE),
+                    peakRefreshRate = parseSettingValue(json, KEY_PEAK_REFRESH_RATE),
+                    touchResponseSpeed = parseSettingValue(json, KEY_TOUCH_RESPONSE_SPEED),
+                    userPreferredDisplayModeId = parseSettingValue(json, KEY_USER_PREFERRED_DISPLAY_MODE_ID),
+                    affectedPackages = parsePackageList(json, KEY_AFFECTED_PACKAGES)
                 )
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("Failed to parse GamingOptimizationSnapshot from JSON", e)
-                null
+            }.onFailure { e ->
+                FrameXLog.e("Failed to parse GamingOptimizationSnapshot from JSON", e, tag = TAG)
+            }.getOrNull()
+        }
+
+        private fun parseSettingValue(json: JSONObject, key: String): SettingValue? {
+            if (json.isNull(key)) return null
+            val obj = json.optJSONObject(key) ?: return null
+            return SettingValue.fromJson(obj)
+        }
+
+        private fun parsePackageList(json: JSONObject, key: String): Set<String> {
+            val result = mutableSetOf<String>()
+            val array = json.optJSONArray(key) ?: return result
+            for (i in 0 until array.length()) {
+                val item = array.optString(i)
+                if (!item.isNullOrBlank()) {
+                    result.add(item)
+                }
             }
+            return result
+        }
+
+        private fun JSONObject.optNullableString(key: String): String? {
+            return if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
         }
     }
 }
@@ -114,21 +115,25 @@ data class SettingValue(
     val value: String,
     val existed: Boolean
 ) {
+
     fun toJson(): JSONObject {
         val json = JSONObject()
-        json.put("value", value)
-        json.put("existed", existed)
+        json.put(KEY_VALUE, value)
+        json.put(KEY_EXISTED, existed)
         return json
     }
-    
+
     companion object {
+        private const val KEY_VALUE = "value"
+        private const val KEY_EXISTED = "existed"
+
         fun fromJson(json: JSONObject): SettingValue {
             return SettingValue(
-                value = json.getString("value"),
-                existed = json.getBoolean("existed")
+                value = json.optString(KEY_VALUE, ""),
+                existed = json.optBoolean(KEY_EXISTED, false)
             )
         }
-        
+
         /**
          * Create SettingValue from settings command output.
          * Returns SettingValue("", existed = false) if output is "null" or empty.

@@ -8,9 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +36,8 @@ fun GameLauncherSection(
     launcherGames: Set<String>,
     userApps: List<AppInfo>,
     onAddGameClicked: () -> Unit,
-    onGameConfigClicked: (String) -> Unit
+    onGameConfigClicked: (String) -> Unit,
+    onRemoveGame: (String) -> Unit
 ) {
     val context = LocalContext.current
     Column {
@@ -73,12 +76,11 @@ fun GameLauncherSection(
             }
         } else {
             val userAppsMap = remember(userApps) { userApps.associateBy { it.packageName } }
-            // Filter launcherGames to only include packages that are actually installed on the device
             val installedLauncherGames = remember(launcherGames, userAppsMap) {
                 if (userApps.isEmpty()) launcherGames.toList()
                 else launcherGames.filter { userAppsMap.containsKey(it) }
             }
-            
+
             if (installedLauncherGames.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -100,66 +102,89 @@ fun GameLauncherSection(
                 ) {
                     items(installedLauncherGames, key = { it }) { pkg ->
                         val app = userAppsMap[pkg] ?: AppInfo(pkg, pkg.substringAfterLast('.'))
-                        Card(
-                            modifier = Modifier.clickable { onGameConfigClicked(pkg) },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, Color.White.copy(0.04f))
-                        ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = app.packageName) {
-                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    try {
-                                        val drawable = context.packageManager.getApplicationIcon(app.packageName)
-                                        drawable.toBitmap().asImageBitmap()
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                }
-                            }
-                            val currentBitmap = iconBitmap
-                            if (currentBitmap != null) {
-                                Image(
-                                    bitmap = currentBitmap,
-                                    contentDescription = null,
+                        // Box wraps the card + the × badge so the badge can overlap the card corner
+                        Box {
+                            Card(
+                                modifier = Modifier.clickable { onGameConfigClicked(pkg) },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, Color.White.copy(0.04f))
+                            ) {
+                                Row(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = app.packageName) {
+                                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            try {
+                                                val drawable = context.packageManager.getApplicationIcon(app.packageName)
+                                                drawable.toBitmap().asImageBitmap()
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        }
+                                    }
+                                    val currentBitmap = iconBitmap
+                                    if (currentBitmap != null) {
+                                        Image(
+                                            bitmap = currentBitmap,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                app.label.take(2).uppercase(),
+                                                color = Color.White.copy(0.8f),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        app.label.take(2).uppercase(),
-                                        color = Color.White.copy(0.8f),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp
+                                        text = app.label,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = app.label,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+
+                            // × remove badge — top-right corner of the card
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 6.dp, y = (-6).dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1E1E2E))
+                                    .border(1.dp, Color.White.copy(0.15f), CircleShape)
+                                    .clickable { onRemoveGame(pkg) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove ${app.label}",
+                                    tint = Color(0xFFFF5252),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

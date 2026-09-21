@@ -242,27 +242,12 @@ class ShizukuManager @Inject constructor() {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun getSuspendedPackages(packageNames: List<String>): Set<String> {
-        if (!_isShizukuAvailable.value || !_hasPermission.value || packageNames.isEmpty()) {
-            return emptySet()
-        }
-        return try {
-            val userId = android.os.Process.myUid() / 100000
-            val res = executeCommandWithResult("cmd package list packages -s --user $userId")
-            val rawOutput = res?.output.orEmpty()
-            if (rawOutput.isNotBlank() && rawOutput != "null") {
-                val globSuspended = rawOutput.lines()
-                    .map { line -> line.trim().removePrefix("package:") }
-                    .filter { it.isNotBlank() }
-                    .toSet()
-                packageNames.filter { it in globSuspended }.toSet()
-            } else {
-                emptySet()
-            }
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.w("Failed to query suspended packages batch", e)
-            emptySet()
-        }
+        // 'cmd package list packages -s' filters system packages, NOT suspended packages.
+        // Android does not have a single batch query flag for suspended packages in pm list packages.
+        // Returning emptySet() ensures installed OEM and Google bloatware packages are not falsely ignored.
+        return emptySet()
     }
 
     suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): SuspendResult? {
