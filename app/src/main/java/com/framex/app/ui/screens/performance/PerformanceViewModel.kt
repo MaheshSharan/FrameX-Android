@@ -17,6 +17,8 @@ import com.framex.app.gaming.ledger.ExecutionLedger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.framex.app.gaming.GamingPlatformPath
+import com.framex.app.gaming.VivoSuiteGate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +41,8 @@ class PerformanceViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: com.framex.app.metrics.MetricsEngine,
     private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager,
-    private val executionLedger: ExecutionLedger
+    private val executionLedger: ExecutionLedger,
+    private val vivoSuiteGate: VivoSuiteGate
 ) : ViewModel() {
 
     private val _toastEvent = MutableSharedFlow<String>()
@@ -90,7 +93,7 @@ class PerformanceViewModel @Inject constructor(
         if (state !is GamingModeState.Active) {
             null
         } else {
-            val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
+            val isVivo = vivoSuiteGate.isVivoHardware
             ActiveGamingSession(
                 title = "Gaming Mode Active",
                 isVivoDevice = isVivo,
@@ -237,7 +240,7 @@ class PerformanceViewModel @Inject constructor(
             gamingModeEngine.enableGamingMode(currentWhitelist)
             if (gamingModeEngine.state.value == GamingModeState.Active) {
                 context.startForegroundService(Intent(context, GamingModeService::class.java))
-                if (deviceDiagnosticManager.isVivoOrIqoo()) {
+                if (settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO) {
                     _toastEvent.emit("Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.")
                 }
             }
@@ -262,7 +265,8 @@ class PerformanceViewModel @Inject constructor(
 
                 // Promote PID and attach per-game optimizations if Gaming Mode is actively running
                 if (isGamingModeActive) {
-                    if (deviceDiagnosticManager.isVivoOrIqoo()) {
+                    val sessionPath = settingsRepository.getGamingPlatformPath()
+                    if (sessionPath == GamingPlatformPath.VIVO) {
                         viewModelScope.launch(Dispatchers.IO) {
                             for (i in 1..10) {
                                 delay(500L)
@@ -273,7 +277,7 @@ class PerformanceViewModel @Inject constructor(
                                 }
                             }
                         }
-                    } else {
+                    } else if (sessionPath == GamingPlatformPath.GENERIC) {
                         viewModelScope.launch(Dispatchers.IO) {
                             gamingModeEngine.promoteGamePid(packageName, 0)
                         }
@@ -325,7 +329,7 @@ class PerformanceViewModel @Inject constructor(
     val vivoPerfGameList: StateFlow<List<String>> = _vivoPerfGameList.asStateFlow()
 
     fun refreshVivoPerfGameList() {
-        if (!deviceDiagnosticManager.isVivoOrIqoo()) return
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return
         viewModelScope.launch {
             val raw = vivoGamingOptimizer.getRawPerfGameList()
             _rawPerfGameList.value = raw
@@ -388,7 +392,8 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
-    val isVivoDevice: Boolean get() = deviceDiagnosticManager.isVivoOrIqoo()
+    val isVivoDevice: Boolean get() = vivoSuiteGate.isVivoHardware
+    val isVivoSuiteEnabled: StateFlow<Boolean> = vivoSuiteGate.isVivoSuiteEnabledFlow
 
     val auditLoggingEnabled: StateFlow<Boolean> = settingsRepository.auditLoggingEnabled
 
@@ -411,7 +416,7 @@ class PerformanceViewModel @Inject constructor(
     val safeToSuspendList: List<String> get() = gamingModeEngine.safeToSuspendPackages
     val googleSafeToSuspendList: List<String> get() = GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
     val gamingDaemonsList: List<String>
-        get() = if (deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value) GamingModeEngine.GAMING_DAEMONS else emptyList()
+        get() = if (vivoSuiteGate.isVivoSuiteEnabled) GamingModeEngine.GAMING_DAEMONS else emptyList()
 
     companion object {
         private const val BYTES_TO_MB = 1024L * 1024L

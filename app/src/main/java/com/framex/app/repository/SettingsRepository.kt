@@ -2,6 +2,7 @@ package com.framex.app.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.framex.app.gaming.GamingPlatformPath
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -406,6 +407,26 @@ class SettingsRepository @Inject constructor(
         return prefs.contains(KEY_GAMING_OPT_SNAPSHOT)
     }
 
+    // ---- Gaming Platform Path Session Routing -------------------------------
+
+    private val _gamingPlatformPath = MutableStateFlow<GamingPlatformPath?>(
+        prefs.getString(KEY_GAMING_PLATFORM_PATH, null)?.let {
+            runCatching { GamingPlatformPath.valueOf(it) }.getOrNull()
+        }
+    )
+    val gamingPlatformPath: StateFlow<GamingPlatformPath?> = _gamingPlatformPath.asStateFlow()
+
+    fun getGamingPlatformPath(): GamingPlatformPath? = _gamingPlatformPath.value
+
+    fun setGamingPlatformPath(path: GamingPlatformPath?) {
+        if (path != null) {
+            prefs.edit().putString(KEY_GAMING_PLATFORM_PATH, path.name).commit()
+        } else {
+            prefs.edit().remove(KEY_GAMING_PLATFORM_PATH).commit()
+        }
+        _gamingPlatformPath.value = path
+    }
+
     // ---- Legacy Cleanup Migration --------------------------------------------
 
     fun needsLegacySettingsCleanup(): Boolean =
@@ -418,6 +439,7 @@ class SettingsRepository @Inject constructor(
     }
 
     companion object {
+        private const val KEY_GAMING_PLATFORM_PATH = "gaming_platform_path"
         private const val KEY_OVERLAY_MODE = "overlay_mode"
         private const val KEY_THERMAL_TIME_WINDOW = "thermal_time_window"
         private const val KEY_THERMAL_GRAPH_MODE = "thermal_graph_mode"

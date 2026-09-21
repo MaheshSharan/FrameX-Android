@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import com.framex.app.MainActivity
 import com.framex.app.R
@@ -17,6 +18,7 @@ import com.framex.app.utils.FrameXLog
 import com.framex.app.gaming.ledger.CommandSpec
 import com.framex.app.gaming.ledger.ExecutionLedger
 import com.framex.app.gaming.ledger.LedgerExecutor
+import android.widget.Toast
 import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
@@ -26,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,11 +72,61 @@ class GamingModeEngine @Inject constructor(
     private val oemPackageResolver: OemPackageResolver,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
     private val executionLedger: ExecutionLedger,
-    private val ledgerExecutor: LedgerExecutor
+    private val ledgerExecutor: LedgerExecutor,
+    private val vivoSuiteGate: VivoSuiteGate
 ) {
 
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var thermalRecoveryJob: Job? = null
+
+    private val _pulseEnabled = MutableStateFlow(true)
+
+    val shouldPulseMaintenance: Flow<Boolean> = combine(
+        settingsRepository.gamingPlatformPath,
+        isActive,
+        _pulseEnabled
+    ) { path, active, enabled ->
+        active && path == GamingPlatformPath.VIVO && enabled
+    }.distinctUntilChanged()
+
+    val isPulseActive: Boolean
+        get() = _isActive.value && settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO && _pulseEnabled.value
+
+    fun stopPulse() {
+        _pulseEnabled.value = false
+    }
+
+    @VisibleForTesting
+    internal fun setSessionActiveForTesting(active: Boolean) {
+        _isActive.value = active
+    }
+
+    fun onVivoOptToggledOffMidSession(): Job? {
+        val currentPath = settingsRepository.getGamingPlatformPath()
+        if (currentPath == GamingPlatformPath.VIVO) {
+            FrameXLog.i("Vivo toggle disabled mid-session: stopping pulse, reverting optimizations", tag = TAG)
+            stopPulse()
+            return recoveryScope.launch {
+                val success = runCatching {
+                    vivoGamingOptimizer.revertOptimizations()
+                }.getOrDefault(false)
+
+                if (success) {
+                    settingsRepository.setGamingPlatformPath(GamingPlatformPath.NONE)
+                    executionLedger.removeStages(VIVO_PLATFORM_STAGES)
+                    runCatching {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Vivo gaming optimizations rolled back", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    FrameXLog.i("Vivo mid-session revert succeeded: path set to NONE", tag = TAG)
+                } else {
+                    FrameXLog.w("Vivo mid-session revert failed: keeping VIVO path for deactivation retry", tag = TAG)
+                }
+            }
+        }
+        return null
+    }
 
     // ---- Public State -------------------------------------------------------
 
@@ -142,6 +195,16 @@ class GamingModeEngine @Inject constructor(
             return
         }
 
+        val platformPath = vivoSuiteGate.resolveCurrentPlatformPath()
+
+        // Re-activation edge case: if previous session had VIVO applied (e.g. earlier mid-session revert
+        // failed, leaving path as VIVO) and user re-activates with non-Vivo path, revert prior Vivo settings first.
+        if (!cleanupStaleVivoPath(platformPath)) {
+            FrameXLog.e("Failed to revert prior Vivo optimizations before activation; aborting", tag = TAG)
+            _state.value = GamingModeState.Error("Failed to revert prior Vivo optimizations")
+            return
+        }
+
         _state.value = GamingModeState.Enabling(0f, "Initializing…")
         FrameXLog.i("Starting Gaming Mode activation (activeGamePkg=$activeGamePkg)...", tag = TAG)
 
@@ -183,19 +246,27 @@ class GamingModeEngine @Inject constructor(
                 applyNotificationSuppression()
             }
 
-            val isVivo = deviceDiagnosticManager.isVivoOrIqoo()
-            val optimizationsApplied = applyPlatformOptimizations(isVivo, activeGamePkg)
+            settingsRepository.setGamingPlatformPath(platformPath)
+            val optimizationsApplied = applyPlatformOptimizations(platformPath, activeGamePkg)
 
             if (!optimizationsApplied) {
+                revertOnActivationFailure(platformPath)
                 handleActivationFailure(isAlreadyActive, installedSafeToSuspend, newlySuspendedPkgs)
                 return
             }
 
-            updateSnapshotIfNeeded(isVivo, isAlreadyActive, newlySuspendedPkgs)
+            updateSnapshotIfNeeded(platformPath, isAlreadyActive, newlySuspendedPkgs)
+            _pulseEnabled.value = true
             finalizeActivation(activeGamePkg, newlySuspendedPkgs.size)
 
         } catch (e: Exception) {
             FrameXLog.e("Unexpected error during Gaming Mode activation", e, tag = TAG)
+            stopPulse()
+            val failedPath = settingsRepository.getGamingPlatformPath()
+            if (failedPath != null) {
+                revertOnActivationFailure(failedPath)
+            }
+            settingsRepository.setGamingPlatformPath(null)
             _state.value = GamingModeState.Error(e.message ?: "Unexpected error during activation")
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
@@ -208,6 +279,7 @@ class GamingModeEngine @Inject constructor(
     suspend fun disableGamingMode() {
         _state.value = GamingModeState.Disabling
         FrameXLog.i("Starting Gaming Mode deactivation...", tag = TAG)
+        stopPulse()
 
         try {
             val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
@@ -224,6 +296,7 @@ class GamingModeEngine @Inject constructor(
 
             _activeGamePackage.value = null
             _suspendedPackagesCount.value = 0
+            settingsRepository.setGamingPlatformPath(null)
             settingsRepository.setGamingModeActive(false)
             _isActive.value = false
             _state.value = GamingModeState.Idle
@@ -386,12 +459,12 @@ class GamingModeEngine @Inject constructor(
     private suspend fun applyNotificationSuppression() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.isNotificationPolicyAccessGranted) {
-            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-            FrameXLog.i("DND filter set to INTERRUPTION_FILTER_NONE, verifying application...", tag = TAG)
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+            FrameXLog.i("DND filter set to INTERRUPTION_FILTER_PRIORITY, verifying application...", tag = TAG)
 
             var filterApplied = false
             for (attempt in 1..5) {
-                if (nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+                if (nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
                     filterApplied = true
                     break
                 }
@@ -402,20 +475,20 @@ class GamingModeEngine @Inject constructor(
                 ledgerExecutor.recordManual(
                     stage = Stage.DND,
                     key = "notification_filter",
-                    displayValue = "Total Silence",
+                    displayValue = "Priority Only",
                     status = OpStatus.APPLIED,
                     priority = OpPriority.PRIMARY,
-                    rawCommand = "NotificationManager.setInterruptionFilter(INTERRUPTION_FILTER_NONE)"
+                    rawCommand = "NotificationManager.setInterruptionFilter(INTERRUPTION_FILTER_PRIORITY)"
                 )
             } else {
-                FrameXLog.w("DND filter did not settle to INTERRUPTION_FILTER_NONE after 500ms (current: ${nm.currentInterruptionFilter})", tag = TAG)
+                FrameXLog.w("DND filter did not settle to INTERRUPTION_FILTER_PRIORITY after 500ms (current: ${nm.currentInterruptionFilter})", tag = TAG)
                 ledgerExecutor.recordManual(
                     stage = Stage.DND,
                     key = "notification_filter",
                     displayValue = "Filter Failed (${nm.currentInterruptionFilter})",
                     status = OpStatus.FAILED,
                     priority = OpPriority.PRIMARY,
-                    rawCommand = "currentInterruptionFilter != INTERRUPTION_FILTER_NONE"
+                    rawCommand = "currentInterruptionFilter != INTERRUPTION_FILTER_PRIORITY"
                 )
             }
         } else {
@@ -431,22 +504,65 @@ class GamingModeEngine @Inject constructor(
         }
     }
 
-    private suspend fun applyPlatformOptimizations(isVivo: Boolean, activeGamePkg: String?): Boolean {
-        if (isVivo) {
-            FrameXLog.i("Vivo/iQOO device detected: Applying hardware-verified Vivo gaming suite", tag = TAG)
-            val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
-            return vivoGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
-                _state.value = GamingModeState.Enabling(progress, statusText)
+    internal suspend fun cleanupStaleVivoPath(newPath: GamingPlatformPath): Boolean {
+        val existingPath = settingsRepository.getGamingPlatformPath()
+        if (existingPath == GamingPlatformPath.VIVO && newPath != GamingPlatformPath.VIVO) {
+            FrameXLog.w("Re-activating with non-Vivo path after un-reverted VIVO session: cleaning up prior Vivo optimizations", tag = TAG)
+            val success = runCatching { vivoGamingOptimizer.revertOptimizations() }.getOrDefault(false)
+            if (!success) {
+                FrameXLog.e("Failed to revert prior Vivo optimizations before switching path to $newPath", tag = TAG)
+                return false
+            }
+            executionLedger.removeStages(VIVO_PLATFORM_STAGES)
+            settingsRepository.clearGamingOptimizationSnapshot()
+        }
+        return true
+    }
+
+    private suspend fun applyPlatformOptimizations(path: GamingPlatformPath, activeGamePkg: String?): Boolean {
+        return when (path) {
+            GamingPlatformPath.VIVO -> {
+                FrameXLog.i("Vivo/iQOO device detected: Applying hardware-verified Vivo gaming suite", tag = TAG)
+                val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
+                vivoGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
+                    _state.value = GamingModeState.Enabling(progress, statusText)
+                }
+            }
+            GamingPlatformPath.GENERIC -> {
+                try {
+                    val uid = activeGamePkg?.let {
+                        runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+                    }
+                    esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
+                } catch (e: Exception) {
+                    FrameXLog.w("Esports optimization failed", e, tag = TAG)
+                    false
+                }
+            }
+            GamingPlatformPath.NONE -> {
+                FrameXLog.i("Platform optimizations disabled (NONE path): running baseline steps only", tag = TAG)
+                true
             }
         }
-        return try {
-            val uid = activeGamePkg?.let {
-                runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+    }
+
+    private suspend fun revertOnActivationFailure(path: GamingPlatformPath) {
+        when (path) {
+            GamingPlatformPath.VIVO -> {
+                runCatching { vivoGamingOptimizer.revertOptimizations() }
+                settingsRepository.clearGamingOptimizationSnapshot()
             }
-            esportsOptimizationEngine.applyOptimizationsForGame(activeGamePkg, uid)
-        } catch (e: Exception) {
-            FrameXLog.w("Esports optimization failed", e, tag = TAG)
-            false
+            GamingPlatformPath.GENERIC -> {
+                // Revert ONLY when a snapshot was successfully captured and saved before the failure.
+                // If activation failed during/before snapshot capture, nothing was modified,
+                // so avoid calling revertOptimizations() which falls back to revertLegacy() and wipes user settings.
+                if (settingsRepository.loadGamingOptimizationSnapshot() != null) {
+                    runCatching { esportsOptimizationEngine.revertOptimizations() }
+                }
+            }
+            GamingPlatformPath.NONE -> {
+                // Baseline only; no platform overrides were applied
+            }
         }
     }
 
@@ -461,13 +577,17 @@ class GamingModeEngine @Inject constructor(
         if (!isAlreadyActive) {
             val allToUnsuspend = (installedSafeToSuspend + affectedPkgs).distinct()
             shizukuManager.suspendPackages(allToUnsuspend, false)
+            settingsRepository.setGamingAffectedPackages(emptySet())
+            runCatching { revertNotificationSuppression() }
         }
+        stopPulse()
+        settingsRepository.setGamingPlatformPath(null)
         settingsRepository.setGamingModeActive(false)
         _isActive.value = false
     }
 
-    private fun updateSnapshotIfNeeded(isVivo: Boolean, isAlreadyActive: Boolean, affectedPkgs: Set<String>) {
-        if (!isVivo && (!isAlreadyActive || affectedPkgs.isNotEmpty())) {
+    private fun updateSnapshotIfNeeded(path: GamingPlatformPath, isAlreadyActive: Boolean, affectedPkgs: Set<String>) {
+        if (path == GamingPlatformPath.GENERIC && (!isAlreadyActive || affectedPkgs.isNotEmpty())) {
             val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
             currentSnapshot?.let {
                 val updatedSnapshot = it.copy(affectedPackages = affectedPkgs)
@@ -541,23 +661,42 @@ class GamingModeEngine @Inject constructor(
             .apply()
     }
 
-    private suspend fun revertPlatformOptimizations() {
-        if (!deviceDiagnosticManager.isVivoOrIqoo()) {
-            val revertSuccess = runCatching { esportsOptimizationEngine.revertOptimizations() }.getOrDefault(false)
-            if (revertSuccess) {
-                FrameXLog.i("Esports optimizations reverted successfully", tag = TAG)
-            } else {
-                FrameXLog.w("Esports revert incomplete during deactivation", tag = TAG)
+    internal suspend fun revertPlatformOptimizations() {
+        val persistedPath = settingsRepository.getGamingPlatformPath()
+        val effectivePath = persistedPath ?: run {
+            FrameXLog.w("Persisted path is null during revert: falling back to hardware check", tag = TAG)
+            if (vivoSuiteGate.isVivoHardware) GamingPlatformPath.VIVO else GamingPlatformPath.GENERIC
+        }
+        when (effectivePath) {
+            GamingPlatformPath.VIVO -> {
+                FrameXLog.i("Reverting Vivo gaming suite (persistedPath=$persistedPath)...", tag = TAG)
+                val revertSuccess = runCatching { vivoGamingOptimizer.revertOptimizations() }.getOrDefault(false)
+                if (revertSuccess) {
+                    FrameXLog.i("Vivo gaming suite reverted successfully", tag = TAG)
+                } else {
+                    FrameXLog.w("Vivo gaming suite revert failed or incomplete", tag = TAG)
+                }
+                settingsRepository.clearGamingOptimizationSnapshot()
             }
-        } else {
-            FrameXLog.i("Vivo/iQOO device detected: Reverting Vivo gaming suite...", tag = TAG)
-            vivoGamingOptimizer.revertOptimizations()
-            settingsRepository.clearGamingOptimizationSnapshot()
+            GamingPlatformPath.GENERIC -> {
+                FrameXLog.i("Reverting esports optimizations (persistedPath=$persistedPath)...", tag = TAG)
+                val revertSuccess = runCatching { esportsOptimizationEngine.revertOptimizations() }.getOrDefault(false)
+                if (revertSuccess) {
+                    FrameXLog.i("Esports optimizations reverted successfully", tag = TAG)
+                } else {
+                    FrameXLog.w("Esports revert incomplete during deactivation", tag = TAG)
+                }
+            }
+            GamingPlatformPath.NONE -> {
+                FrameXLog.i("Persisted session path is NONE: No platform optimizations to revert", tag = TAG)
+            }
         }
     }
 
     suspend fun runPeriodicMaintenance() {
-        if (deviceDiagnosticManager.isVivoOrIqoo()) {
+        if (!isPulseActive) return
+        val path = settingsRepository.getGamingPlatformPath()
+        if (path == GamingPlatformPath.VIVO) {
             vivoGamingOptimizer.runPeriodicMaintenance()
         }
     }
@@ -570,11 +709,18 @@ class GamingModeEngine @Inject constructor(
 
     suspend fun promoteGamePid(packageName: String, pid: Int) {
         _activeGamePackage.value = packageName
-        if (deviceDiagnosticManager.isVivoOrIqoo()) {
-            vivoGamingOptimizer.promoteGamePid(packageName, pid)
-        } else {
-            val uid = runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()
-            esportsOptimizationEngine.attachGame(packageName, uid)
+        val path = settingsRepository.getGamingPlatformPath()
+        when (path) {
+            GamingPlatformPath.VIVO -> {
+                vivoGamingOptimizer.promoteGamePid(packageName, pid)
+            }
+            GamingPlatformPath.GENERIC -> {
+                val uid = runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()
+                esportsOptimizationEngine.attachGame(packageName, uid)
+            }
+            GamingPlatformPath.NONE, null -> {
+                FrameXLog.i("promoteGamePid: platform path is $path, skipping platform PID attachment", tag = TAG)
+            }
         }
     }
 
@@ -657,6 +803,20 @@ class GamingModeEngine @Inject constructor(
 
         private val _isActive = MutableStateFlow(false)
         val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
+
+        @VisibleForTesting
+        internal fun resetSessionStateForTesting() {
+            _isActive.value = false
+        }
+
+        internal val VIVO_PLATFORM_STAGES = setOf(
+            Stage.POWER,
+            Stage.DISPLAY,
+            Stage.TOUCH,
+            Stage.GYRO,
+            Stage.KERNEL,
+            Stage.HANDSHAKE
+        )
 
         internal const val RECOVERY_NOTIFICATION_ID = 3
 

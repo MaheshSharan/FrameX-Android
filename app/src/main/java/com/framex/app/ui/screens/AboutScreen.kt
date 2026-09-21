@@ -58,14 +58,22 @@ class AboutViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     val deviceDiagnosticManager: DeviceDiagnosticManager,
     val updateRepository: com.framex.app.update.UpdateRepository,
-    val updateInstaller: com.framex.app.update.UpdateInstaller
+    val updateInstaller: com.framex.app.update.UpdateInstaller,
+    private val gamingModeEngine: com.framex.app.gaming.GamingModeEngine,
+    val vivoSuiteGate: com.framex.app.gaming.VivoSuiteGate
 ) : ViewModel() {
     val vivoOptEnabled = settingsRepository.vivoOptEnabled
     val autoUpdateCheckEnabled = settingsRepository.autoUpdateCheckEnabled
     val downloadState = updateRepository.downloadState
 
+    val isVivoHardware: Boolean get() = vivoSuiteGate.isVivoHardware
+
     fun setVivoOptEnabled(enabled: Boolean) {
+        val wasEnabled = settingsRepository.vivoOptEnabled.value
         settingsRepository.setVivoOptEnabled(enabled)
+        if (!enabled && wasEnabled) {
+            gamingModeEngine.onVivoOptToggledOffMidSession()
+        }
     }
 
     fun setAutoUpdateCheckEnabled(enabled: Boolean) {
@@ -333,6 +341,7 @@ fun AboutScreen(
 
             // Hardware Optimization Card (Vivo / iQOO Diagnostic)
             val isVivoOptActive by viewModel.vivoOptEnabled.collectAsState()
+            val isVivoDevice = viewModel.isVivoHardware
             var showVivoDiagModal by remember { mutableStateOf(false) }
 
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -365,17 +374,46 @@ fun AboutScreen(
                                         .border(1.dp, Color(0xFF2FBF9F).copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF4FDCB8), modifier = Modifier.size(20.dp))
+                                    Icon(
+                                        Icons.Default.Tune,
+                                        contentDescription = null,
+                                        tint = if (isVivoDevice) Color(0xFF4FDCB8) else Color.Gray,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Vivo T3 Ultra Hardware Optimizations", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
+                                    Text(
+                                        "Vivo / iQOO Hardware Suite",
+                                        color = if (isVivoDevice) Color.White else Color.White.copy(alpha = 0.5f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.5.sp
+                                    )
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text("Enable OriginOS / FuntouchOS OEM power governor overrides.", color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp)
+                                    if (isVivoDevice) {
+                                        Text(
+                                            "Applies power, touch, gyro and scheduler overrides during Gaming Mode. Off = only app suspension, RAM purge and DND.",
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            fontSize = 12.5.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "Enabling takes effect at the next activation.",
+                                            color = Color(0xFF4FDCB8).copy(alpha = 0.8f),
+                                            fontSize = 11.5.sp
+                                        )
+                                    } else {
+                                        Text(
+                                            "Not applicable on this device",
+                                            color = Color.White.copy(alpha = 0.4f),
+                                            fontSize = 12.5.sp
+                                        )
+                                    }
                                 }
                             }
                             Switch(
-                                checked = isVivoOptActive,
+                                checked = isVivoDevice && isVivoOptActive,
+                                enabled = isVivoDevice,
                                 onCheckedChange = { checked ->
                                     if (checked) {
                                         showVivoDiagModal = true
@@ -390,7 +428,6 @@ fun AboutScreen(
             }
 
             if (showVivoDiagModal) {
-                val isVivoDevice = viewModel.deviceDiagnosticManager.isVivoOrIqoo()
                 val modelInfo = viewModel.deviceDiagnosticManager.getDeviceModelInfo()
                 VivoDiagnosticDialog(
                     isVivoOrIqoo = isVivoDevice,

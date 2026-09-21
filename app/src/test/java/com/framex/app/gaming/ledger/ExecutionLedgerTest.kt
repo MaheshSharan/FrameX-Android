@@ -431,4 +431,23 @@ class ExecutionLedgerTest {
         assertEquals(1, powerStage.appliedCount)
         assertEquals(2, netStage.appliedCount)
     }
+
+    @Test
+    fun removeStages_removesOnlyTargetStagesAndKeepsOthers() {
+        val ledger = ExecutionLedger()
+        ledger.upsert(AppliedOp(Stage.MEMORY, "trim-caches", "4G", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.APPS, "suspend", "25", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.POWER, "monster_mode", "5", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.DISPLAY, "peak_refresh_rate", "120", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+        ledger.upsert(AppliedOp(Stage.DND, "interruption_filter", "priority", "", OpStatus.APPLIED, OpPriority.PRIMARY))
+
+        assertEquals(5, ledger.ops.value.size)
+
+        // Remove Vivo platform stages: POWER and DISPLAY
+        ledger.removeStages(setOf(Stage.POWER, Stage.DISPLAY))
+
+        assertEquals(3, ledger.ops.value.size)
+        val remainingStages = ledger.ops.value.map { it.stage }.toSet()
+        assertEquals(setOf(Stage.MEMORY, Stage.APPS, Stage.DND), remainingStages)
+    }
 }

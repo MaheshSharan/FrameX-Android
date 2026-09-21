@@ -1,14 +1,11 @@
 package com.framex.app.gaming
 
-import com.framex.app.device.DeviceDiagnosticManager
-import com.framex.app.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class OemPackageResolver @Inject constructor(
-    private val deviceDiagnosticManager: DeviceDiagnosticManager,
-    private val settingsRepository: SettingsRepository
+    private val vivoSuiteGate: VivoSuiteGate
 ) {
 
     // =========================================================================
@@ -20,8 +17,7 @@ class OemPackageResolver @Inject constructor(
      * hardware diagnostics and user optimization preferences.
      */
     fun getOemPackagesToSuspend(): List<String> {
-        val isVivoEnabled = deviceDiagnosticManager.isVivoOrIqoo() && settingsRepository.vivoOptEnabled.value
-        return if (isVivoEnabled) {
+        return if (vivoSuiteGate.isVivoSuiteEnabled) {
             VIVO_SAFE_TO_SUSPEND
         } else {
             emptyList()

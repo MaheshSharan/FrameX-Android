@@ -38,6 +38,12 @@ class ExecutionLedger @Inject constructor() {
         _ops.value = emptyList()
     }
 
+    fun removeStages(stages: Set<Stage>) {
+        _ops.update { currentList ->
+            currentList.filter { it.stage !in stages }
+        }
+    }
+
     fun getSummary(): LedgerSummary {
         val currentOps = _ops.value
         if (currentOps.isEmpty()) {

@@ -52,7 +52,7 @@ class GamingModeService : Service() {
         _isRunning.value = true
         createNotificationChannel()
         startForegroundServiceCompat()
-        startPeriodicMaintenanceLoop()
+        observeMaintenancePulse()
         FrameXLog.i("GamingModeService created and foregrounded", tag = TAG)
     }
 
@@ -97,6 +97,19 @@ class GamingModeService : Service() {
                 FrameXLog.e("Emergency deactivation failed on task removal", error, tag = TAG)
             }
             stopSelf()
+        }
+    }
+
+    private fun observeMaintenancePulse() {
+        serviceScope.launch {
+            gamingModeEngine.shouldPulseMaintenance.collect { active ->
+                if (active) {
+                    startPeriodicMaintenanceLoop()
+                } else {
+                    maintenanceJob?.cancel()
+                    maintenanceJob = null
+                }
+            }
         }
     }
 

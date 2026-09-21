@@ -25,12 +25,13 @@ import javax.inject.Singleton
  * or memory-factor to prevent 60Hz LTPO/RMS lockouts.
  */
 @Singleton
-class VivoGamingOptimizer @Inject constructor(
+open class VivoGamingOptimizer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: com.framex.app.repository.SettingsRepository,
     private val ledgerExecutor: com.framex.app.gaming.ledger.LedgerExecutor,
-    private val auditLogRepository: SystemAuditLogRepository
+    private val auditLogRepository: SystemAuditLogRepository,
+    private val vivoSuiteGate: VivoSuiteGate
 ) {
 
     private var activeGamePackage: String? = null
@@ -272,7 +273,7 @@ class VivoGamingOptimizer @Inject constructor(
     // Teardown & Rollback
     // =========================================================================
 
-    suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
+    open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
             addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
@@ -349,6 +350,7 @@ class VivoGamingOptimizer @Inject constructor(
     // =========================================================================
 
     suspend fun injectPerfGameList(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val existingRaw = queryPerfGameListDirect()
         val listTokens = existingRaw.split(":").map { it.trim() }.filter { it.isNotBlank() }
@@ -368,14 +370,17 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun getPerfGameList(): List<String> = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext emptyList()
         queryPerfGameListDirect().split(":").map { it.trim() }.filter { it.isNotBlank() }
     }
 
     suspend fun getRawPerfGameList(): String = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
         queryPerfGameListDirect()
     }
 
     suspend fun removePerfGame(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoHardware) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val existingRaw = queryPerfGameListDirect()
         val listTokens = existingRaw.split(":").map { it.trim() }.filter { it.isNotBlank() && it != safePkg }
@@ -413,6 +418,7 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun getPackageCompileFilter(packageName: String): String = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
         val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
         val line = dumpRes?.output?.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
@@ -421,6 +427,7 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun compileSpeedAot(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         FrameXLog.i("Starting AOT speed compilation for $safePkg...", tag = TAG)
         val compileRes = shizukuManager.executeCommandWithResult("pm compile -m speed -f $safePkg")
@@ -433,12 +440,15 @@ class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun isSpeedCompiled(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
         dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
     }
 
     suspend fun setMemcTargetFps(packageName: String, enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val allowed = if (enabled) vivoSuiteGate.isVivoSuiteEnabled else vivoSuiteGate.isVivoHardware
+        if (!allowed) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val value = if (enabled) "\"${safePkg}_0_120\"" else "\"\""
         val payload = listOf(

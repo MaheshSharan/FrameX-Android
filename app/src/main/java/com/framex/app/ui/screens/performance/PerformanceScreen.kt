@@ -48,6 +48,7 @@ fun PerformanceScreen(
     val metricsState by viewModel.metricsState.collectAsState()
     val fixedPerformanceMode by viewModel.fixedPerformanceMode.collectAsState()
     val activeGamingSession by viewModel.activeGamingSession.collectAsState()
+    val isVivoSuiteEnabled by viewModel.isVivoSuiteEnabled.collectAsState()
 
     val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
@@ -195,7 +196,7 @@ fun PerformanceScreen(
             }
 
             // Dedicated Vivo & iQOO Hardware Suite (AOT Speed Compile & Game Space Whitelist)
-            if (viewModel.isVivoDevice) {
+            if (isVivoSuiteEnabled) {
                 item {
                     val perfGameList by viewModel.vivoPerfGameList.collectAsState()
                     val rawPerfGameList by viewModel.rawPerfGameList.collectAsState()
@@ -327,18 +328,16 @@ fun PerformanceScreen(
                 OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
             }
 
-            // Vivo System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
-            if (viewModel.isVivoDevice) {
-                item {
-                    val auditLogs by viewModel.vivoAuditLogs.collectAsState()
-                    val isAuditLoggingEnabled by viewModel.auditLoggingEnabled.collectAsState()
-                    com.framex.app.ui.screens.performance.sections.SystemAuditLogSection(
-                        isLoggingEnabled = isAuditLoggingEnabled,
-                        onToggleLogging = { viewModel.setAuditLoggingEnabled(it) },
-                        auditLogs = auditLogs,
-                        onClearLogs = { viewModel.clearVivoAuditLogs() }
-                    )
-                }
+            // System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
+            item {
+                val auditLogs by viewModel.vivoAuditLogs.collectAsState()
+                val isAuditLoggingEnabled by viewModel.auditLoggingEnabled.collectAsState()
+                com.framex.app.ui.screens.performance.sections.SystemAuditLogSection(
+                    isLoggingEnabled = isAuditLoggingEnabled,
+                    onToggleLogging = { viewModel.setAuditLoggingEnabled(it) },
+                    auditLogs = auditLogs,
+                    onClearLogs = { viewModel.clearVivoAuditLogs() }
+                )
             }
         }
 
@@ -367,7 +366,7 @@ fun PerformanceScreen(
                     activeDeployingGamePkg = tPkg
                 },
                 onDismiss = { configGamePkg = null },
-                isVivo = viewModel.isVivoDevice,
+                isVivo = isVivoSuiteEnabled,
                 onToggleMemc = { p, v, cb -> viewModel.toggleMemc(p, v, cb) }
             )
         }

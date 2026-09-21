@@ -23,8 +23,11 @@
 </p>
 
 ---
->  [!NOTE]
-> **Gaming Performance Mode** is optimized specifically for **Android 16** and **Vivo OriginOS/FuntouchOS** devices (featuring hardware Mode 4 1080p @ 120Hz lock and 4 OEM Whitelists engine). For Vivo devices, enable **Vivo T3 Ultra Hardware Optimizations** in Settings (About) to unlock maximum gaming performance. Behavior on other Android skins may vary.
+> [!NOTE]
+> **Gaming Performance Mode** adapts dynamically based on your device hardware:
+> - **Generic / Non-Vivo Devices:** Applies standard AOSP optimizations (RAM cache purge, CPU process priority locks, network/doze bypass, and display/touch boosts).
+> - **Vivo / iQOO (Hardware Optimizations ON):** Activates the verified OriginOS/FuntouchOS hardware suite (1080p @ 120Hz Mode 4 lock, RMS display arbitration, touch boost, and OEM daemon whitelisting).
+> - **Vivo / iQOO (Hardware Optimizations OFF):** Safely executes **only non-invasive baseline tweaks** (RAM cache purge, background app suspension, and DND). Generic AOSP display/thermal overrides are deliberately bypassed to protect against 60Hz lockouts and RMS arbitration conflicts.
 
 > [!IMPORTANT]
 > **Encountering "Parse Failed" or "Unsupported Hardware"?**

@@ -107,6 +107,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts:1.6.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
 }
