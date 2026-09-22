@@ -99,6 +99,16 @@ fun DeepFreezeSafeguardDialog(
                     lineHeight = 18.sp
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "💡 Note: You can customize individual optimization commands under Settings > Execution Center.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 11.5.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Row(

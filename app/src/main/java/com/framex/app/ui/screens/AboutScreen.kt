@@ -65,6 +65,7 @@ class AboutViewModel @Inject constructor(
     val toastEvents = gamingModeEngine.toastEvents
     val vivoOptEnabled = settingsRepository.vivoOptEnabled
     val autoUpdateCheckEnabled = settingsRepository.autoUpdateCheckEnabled
+    val disableThermalThrottling = settingsRepository.disableThermalThrottling
     val downloadState = updateRepository.downloadState
 
     val isVivoHardware: Boolean get() = vivoSuiteGate.isVivoHardware
@@ -79,6 +80,10 @@ class AboutViewModel @Inject constructor(
 
     fun setAutoUpdateCheckEnabled(enabled: Boolean) {
         settingsRepository.setAutoUpdateCheckEnabled(enabled)
+    }
+
+    fun setDisableThermalThrottling(enabled: Boolean) {
+        settingsRepository.setDisableThermalThrottling(enabled)
     }
 }
 
@@ -433,6 +438,15 @@ fun AboutScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Execution Center Card (Collapsible optimization command overrides)
+            val disableThermalThrottling by viewModel.disableThermalThrottling.collectAsState()
+            com.framex.app.ui.screens.about.ExecutionCenterSection(
+                disableThermalThrottling = disableThermalThrottling,
+                onToggleDisableThermalThrottling = { viewModel.setDisableThermalThrottling(it) }
+            )
 
             if (showVivoDiagModal) {
                 val modelInfo = viewModel.deviceDiagnosticManager.getDeviceModelInfo()

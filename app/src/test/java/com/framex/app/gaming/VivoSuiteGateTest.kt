@@ -767,5 +767,26 @@ class VivoSuiteGateTest {
         repo.toggleLauncherGame("com.pubg.imobile")
         assertTrue("Launcher games must be empty after removing", repo.launcherGames.value.isEmpty())
     }
+
+    @Test
+    fun disableThermalThrottling_defaultsToFalseAndPersistsState() = runBlocking {
+        val prefsData = mutableMapOf<String, Any?>()
+        val prefs = createMockSharedPreferences(prefsData)
+        val context = MockContext(prefs)
+        val repo = SettingsRepository(context)
+
+        // Verify default-off state (Safe Mode: thermal safety preserved)
+        assertFalse("disableThermalThrottling must default to false", repo.disableThermalThrottling.first())
+
+        // Toggle disable thermal throttling on (Aggressive Mode)
+        repo.setDisableThermalThrottling(true)
+        assertTrue("disableThermalThrottling flow must emit true", repo.disableThermalThrottling.first())
+        assertEquals(true, prefsData["gaming_disable_thermal_throttling"])
+
+        // Toggle back to safe mode
+        repo.setDisableThermalThrottling(false)
+        assertFalse("disableThermalThrottling flow must emit false", repo.disableThermalThrottling.first())
+        assertEquals(false, prefsData["gaming_disable_thermal_throttling"])
+    }
 }
 
