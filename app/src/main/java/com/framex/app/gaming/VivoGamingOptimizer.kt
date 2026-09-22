@@ -150,11 +150,13 @@ open class VivoGamingOptimizer @Inject constructor(
     }
 
     private suspend fun executeDisplayAndGameSpacePayload() {
-        val specs = listOf(
+        val specs = mutableListOf(
             com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:com.vivo.vivoconsole.icon.status --bind value:s:2", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
-            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL),
-            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.PRIMARY)
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.DETAIL)
         )
+        if (settingsRepository.disableThermalThrottling.value) {
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
+        }
         ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.DISPLAY, specs)
     }
 

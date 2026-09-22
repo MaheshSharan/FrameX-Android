@@ -185,9 +185,14 @@ class EsportsOptimizationEngine @Inject constructor(
         val powerSpecs = listOf(
             CommandSpec("cmd thermalservice override-status 0", OpPriority.PRIMARY)
         )
-        ledgerExecutor.executeBatch(Stage.POWER, powerSpecs)
-        settingsRepository.setNeedsThermalOverrideActive(true)
-        FrameXLog.i("RAM cache pre-trimming, ART heap compaction & thermal throttle override executed", tag = TAG)
+        if (settingsRepository.disableThermalThrottling.value) {
+            ledgerExecutor.executeBatch(Stage.POWER, powerSpecs)
+            settingsRepository.setNeedsThermalOverrideActive(true)
+            FrameXLog.i("RAM cache pre-trimming, ART heap compaction & thermal throttle override executed", tag = TAG)
+        } else {
+            ledgerExecutor.recordSkipped(Stage.POWER, powerSpecs)
+            FrameXLog.i("RAM cache pre-trimming & ART heap compaction executed (Thermal override skipped — Safe Mode)", tag = TAG)
+        }
     }
 
     private suspend fun applyProcessPriorities(packageName: String?) {

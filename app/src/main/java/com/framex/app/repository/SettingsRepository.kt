@@ -376,6 +376,14 @@ class SettingsRepository @Inject constructor(
         _deepFreezeEnabled.value = enabled
     }
 
+    private val _disableThermalThrottling = MutableStateFlow(prefs.getBoolean(KEY_DISABLE_THERMAL_THROTTLING, false))
+    val disableThermalThrottling: StateFlow<Boolean> = _disableThermalThrottling.asStateFlow()
+
+    fun setDisableThermalThrottling(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DISABLE_THERMAL_THROTTLING, enabled).apply()
+        _disableThermalThrottling.value = enabled
+    }
+
     private val _hasSeenDeepFreezeNotice = MutableStateFlow(prefs.getBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, false))
     val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
 
@@ -496,6 +504,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_FRAME_PACING_OVERLAY = "esports_frame_pacing_overlay"
         private const val KEY_FIXED_PERFORMANCE_MODE = "esports_fixed_performance_mode"
         private const val KEY_DEEP_FREEZE_ENABLED = "gaming_deep_freeze_enabled"
+        private const val KEY_DISABLE_THERMAL_THROTTLING = "gaming_disable_thermal_throttling"
         private const val KEY_HAS_SEEN_DEEP_FREEZE_NOTICE = "has_seen_deep_freeze_notice"
         private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
         private const val KEY_OVERLAY_WAS_RUNNING = "overlay_was_running"
