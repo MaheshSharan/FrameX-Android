@@ -59,7 +59,6 @@ fun VivoPerformanceToolsSection(
         )
 
         AotCompileCard(
-            launcherGames = launcherGames,
             onCompileAll = { onComplete -> onCompileAll(launcherGames, onComplete) }
         )
 
@@ -161,12 +160,12 @@ private fun PerfListCard(
                 // Add to Perf List — full width
                 Button(
                     onClick = {
-                        if (!isAdding && launcherGames.isNotEmpty()) {
+                        if (!isAdding) {
                             isAdding = true
                             onAddAll { isAdding = false }
                         }
                     },
-                    enabled = !isAdding && launcherGames.isNotEmpty(),
+                    enabled = !isAdding,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF0F3B4A),
@@ -205,7 +204,6 @@ private fun PerfListCard(
 
 @Composable
 private fun AotCompileCard(
-    launcherGames: Set<String>,
     onCompileAll: ((Boolean) -> Unit) -> Unit
 ) {
     var isCompiling by remember { mutableStateOf(false) }
@@ -258,7 +256,7 @@ private fun AotCompileCard(
 
             Button(
                 onClick = {
-                    if (!isCompiling && launcherGames.isNotEmpty()) {
+                    if (!isCompiling) {
                         isCompiling = true
                         statusText = null
                         onCompileAll { ok ->
@@ -267,7 +265,7 @@ private fun AotCompileCard(
                         }
                     }
                 },
-                enabled = !isCompiling && launcherGames.isNotEmpty(),
+                enabled = !isCompiling,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF0F3B4A),

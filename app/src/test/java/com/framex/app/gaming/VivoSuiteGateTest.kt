@@ -721,4 +721,51 @@ class VivoSuiteGateTest {
         assertTrue("Must return true when transitioning from VIVO to GENERIC", result)
         assertTrue("Revert must be called when transitioning from VIVO to GENERIC", rig.testOptimizer.revertCalled)
     }
+
+    @Test
+    fun deepFreezeSettings_defaultToFalseAndPersistState() = runBlocking {
+        val prefsData = mutableMapOf<String, Any?>()
+        val prefs = createMockSharedPreferences(prefsData)
+        val context = MockContext(prefs)
+        val repo = SettingsRepository(context)
+
+        // Verify default-off state (Safeguards active)
+        assertFalse("deepFreezeEnabled must default to false", repo.deepFreezeEnabled.first())
+        assertFalse("hasSeenDeepFreezeNotice must default to false", repo.hasSeenDeepFreezeNotice.first())
+
+        // Toggle deep freeze on
+        repo.setDeepFreezeEnabled(true)
+        assertTrue("deepFreezeEnabled flow must emit true", repo.deepFreezeEnabled.first())
+        assertEquals(true, prefsData["gaming_deep_freeze_enabled"])
+
+        // Mark notice seen
+        repo.setHasSeenDeepFreezeNotice(true)
+        assertTrue("hasSeenDeepFreezeNotice flow must emit true", repo.hasSeenDeepFreezeNotice.first())
+        assertEquals(true, prefsData["has_seen_deep_freeze_notice"])
+
+        // Verify Google app list integrity (Issue #78 preservation)
+        assertTrue("GOOGLE_SAFE_TO_SUSPEND must contain youtube", GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND.contains("com.google.android.youtube"))
+        assertTrue("GOOGLE_SAFE_TO_SUSPEND must contain chrome", GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND.contains("com.android.chrome"))
+        assertTrue("GOOGLE_SAFE_TO_SUSPEND must contain gm", GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND.contains("com.google.android.gm"))
+    }
+
+    @Test
+    fun launcherGames_emptyByDefaultAndSynchronousRead() = runBlocking {
+        val prefsData = mutableMapOf<String, Any?>()
+        val prefs = createMockSharedPreferences(prefsData)
+        val context = MockContext(prefs)
+        val repo = SettingsRepository(context)
+
+        // Default empty state
+        assertTrue("Launcher games must be empty by default", repo.launcherGames.value.isEmpty())
+
+        // Add a game
+        repo.toggleLauncherGame("com.pubg.imobile")
+        assertTrue("Launcher games must contain added game", repo.launcherGames.value.contains("com.pubg.imobile"))
+
+        // Remove the game
+        repo.toggleLauncherGame("com.pubg.imobile")
+        assertTrue("Launcher games must be empty after removing", repo.launcherGames.value.isEmpty())
+    }
 }
+

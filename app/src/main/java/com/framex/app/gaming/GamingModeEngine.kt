@@ -382,12 +382,18 @@ class GamingModeEngine @Inject constructor(
         finalWhitelist: Set<String>,
         installedSafeToSuspend: List<String>
     ): Set<String> {
-        val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist && isPackageInstalled(it) }
+        val isDeepFreeze = settingsRepository.deepFreezeEnabled.value
+        val systemAndOemTargets = if (isDeepFreeze) {
+            val googleTargets = GOOGLE_SAFE_TO_SUSPEND.filter { it !in finalWhitelist && isPackageInstalled(it) }
+            installedSafeToSuspend + googleTargets
+        } else {
+            emptyList()
+        }
         val userApps = withContext(Dispatchers.IO) { getInstalledUserApps() }
             .filter { it.packageName !in finalWhitelist }
             .map { it.packageName }
 
-        val allTargets = (installedSafeToSuspend + googleTargets + userApps).distinct()
+        val allTargets = (systemAndOemTargets + userApps).distinct()
         val preSuspended = shizukuManager.getSuspendedPackages(allTargets)
         val selfPkg = context.packageName
         val targetsToFreeze = allTargets

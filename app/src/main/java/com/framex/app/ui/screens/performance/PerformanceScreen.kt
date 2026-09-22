@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.ui.components.DeepFreezeSafeguardDialog
 import com.framex.app.ui.screens.performance.PerformanceViewModel
 import com.framex.app.ui.screens.performance.dialogs.*
 import com.framex.app.ui.screens.performance.sections.*
@@ -47,6 +48,8 @@ fun PerformanceScreen(
     val googleApps by viewModel.googleApps.collectAsState()
     val metricsState by viewModel.metricsState.collectAsState()
     val fixedPerformanceMode by viewModel.fixedPerformanceMode.collectAsState()
+    val deepFreezeEnabled by viewModel.deepFreezeEnabled.collectAsState()
+    val hasSeenDeepFreezeNotice by viewModel.hasSeenDeepFreezeNotice.collectAsState()
     val activeGamingSession by viewModel.activeGamingSession.collectAsState()
     val isVivoSuiteEnabled by viewModel.isVivoSuiteEnabled.collectAsState()
 
@@ -315,17 +318,20 @@ fun PerformanceScreen(
             GoogleAppsSection(
                 googleApps = googleApps,
                 whitelist = whitelist,
-                onToggleWhitelist = { pkg -> viewModel.toggleWhitelist(pkg) }
+                onToggleWhitelist = { pkg -> viewModel.toggleWhitelist(pkg) },
+                deepFreezeEnabled = deepFreezeEnabled,
+                onToggleDeepFreeze = { enabled -> viewModel.toggleDeepFreeze(enabled) }
             )
 
-            // Protected Daemons
-            item {
-                ProtectedDaemonsSection(daemonsList = viewModel.gamingDaemonsList)
-            }
+            // Protected Daemons & OEM Suspended Packages (Visible only when Deep Freeze is enabled)
+            if (deepFreezeEnabled) {
+                item {
+                    ProtectedDaemonsSection(daemonsList = viewModel.gamingDaemonsList)
+                }
 
-            // OEM Suspended Packages
-            item {
-                OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
+                item {
+                    OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
+                }
             }
 
             // System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
@@ -339,6 +345,17 @@ fun PerformanceScreen(
                     onClearLogs = { viewModel.clearVivoAuditLogs() }
                 )
             }
+        }
+
+        // Deep Freeze Safeguard Notice Dialog (One-time modal)
+        if (!hasSeenDeepFreezeNotice) {
+            DeepFreezeSafeguardDialog(
+                onDismiss = { viewModel.dismissDeepFreezeNotice() },
+                onConfirmEnable = {
+                    viewModel.toggleDeepFreeze(true)
+                    viewModel.dismissDeepFreezeNotice()
+                }
+            )
         }
 
         // Floating Success Banner
