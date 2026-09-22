@@ -220,7 +220,7 @@ class CpuMonitor @Inject constructor(
             2 -> {
                 // Issue #84: 2-cluster architecture support (e.g. Snapdragon 8 Elite / Oryon without efficiency cores).
                 // If top policy max is >= 2.8GHz, it is a Performance + Ultra configuration.
-                if (policies[1].maxMhz >= 2800) {
+                if (policies[1].maxMhz >= TWO_CLUSTER_ULTRA_THRESHOLD_MHZ) {
                     CpuClusterState(
                         effMhz = 0,
                         perfMhz = policies[0].currentMhz,
@@ -281,6 +281,9 @@ class CpuMonitor @Inject constructor(
 
     companion object {
         private const val KHZ_TO_MHZ = 1000
+        // Issue #84: 2-cluster CPU architecture threshold (e.g. Snapdragon 8 Elite / Oryon without efficiency cores).
+        // If the top policy max frequency is >= 2.8 GHz (2800 MHz), it is classified as Performance + Ultra.
+        private const val TWO_CLUSTER_ULTRA_THRESHOLD_MHZ = 2800
     }
 }
 

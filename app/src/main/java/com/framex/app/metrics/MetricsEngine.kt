@@ -146,8 +146,7 @@ class MetricsEngine @Inject constructor(
                 // Issue #86: Keep battery temp ("temp") continuously monitored for timeline recording.
                 // BatteryMonitor is a passive sticky broadcast check with zero IPC overhead.
                 base + setOf("temp")
-            }
-                .collect { enabled ->
+            }.collect { enabled ->
                 toggleModule("cpu", enabled) {
                     coroutineScope {
                         launch {

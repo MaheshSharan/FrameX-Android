@@ -2,6 +2,7 @@ package com.framex.app.gaming
 
 import android.content.Context
 import android.widget.Toast
+import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.shizuku.ShizukuManager
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,8 +32,12 @@ open class VivoGamingOptimizer @Inject constructor(
     private val settingsRepository: com.framex.app.repository.SettingsRepository,
     private val ledgerExecutor: com.framex.app.gaming.ledger.LedgerExecutor,
     private val auditLogRepository: SystemAuditLogRepository,
-    private val vivoSuiteGate: VivoSuiteGate
+    private val vivoSuiteGate: VivoSuiteGate,
+    private val deviceDiagnosticManager: DeviceDiagnosticManager
 ) {
+
+    private val maxHardwareRefreshRate: Int
+        get() = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60)
 
     private var activeGamePackage: String? = null
     private var activeGamePid: Int = 0
@@ -91,7 +96,8 @@ open class VivoGamingOptimizer @Inject constructor(
         onProgress?.invoke(0.68f, "Disabling Thermal Auto-Exit & Brightness Dimming…")
         executeDisplayAndGameSpacePayload()
 
-        onProgress?.invoke(0.76f, "Initializing Game Handshake & 120 FPS Target…")
+        val targetFps = maxHardwareRefreshRate
+        onProgress?.invoke(0.76f, "Initializing Game Handshake & ${targetFps} FPS Target…")
         executeLiveHandshakePayload(packageName, pid)
 
         onProgress?.invoke(0.84f, "Activating Hardware Gyroscope & Anti-Shake…")
@@ -155,8 +161,9 @@ open class VivoGamingOptimizer @Inject constructor(
     private suspend fun executeLiveHandshakePayload(packageName: String?, pid: Int) {
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
         val targetPkg = safePkg ?: "com.vivo.game"
+        val targetFps = maxHardwareRefreshRate
         val specs = listOf(
-            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_120\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_$targetFps\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
             com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
             com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.DETAIL)
         )
@@ -450,7 +457,8 @@ open class VivoGamingOptimizer @Inject constructor(
         val allowed = if (enabled) vivoSuiteGate.isVivoSuiteEnabled else vivoSuiteGate.isVivoHardware
         if (!allowed) return@withContext false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
-        val value = if (enabled) "\"${safePkg}_0_120\"" else "\"\""
+        val targetFps = maxHardwareRefreshRate
+        val value = if (enabled) "\"${safePkg}_0_$targetFps\"" else "\"\""
         val payload = listOf(
             "content insert --uri content://settings/global --bind name:s:cached_memc_sdk_game_target_fps --bind value:s:$value",
             "content insert --uri content://settings/system --bind name:s:cached_memc_sdk_game_target_fps --bind value:s:$value"

@@ -69,10 +69,11 @@ android {
     }
 
     applicationVariants.all {
+        val variantName = name
         val ver = android.defaultConfig.versionName ?: "unknown"
         outputs.all {
             if (this is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
-                outputFileName = "FrameX_v${ver}-${this@all.name}.apk"
+                outputFileName = "FrameX_v${ver}-${variantName}.apk"
             }
         }
     }

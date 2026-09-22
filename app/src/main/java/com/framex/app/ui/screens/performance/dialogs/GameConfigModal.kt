@@ -36,6 +36,8 @@ fun GameConfigModal(
     onBoostClicked: (String) -> Unit,
     onDismiss: () -> Unit,
     isVivo: Boolean = false,
+    maxRefreshRate: Int = 120,
+    getGameConfigMemc: (String) -> Boolean = { false },
     onToggleMemc: ((String, Boolean, (Boolean) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -74,78 +76,76 @@ fun GameConfigModal(
                     if (currentBitmap != null) {
                         Image(
                             bitmap = currentBitmap,
-                            contentDescription = null,
+                            contentDescription = app.label,
                             modifier = Modifier
-                                .size(52.dp)
+                                .size(48.dp)
                                 .clip(RoundedCornerShape(12.dp))
                         )
                     } else {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                .size(48.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                app.label.take(2).uppercase(),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
+                            Icon(
+                                Icons.Default.SportsEsports,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     }
+
                     Spacer(modifier = Modifier.width(16.dp))
-                    Column {
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            app.label,
-                            color = Color.White,
+                            text = app.label,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            app.packageName,
+                            text = app.packageName,
+                            style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray,
-                            fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "The following configuration will change automatically when the game starts.",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
+
                 Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    "ENGINE OPTIMIZATIONS",
+                    "GAME CONFIGURATION",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Boost RAM Feature
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Bolt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Boost RAM",
+                            "Boost RAM on Launch",
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                         Text(
                             "Force-stop background activities",
@@ -167,7 +167,7 @@ fun GameConfigModal(
                 }
 
                 if (isVivo) {
-                    var memcEnabled by remember(pkg) { mutableStateOf(false) }
+                    var memcEnabled by remember(pkg) { mutableStateOf(getGameConfigMemc(pkg)) }
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -186,13 +186,13 @@ fun GameConfigModal(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "MEMC 120 FPS Target",
+                                "MEMC ${maxRefreshRate} FPS Target",
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp
                             )
                             Text(
-                                "Hardware IC 60->120 FPS interpolation",
+                                "Hardware IC 60->${maxRefreshRate} FPS interpolation",
                                 color = Color.Gray,
                                 fontSize = 11.sp
                             )
@@ -201,7 +201,11 @@ fun GameConfigModal(
                             checked = memcEnabled,
                             onCheckedChange = { checked ->
                                 memcEnabled = checked
-                                onToggleMemc?.invoke(pkg, checked) { }
+                                onToggleMemc?.invoke(pkg, checked) { success ->
+                                    if (!success) {
+                                        memcEnabled = !checked
+                                    }
+                                }
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,

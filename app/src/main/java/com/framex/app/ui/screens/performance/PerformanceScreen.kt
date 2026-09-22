@@ -361,6 +361,8 @@ fun PerformanceScreen(
                 userApps = userApps,
                 getGameConfigBoostRam = { p -> viewModel.getGameConfigBoostRam(p) },
                 setGameConfigBoostRam = { p, v -> viewModel.setGameConfigBoostRam(p, v) },
+                getGameConfigMemc = { p -> viewModel.getGameConfigMemc(p) },
+                maxRefreshRate = viewModel.maxRefreshRate,
                 onBoostClicked = { tPkg ->
                     configGamePkg = null
                     activeDeployingGamePkg = tPkg

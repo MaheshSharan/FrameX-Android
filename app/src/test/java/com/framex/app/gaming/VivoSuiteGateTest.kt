@@ -149,8 +149,9 @@ class VivoSuiteGateTest {
         settingsRepo: SettingsRepository,
         ledgerExecutor: LedgerExecutor,
         auditRepo: SystemAuditLogRepository,
-        gate: VivoSuiteGate
-    ) : VivoGamingOptimizer(context, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate) {
+        gate: VivoSuiteGate,
+        deviceDiagnosticManager: DeviceDiagnosticManager = TestDeviceDiagnosticManager(context, isVivo = true)
+    ) : VivoGamingOptimizer(context, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate, deviceDiagnosticManager) {
         var revertCalled = false
         var revertResult = true
         var revertThrows: Throwable? = null
@@ -497,7 +498,8 @@ class VivoSuiteGateTest {
             settingsRepository = settingsRepo,
             ledgerExecutor = ledgerExecutor,
             auditLogRepository = auditRepo,
-            vivoSuiteGate = gate
+            vivoSuiteGate = gate,
+            deviceDiagnosticManager = vivoManager
         )
 
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
@@ -534,7 +536,8 @@ class VivoSuiteGateTest {
             settingsRepository = settingsRepo,
             ledgerExecutor = ledgerExecutor,
             auditLogRepository = auditRepo,
-            vivoSuiteGate = gate
+            vivoSuiteGate = gate,
+            deviceDiagnosticManager = nonVivoManager
         )
 
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware

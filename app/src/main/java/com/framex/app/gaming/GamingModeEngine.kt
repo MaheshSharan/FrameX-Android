@@ -18,7 +18,6 @@ import com.framex.app.utils.FrameXLog
 import com.framex.app.gaming.ledger.CommandSpec
 import com.framex.app.gaming.ledger.ExecutionLedger
 import com.framex.app.gaming.ledger.LedgerExecutor
-import android.widget.Toast
 import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
@@ -29,8 +28,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -101,6 +103,9 @@ class GamingModeEngine @Inject constructor(
         _isActive.value = active
     }
 
+    private val _toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val toastEvents: SharedFlow<String> = _toastEvents.asSharedFlow()
+
     fun onVivoOptToggledOffMidSession(): Job? {
         val currentPath = settingsRepository.getGamingPlatformPath()
         if (currentPath == GamingPlatformPath.VIVO) {
@@ -114,11 +119,7 @@ class GamingModeEngine @Inject constructor(
                 if (success) {
                     settingsRepository.setGamingPlatformPath(GamingPlatformPath.NONE)
                     executionLedger.removeStages(VIVO_PLATFORM_STAGES)
-                    runCatching {
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Vivo gaming optimizations rolled back", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    _toastEvents.tryEmit("Vivo gaming optimizations rolled back")
                     FrameXLog.i("Vivo mid-session revert succeeded: path set to NONE", tag = TAG)
                 } else {
                     FrameXLog.w("Vivo mid-session revert failed: keeping VIVO path for deactivation retry", tag = TAG)

@@ -48,6 +48,8 @@ class PerformanceViewModel @Inject constructor(
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent = _toastEvent.asSharedFlow()
 
+    val maxRefreshRate: Int = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60)
+
     val gamingModeState = gamingModeEngine.state
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GamingModeState.Idle)
 
@@ -314,9 +316,14 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
+    fun getGameConfigMemc(pkg: String): Boolean = settingsRepository.getGameConfigMemc(pkg)
+
     fun toggleMemc(packageName: String, enabled: Boolean, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
             val result = vivoGamingOptimizer.setMemcTargetFps(packageName, enabled)
+            if (result) {
+                settingsRepository.setGameConfigMemc(packageName, enabled)
+            }
             onComplete(result)
         }
     }
