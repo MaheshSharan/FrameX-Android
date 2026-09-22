@@ -41,6 +41,7 @@ data class MetricsState(
     val hasThermalNpu: Boolean = false,
     val hasThermalSkin: Boolean = false,
     val hasThermalBattery: Boolean = false,
+    val isThrottling: Boolean = false,
     // Busiest process at this tick (see TopProcessMonitor) — names the likely
     // culprit when a frame drop isn't explained by thermal or frequency alone.
     val topProcessName: String? = null,
@@ -137,11 +138,14 @@ class MetricsEngine @Inject constructor(
                 screenOverrideModules,
                 settingsRepository.isGamingModeActiveFlow
             ) { persisted, override, gamingActive ->
-                if (gamingActive) {
+                val base = if (gamingActive) {
                     persisted + override + setOf("temp", "thermal")
                 } else {
                     persisted + override
                 }
+                // Issue #86: Keep battery temp ("temp") continuously monitored for timeline recording.
+                // BatteryMonitor is a passive sticky broadcast check with zero IPC overhead.
+                base + setOf("temp")
             }
                 .collect { enabled ->
                 toggleModule("cpu", enabled) {
@@ -199,7 +203,8 @@ class MetricsEngine @Inject constructor(
                             hasThermalGpu = t.hasGpu,
                             hasThermalNpu = t.hasNpu,
                             hasThermalSkin = t.hasSkin,
-                            hasThermalBattery = t.hasBattery
+                            hasThermalBattery = t.hasBattery,
+                            isThrottling = t.isThrottling
                         )
                     }
                 }

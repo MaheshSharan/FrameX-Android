@@ -43,7 +43,11 @@ import kotlin.math.roundToInt
 private const val GRID_LINE_ALPHA = 0.16f
 
 @Composable
-fun GraphLegend(series: List<GraphSeries>, modifier: Modifier = Modifier) {
+fun GraphLegend(
+    series: List<GraphSeries>,
+    modifier: Modifier = Modifier,
+    hasThrottling: Boolean = false
+) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -58,6 +62,18 @@ fun GraphLegend(series: List<GraphSeries>, modifier: Modifier = Modifier) {
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(entry.label, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        if (hasThrottling) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Throttled", color = Color(0xFFEF4444), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -164,6 +180,28 @@ fun ModernInteractiveGraph(
                 // 3. Bezier Curves and Area Fills
                 val stepX = graphWidth / (snapshots.size - 1).coerceAtLeast(1)
 
+                // 3a. Throttling Regions Highlight along the Timeline (Issue #59)
+                snapshots.forEachIndexed { i, s ->
+                    if (s.state.isThrottling || s.state.thermalStatus >= 2) {
+                        val x = leftPadding + i * stepX
+                        val halfBand = (stepX / 2f).coerceAtLeast(1.5f)
+                        drawRect(
+                            color = Color(0xFFEF4444).copy(alpha = 0.16f),
+                            topLeft = Offset((x - halfBand).coerceAtLeast(leftPadding), topPadding),
+                            size = androidx.compose.ui.geometry.Size(
+                                (halfBand * 2f).coerceAtMost((leftPadding + graphWidth) - (x - halfBand)),
+                                graphHeight
+                            )
+                        )
+                        drawLine(
+                            color = Color(0xFFEF4444),
+                            start = Offset(x, topPadding),
+                            end = Offset(x, topPadding + 4.dp.toPx()),
+                            strokeWidth = 2f
+                        )
+                    }
+                }
+
                 fun pointsFor(entry: GraphSeries): List<Offset> =
                     snapshots.mapIndexed { i, snapshot ->
                         val v = entry.valueOf(snapshot)
@@ -254,7 +292,7 @@ fun ModernInteractiveGraph(
                             .align(Alignment.TopEnd)
                             .padding(top = 4.dp, end = 4.dp),
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.55f))
+                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.65f))
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                             series.forEach { entry ->
@@ -267,6 +305,26 @@ fun ModernInteractiveGraph(
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            if (readoutSnapshot.state.isThrottling || readoutSnapshot.state.thermalStatus >= 2) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFEF4444))
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "THROTTLED",
+                                        color = Color(0xFFEF4444),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             }

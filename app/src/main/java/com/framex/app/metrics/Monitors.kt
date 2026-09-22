@@ -217,7 +217,23 @@ class CpuMonitor @Inject constructor(
         return when (policies.size) {
             0 -> CpuClusterState(0, 0, 0)
             1 -> CpuClusterState(policies[0].currentMhz, 0, 0)
-            2 -> CpuClusterState(policies[0].currentMhz, policies[1].currentMhz, 0)
+            2 -> {
+                // Issue #84: 2-cluster architecture support (e.g. Snapdragon 8 Elite / Oryon without efficiency cores).
+                // If top policy max is >= 2.8GHz, it is a Performance + Ultra configuration.
+                if (policies[1].maxMhz >= 2800) {
+                    CpuClusterState(
+                        effMhz = 0,
+                        perfMhz = policies[0].currentMhz,
+                        ultraMhz = policies[1].currentMhz
+                    )
+                } else {
+                    CpuClusterState(
+                        effMhz = policies[0].currentMhz,
+                        perfMhz = policies[1].currentMhz,
+                        ultraMhz = 0
+                    )
+                }
+            }
             else -> CpuClusterState(
                 effMhz = policies.first().currentMhz,
                 perfMhz = policies[policies.lastIndex - 1].currentMhz,
@@ -417,7 +433,8 @@ class ThermalMonitor @Inject constructor(
         val hasGpu: Boolean = false,
         val hasNpu: Boolean = false,
         val hasSkin: Boolean = false,
-        val hasBattery: Boolean = false
+        val hasBattery: Boolean = false,
+        val isThrottling: Boolean = false
     ) {
         val statusLabel: String get() = when (status) {
             0 -> "Normal"
@@ -431,7 +448,7 @@ class ThermalMonitor @Inject constructor(
         }
 
         val pressureLabel: String get() = when (status) {
-            0 -> "Stable"
+            0 -> if (isThrottling) "Throttled" else "Stable"
             1, 2 -> "Rising"
             else -> "Elevated"
         }
@@ -463,7 +480,7 @@ class ThermalMonitor @Inject constructor(
                         }
                     } else {
                         val parsed = ThermalServiceParser.parse(output)
-                        com.framex.app.utils.FrameXLog.d("ThermalMonitor", "Parsed result: entryCount=${parsed?.entryCount}, cpu=${parsed?.cpuC}, gpu=${parsed?.gpuC}, skin=${parsed?.skinC}, battery=${parsed?.batteryC}, halNotReady=${parsed?.halNotReady}")
+                        com.framex.app.utils.FrameXLog.d("ThermalMonitor", "Parsed result: entryCount=${parsed?.entryCount}, cpu=${parsed?.cpuC}, gpu=${parsed?.gpuC}, skin=${parsed?.skinC}, battery=${parsed?.batteryC}, halNotReady=${parsed?.halNotReady}, isThrottling=${parsed?.isThrottling}")
                         if (parsed == null || parsed.entryCount == 0) {
                             consecutiveFailures++
                             if (consecutiveFailures <= 3 && lastGoodState != null) {
@@ -474,7 +491,7 @@ class ThermalMonitor @Inject constructor(
                                 }
                                 val status = parsed?.thermalStatus?.takeIf { it > 0 } ?: powerManager.thermalStatusOrDefault()
                                 val statusType = if (parsed?.halNotReady == true) MetricReadStatus.EmptyOutput else MetricReadStatus.ParseFailed
-                                ThermalState(status = status, readStatus = statusType)
+                                ThermalState(status = status, readStatus = statusType, isThrottling = parsed?.isThrottling == true)
                             }
                         } else {
                             consecutiveFailures = 0
@@ -491,7 +508,8 @@ class ThermalMonitor @Inject constructor(
                                 hasGpu = parsed.gpuC != null,
                                 hasNpu = parsed.npuC != null,
                                 hasSkin = parsed.skinC != null,
-                                hasBattery = parsed.batteryC != null
+                                hasBattery = parsed.batteryC != null,
+                                isThrottling = parsed.isThrottling
                             )
                             lastGoodState = newState
                             newState

@@ -109,7 +109,12 @@ fun metricValueFor(id: MetricModuleId, metricsState: MetricsState): String = whe
     MetricModuleId.THERMAL_MONITOR -> String.format(
         "%.0f°C %s",
         metricsState.thermalCpuC,
-        thermalStatusShortLabel(metricsState.thermalStatus)
+        thermalStatusShortLabel(
+            status = metricsState.thermalStatus,
+            cpuTempC = metricsState.thermalCpuC,
+            skinTempC = metricsState.thermalSkinC,
+            isThrottling = metricsState.isThrottling
+        )
     )
     MetricModuleId.NETWORK_SPEED -> {
         val totalKbps = metricsState.networkRxKbps + metricsState.networkTxKbps
@@ -128,13 +133,30 @@ fun metricValueFor(id: MetricModuleId, metricsState: MetricsState): String = whe
 
 /** Short label for the overlay's compact/minimal display — full names are used in
  *  the Performance/detail screens where there's room to show "MODERATE" in full. */
-fun thermalStatusShortLabel(status: Int): String = when (status) {
-    0, 1 -> "OK"
-    2 -> "WARM"
-    3 -> "HOT"
-    4 -> "CRIT"
-    5, 6 -> "!!!"
-    else -> "?"
+fun thermalStatusShortLabel(
+    status: Int,
+    cpuTempC: Float = 0f,
+    skinTempC: Float = 0f,
+    isThrottling: Boolean = false
+): String {
+    // 1. Android system thermal status is authoritative when non-zero
+    if (status > 0) {
+        return when (status) {
+            1 -> "LGT"
+            2 -> "WARM"
+            3 -> "HOT"
+            4 -> "CRIT"
+            5, 6 -> "!!!"
+            else -> "THROT"
+        }
+    }
+    // 2. Hardware CPU cooling throttling
+    if (isThrottling) {
+        return "THROT"
+    }
+    // 3. Sensor temperature advisory when system status is nominal (0)
+    val advisory = SensorTemperatureAdvisory.fromTemperatures(cpuTempC, skinTempC)
+    return advisory.shortLabel
 }
 
 private const val KBPS_PER_MBPS = 1024f

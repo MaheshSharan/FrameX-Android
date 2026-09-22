@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.framex.app.metrics.SensorTemperatureAdvisory
 import com.framex.app.metrics.ThermalSeverity
 import com.framex.app.ui.screens.thermal.components.GraphLegend
 import com.framex.app.ui.screens.thermal.components.ModernInteractiveGraph
@@ -247,21 +248,28 @@ fun ThermalDiagnosticsScreen(
                     }
                 }
 
-                // 1. Thermal Status Banner (Single source of truth via getThermalStatusLabel & computeThermalPressure)
-                val severity = ThermalSeverity.fromStatus(metricsState.thermalStatus)
+                // 1. Thermal Status Banner (Primary system state from OS status + explicit sensor advisory)
+                val systemSeverity = ThermalSeverity.fromStatus(metricsState.thermalStatus)
                 val statusText = getThermalStatusLabel(metricsState.thermalStatus)
-                val pressureText = computeThermalPressure(metricsState.thermalStatus, cpuDelta, skinDelta)
+                val sensorAdvisory = SensorTemperatureAdvisory.fromTemperatures(metricsState.thermalCpuC, metricsState.thermalSkinC)
+                val pressureText = if (metricsState.isThrottling) "CPU Throttled" else computeThermalPressure(metricsState.thermalStatus, cpuDelta, skinDelta)
+
+                val bannerColor = when {
+                    systemSeverity != ThermalSeverity.NONE -> systemSeverity.color
+                    metricsState.isThrottling -> Color(0xFFEF4444)
+                    else -> sensorAdvisory.color
+                }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(severity.color.copy(alpha = 0.12f))
-                        .border(1.dp, severity.color.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                        .background(bannerColor.copy(alpha = 0.12f))
+                        .border(1.dp, bannerColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(severity.color))
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(bannerColor))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
@@ -272,7 +280,7 @@ fun ThermalDiagnosticsScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Thermal pressure: $pressureText · Live · Thermal HAL",
+                            text = "Sensor Advisory: ${sensorAdvisory.displayLabel} · Hardware Pressure: $pressureText",
                             color = Color.LightGray,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -496,7 +504,14 @@ fun ThermalDiagnosticsScreen(
                     val hasGpu = filteredSnapshots.any { it.state.hasThermalGpu || it.state.thermalGpuC > 0f }
                     seriesForMode(selectedGraphMode, fpsRef, tempRef, jankRef, hasGpu = hasGpu)
                 }
-                GraphLegend(series = activeSeries, modifier = Modifier.padding(bottom = 10.dp))
+                val hasThrottlingLegend = remember(filteredSnapshots) {
+                    filteredSnapshots.any { it.state.isThrottling || it.state.thermalStatus >= 2 }
+                }
+                GraphLegend(
+                    series = activeSeries,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                    hasThrottling = hasThrottlingLegend
+                )
 
                 // Canvas Bezier Graph with Touch Scrubbing
                 ModernInteractiveGraph(
