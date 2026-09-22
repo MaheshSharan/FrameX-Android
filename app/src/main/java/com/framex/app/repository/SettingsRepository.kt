@@ -291,6 +291,9 @@ class SettingsRepository @Inject constructor(
     fun getGameConfigRingtoneVol(pkg: String): Int = prefs.getInt("game_config_${pkg}_ringtone_vol", 50)
     fun setGameConfigRingtoneVol(pkg: String, vol: Int) = prefs.edit().putInt("game_config_${pkg}_ringtone_vol", vol).apply()
 
+    fun getGameConfigMemc(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_memc", false)
+    fun setGameConfigMemc(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_memc", enabled).apply()
+
     // ---- Esports Optimizations ----------------------------------------------
 
     private val _auditLoggingEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUDIT_LOGGING_ENABLED, false))
@@ -420,9 +423,9 @@ class SettingsRepository @Inject constructor(
 
     fun setGamingPlatformPath(path: GamingPlatformPath?) {
         if (path != null) {
-            prefs.edit().putString(KEY_GAMING_PLATFORM_PATH, path.name).commit()
+            prefs.edit().putString(KEY_GAMING_PLATFORM_PATH, path.name).apply()
         } else {
-            prefs.edit().remove(KEY_GAMING_PLATFORM_PATH).commit()
+            prefs.edit().remove(KEY_GAMING_PLATFORM_PATH).apply()
         }
         _gamingPlatformPath.value = path
     }

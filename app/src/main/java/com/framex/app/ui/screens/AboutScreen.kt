@@ -62,6 +62,7 @@ class AboutViewModel @Inject constructor(
     private val gamingModeEngine: com.framex.app.gaming.GamingModeEngine,
     val vivoSuiteGate: com.framex.app.gaming.VivoSuiteGate
 ) : ViewModel() {
+    val toastEvents = gamingModeEngine.toastEvents
     val vivoOptEnabled = settingsRepository.vivoOptEnabled
     val autoUpdateCheckEnabled = settingsRepository.autoUpdateCheckEnabled
     val downloadState = updateRepository.downloadState
@@ -89,6 +90,12 @@ fun AboutScreen(
     val context = LocalContext.current
     val accentColor = MaterialTheme.colorScheme.primary
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        viewModel.toastEvents.collect { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val autoUpdateEnabled by viewModel.autoUpdateCheckEnabled.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
