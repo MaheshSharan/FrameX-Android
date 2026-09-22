@@ -98,7 +98,7 @@ class CommandRunnerService private constructor(
     override fun getThermalTemperatures(): String {
         resolvedThermalStrategy?.let { cached ->
             val cachedResult = readUsingStrategy(cached)
-            if (cachedResult != null) return cachedResult
+            if (cachedResult != null) return appendThermalStatusProperty(cachedResult)
             // Cached strategy stopped working (hardware state changed at runtime) --
             // clear it and fall through to full re-discovery below.
             resolvedThermalStrategy = null
@@ -106,21 +106,30 @@ class CommandRunnerService private constructor(
 
         readViaReflection()?.let {
             resolvedThermalStrategy = ThermalReadStrategy.REFLECTION
-            return it
+            return appendThermalStatusProperty(it)
         }
         readViaDumpsys()?.let {
             resolvedThermalStrategy = ThermalReadStrategy.DUMPSYS
-            return it
+            return appendThermalStatusProperty(it)
         }
         readViaSysfs()?.let {
             resolvedThermalStrategy = ThermalReadStrategy.SYSFS
-            return it
+            return appendThermalStatusProperty(it)
         }
 
         // All strategies failed validation: still return the raw dumpsys dump so callers
         // (ThermalMonitor's parser) can surface a ParseFailed status rather than getting
         // an empty string, matching prior behavior.
-        return readViaDumpsys(requireValid = false).orEmpty()
+        return appendThermalStatusProperty(readViaDumpsys(requireValid = false).orEmpty())
+    }
+
+    private fun appendThermalStatusProperty(payload: String): String {
+        val prop = executeCommand("getprop sys.thermal.status").trim()
+        return if (prop.isNotEmpty() && prop.all { it.isDigit() }) {
+            "$payload\nsys.thermal.status: $prop\n"
+        } else {
+            payload
+        }
     }
 
     private fun readUsingStrategy(strategy: ThermalReadStrategy): String? = when (strategy) {
@@ -300,7 +309,7 @@ class CommandRunnerService private constructor(
         }
 
         val sysfsDump = executeCommand(
-            "sh -c 'for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done'"
+            "sh -c 'for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done; for d in /sys/class/thermal/cooling_device*; do echo \"cooling: \$(cat \$d/type 2>/dev/null) \$(cat \$d/cur_state 2>/dev/null)\"; done'"
         )
         val validLines = sysfsDump.lines().filter {
             it.contains(":") && it.substringBefore(":").isNotBlank() && it.substringAfter(":").isNotBlank()

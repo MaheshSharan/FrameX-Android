@@ -94,7 +94,7 @@ fun evaluateLikelyCause(
 
     val maxCpuTemp = snapshots.maxOf { it.state.thermalCpuC }
     val maxSkinTemp = snapshots.maxOf { it.state.thermalSkinC }
-    val isHot = maxCpuTemp >= 65f || maxSkinTemp >= 42f || currentState.thermalStatus > 0
+    val isHot = maxCpuTemp >= 65f || maxSkinTemp >= 42f || currentState.thermalStatus > 0 || currentState.isThrottling
 
     val topCpu = currentState.topProcessCpuPercent
     val isProcessBusy = topCpu >= 20f && currentState.topProcessName != null
