@@ -45,7 +45,7 @@ class PerformanceViewModel @Inject constructor(
     private val vivoSuiteGate: VivoSuiteGate
 ) : ViewModel() {
 
-    private val _toastEvent = MutableSharedFlow<String>()
+    private val _toastEvent = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val toastEvent = _toastEvent.asSharedFlow()
 
     val maxRefreshRate: Int = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60)
@@ -59,32 +59,20 @@ class PerformanceViewModel @Inject constructor(
     val hasShizukuPermission = shizukuManager.hasPermission
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val whitelist = settingsRepository.gamingModeWhitelist
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
-
-    val launcherGames = settingsRepository.launcherGames
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val whitelist: StateFlow<Set<String>> = settingsRepository.gamingModeWhitelist
+    val launcherGames: StateFlow<Set<String>> = settingsRepository.launcherGames
 
     val metricsState = metricsEngine.metricsState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.framex.app.metrics.MetricsState())
 
-    val cpuPriorityLock = settingsRepository.cpuPriorityLock
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val networkFirewall = settingsRepository.networkFirewall
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val refreshRateLock = settingsRepository.refreshRateLock
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val touchBoost = settingsRepository.touchBoost
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    val framePacingOverlay = settingsRepository.framePacingOverlay
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val fixedPerformanceMode = settingsRepository.fixedPerformanceMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val cpuPriorityLock: StateFlow<Boolean> = settingsRepository.cpuPriorityLock
+    val networkFirewall: StateFlow<Boolean> = settingsRepository.networkFirewall
+    val refreshRateLock: StateFlow<Boolean> = settingsRepository.refreshRateLock
+    val touchBoost: StateFlow<Boolean> = settingsRepository.touchBoost
+    val framePacingOverlay: StateFlow<Boolean> = settingsRepository.framePacingOverlay
+    val fixedPerformanceMode: StateFlow<Boolean> = settingsRepository.fixedPerformanceMode
+    val deepFreezeEnabled: StateFlow<Boolean> = settingsRepository.deepFreezeEnabled
+    val hasSeenDeepFreezeNotice: StateFlow<Boolean> = settingsRepository.hasSeenDeepFreezeNotice
 
     val activeGamingSession: StateFlow<ActiveGamingSession?> = combine(
         gamingModeEngine.state,
@@ -112,6 +100,8 @@ class PerformanceViewModel @Inject constructor(
     fun toggleTouchBoost(enabled: Boolean) = settingsRepository.setTouchBoost(enabled)
     fun toggleFramePacingOverlay(enabled: Boolean) = settingsRepository.setFramePacingOverlay(enabled)
     fun toggleFixedPerformanceMode(enabled: Boolean) = settingsRepository.setFixedPerformanceMode(enabled)
+    fun toggleDeepFreeze(enabled: Boolean) = settingsRepository.setDeepFreezeEnabled(enabled)
+    fun dismissDeepFreezeNotice() = settingsRepository.setHasSeenDeepFreezeNotice(true)
 
     private val _userApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val userApps = _userApps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -237,6 +227,10 @@ class PerformanceViewModel @Inject constructor(
     }
 
     fun enableGamingMode(context: Context) {
+        if (settingsRepository.launcherGames.value.isEmpty()) {
+            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            return
+        }
         viewModelScope.launch {
             val currentWhitelist = settingsRepository.gamingModeWhitelist.value
             gamingModeEngine.enableGamingMode(currentWhitelist)
@@ -353,6 +347,11 @@ class PerformanceViewModel @Inject constructor(
 
     /** Adds all launcher games to perf_game_list one by one, refreshes list on completion. */
     fun addAllLauncherGamesToPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
+        if (packages.isEmpty()) {
+            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             var allSuccess = true
             for (pkg in packages) {
@@ -370,6 +369,11 @@ class PerformanceViewModel @Inject constructor(
 
     /** Removes all launcher games from perf_game_list one by one, refreshes list on completion. */
     fun removeAllLauncherGamesFromPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
+        if (packages.isEmpty()) {
+            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             var allSuccess = true
             for (pkg in packages) {
@@ -387,6 +391,11 @@ class PerformanceViewModel @Inject constructor(
 
     /** Compiles all launcher games with AOT speed mode. Reports overall success. */
     fun compileAllLauncherGamesSpeed(packages: Set<String>, onComplete: (Boolean) -> Unit) {
+        if (packages.isEmpty()) {
+            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             var allSuccess = true
             for (pkg in packages) {

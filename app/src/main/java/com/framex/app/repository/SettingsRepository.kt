@@ -368,6 +368,22 @@ class SettingsRepository @Inject constructor(
         _autoUpdateCheckEnabled.value = enabled
     }
 
+    private val _deepFreezeEnabled = MutableStateFlow(prefs.getBoolean(KEY_DEEP_FREEZE_ENABLED, false))
+    val deepFreezeEnabled: StateFlow<Boolean> = _deepFreezeEnabled.asStateFlow()
+
+    fun setDeepFreezeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DEEP_FREEZE_ENABLED, enabled).apply()
+        _deepFreezeEnabled.value = enabled
+    }
+
+    private val _hasSeenDeepFreezeNotice = MutableStateFlow(prefs.getBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, false))
+    val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
+
+    fun setHasSeenDeepFreezeNotice(seen: Boolean) {
+        prefs.edit().putBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, seen).apply()
+        _hasSeenDeepFreezeNotice.value = seen
+    }
+
     private val _overlayWasRunning = MutableStateFlow(prefs.getBoolean(KEY_OVERLAY_WAS_RUNNING, false))
     val overlayWasRunning: StateFlow<Boolean> = _overlayWasRunning.asStateFlow()
 
@@ -479,6 +495,8 @@ class SettingsRepository @Inject constructor(
         private const val KEY_TOUCH_BOOST = "esports_touch_boost"
         private const val KEY_FRAME_PACING_OVERLAY = "esports_frame_pacing_overlay"
         private const val KEY_FIXED_PERFORMANCE_MODE = "esports_fixed_performance_mode"
+        private const val KEY_DEEP_FREEZE_ENABLED = "gaming_deep_freeze_enabled"
+        private const val KEY_HAS_SEEN_DEEP_FREEZE_NOTICE = "has_seen_deep_freeze_notice"
         private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
         private const val KEY_OVERLAY_WAS_RUNNING = "overlay_was_running"
         private const val KEY_GAMING_OPT_SNAPSHOT = "gaming_opt_snapshot"
