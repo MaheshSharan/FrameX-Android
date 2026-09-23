@@ -5,15 +5,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.framex.app.ui.screens.AboutScreen
-import com.framex.app.ui.screens.AppearanceScreen
-import com.framex.app.ui.screens.DashboardScreen
-import com.framex.app.ui.screens.OnboardingScreen
-import com.framex.app.ui.screens.OverlayCustomizationScreen
-import com.framex.app.ui.screens.PermissionsScreen
-import com.framex.app.ui.screens.SplashScreen
-import com.framex.app.ui.screens.thermal.ThermalDiagnosticsScreen
-import com.framex.app.ui.screens.performance.PerformanceScreen
+import com.framex.app.ui.screens.about.AboutRoute
+import com.framex.app.ui.screens.appearance.AppearanceRoute
+import com.framex.app.ui.screens.dashboard.DashboardRoute
+import com.framex.app.ui.screens.onboarding.OnboardingRoute
+import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
+import com.framex.app.ui.screens.permissions.PermissionsRoute
+import com.framex.app.ui.screens.splash.SplashRoute
+import com.framex.app.ui.screens.thermal.ThermalDiagnosticsRoute
+import com.framex.app.ui.screens.performance.PerformanceRoute
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
@@ -37,18 +37,18 @@ fun FrameXNavGraph(
         startDestination = startDestination
     ) {
         composable(Screen.Splash.route) {
-            SplashScreen(
+            SplashRoute(
                 onNavigateToOnboarding = { navController.navigate(Screen.Onboarding.route) { popUpTo(0) } },
                 onNavigateToDashboard = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
         }
         composable(Screen.Onboarding.route) {
-            OnboardingScreen(
+            OnboardingRoute(
                 onFinishOnboarding = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
         }
         composable(Screen.Dashboard.route) {
-            DashboardScreen(
+            DashboardRoute(
                 onNavigateToAppearance = { navController.navigate(Screen.Appearance.route) },
                 onNavigateToOverlayCustomization = { navController.navigate(Screen.OverlayCustomization.route) },
                 onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) },
@@ -58,22 +58,22 @@ fun FrameXNavGraph(
             )
         }
         composable(Screen.Appearance.route) {
-            AppearanceScreen(onNavigateBack = { navController.safePopBackStack() })
+            AppearanceRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.OverlayCustomization.route) {
-            OverlayCustomizationScreen(onNavigateBack = { navController.safePopBackStack() })
+            OverlayCustomizationRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.Permissions.route) {
-            PermissionsScreen(onNavigateBack = { navController.safePopBackStack() })
+            PermissionsRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.About.route) {
-            AboutScreen(onNavigateBack = { navController.safePopBackStack() })
+            AboutRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.Performance.route) {
-            PerformanceScreen(onNavigateBack = { navController.safePopBackStack() })
+            PerformanceRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.ThermalDiagnostics.route) {
-            ThermalDiagnosticsScreen(onNavigateBack = { navController.safePopBackStack() })
+            ThermalDiagnosticsRoute(onNavigateBack = { navController.safePopBackStack() })
         }
     }
 }

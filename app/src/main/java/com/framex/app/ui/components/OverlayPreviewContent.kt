@@ -1,5 +1,6 @@
 package com.framex.app.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -8,22 +9,45 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.framex.app.R
 import com.framex.app.metrics.METRIC_MODULE_REGISTRY
 import com.framex.app.metrics.MetricsState
 import com.framex.app.metrics.isIconShown
 import com.framex.app.metrics.metricValueFor
 import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.metrics.resolveModuleIcon
+
+@Immutable
+data class OverlayDisplayConfig(
+    val mode: String = "Compact",
+    val enabledModules: Set<String> = setOf("fps"),
+    val moduleOrder: List<String> = emptyList(),
+    val opacity: Float = 0.75f,
+    val textSize: Int = 1,
+    val overlayScale: Float = 1.0f,
+    val useMonospace: Boolean = false,
+    val colorIndex: Int = 0,
+    val bgColorIndex: Int = 0,
+    val borderColorIndex: Int = 0,
+    val textColorIndex: Int = 0,
+    val enabledModuleIcons: Set<String> = emptySet(),
+    val cpuHotWarningEnabled: Boolean = true
+)
+
+private val OVERLAY_BG_COLORS = listOf(Color.Black, Color(0xFF0D1117), Color(0xFF1C1C1E), Color.Transparent)
 
 private data class MetricRenderItem(
     val storageKey: String,
@@ -36,6 +60,31 @@ private data class MetricRenderItem(
 private const val MINIMAL_SINGLE_ROW_MAX_ITEMS = 4
 private const val COMPACT_SINGLE_ROW_MAX_ITEMS = 3
 
+@Composable
+fun OverlayPreviewContent(
+    config: OverlayDisplayConfig,
+    modifier: Modifier = Modifier,
+    metricsState: MetricsState? = null
+) {
+    OverlayPreviewContent(
+        mode = config.mode,
+        enabledModules = config.enabledModules,
+        moduleOrder = config.moduleOrder,
+        opacity = config.opacity,
+        textSize = config.textSize,
+        overlayScale = config.overlayScale,
+        useMonospace = config.useMonospace,
+        colorIndex = config.colorIndex,
+        bgColorIndex = config.bgColorIndex,
+        borderColorIndex = config.borderColorIndex,
+        textColorIndex = config.textColorIndex,
+        enabledModuleIcons = config.enabledModuleIcons,
+        cpuHotWarningEnabled = config.cpuHotWarningEnabled,
+        metricsState = metricsState,
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverlayPreviewContent(
@@ -43,44 +92,51 @@ fun OverlayPreviewContent(
     enabledModules: Set<String>,
     moduleOrder: List<String>,
     opacity: Float,
-    textSize: Int = 1,
-    overlayScale: Float = 1.0f,
     useMonospace: Boolean,
     colorIndex: Int,
+    modifier: Modifier = Modifier,
+    textSize: Int = 1,
+    overlayScale: Float = 1.0f,
     bgColorIndex: Int = 0,
     borderColorIndex: Int = 0,
     textColorIndex: Int = 0,
     enabledModuleIcons: Set<String> = emptySet(),
     cpuHotWarningEnabled: Boolean = true,
-    metricsState: MetricsState? = null,
-    modifier: Modifier = Modifier
+    metricsState: MetricsState? = null
 ) {
-    val activeList = resolveMetricModuleOrder(moduleOrder)
-        .filter { enabledModules.contains(it.storageKey) }
-        .map { id ->
-            val info = METRIC_MODULE_REGISTRY.getValue(id)
-            val icon = resolveModuleIcon(id, metricsState)
-            val displayValue = if (metricsState != null) {
-                metricValueFor(id, metricsState, cpuHotWarningEnabled)
-            } else {
-                info.previewSampleValue
+    val activeList = remember(
+        moduleOrder,
+        enabledModules,
+        metricsState,
+        cpuHotWarningEnabled,
+        enabledModuleIcons
+    ) {
+        resolveMetricModuleOrder(moduleOrder)
+            .filter { enabledModules.contains(it.storageKey) }
+            .map { id ->
+                val info = METRIC_MODULE_REGISTRY.getValue(id)
+                val icon = resolveModuleIcon(id, metricsState)
+                val displayValue = if (metricsState != null) {
+                    metricValueFor(id, metricsState, cpuHotWarningEnabled)
+                } else {
+                    info.previewSampleValue
+                }
+                val showIcon = isIconShown(enabledModuleIcons, id.storageKey)
+                MetricRenderItem(
+                    storageKey = id.storageKey,
+                    shortLabel = info.overlayShortLabel,
+                    displayValue = displayValue,
+                    icon = icon,
+                    showIcon = showIcon
+                )
             }
-            val showIcon = isIconShown(enabledModuleIcons, id.storageKey)
-            MetricRenderItem(
-                storageKey = id.storageKey,
-                shortLabel = info.overlayShortLabel,
-                displayValue = displayValue,
-                icon = icon,
-                showIcon = showIcon
-            )
-        }
+    }
 
     val accentColor = com.framex.app.ui.theme.getAccentColor(colorIndex)
     val fontFamily = if (useMonospace) FontFamily.Monospace else MaterialTheme.typography.bodyMedium.fontFamily
     val textScale = if (overlayScale != 1.0f || textSize == 1) overlayScale else when (textSize) { 0 -> 0.8f; 2 -> 1.2f; else -> 1.0f }
 
-    val bgColors = listOf(Color.Black, Color(0xFF0D1117), Color(0xFF1C1C1E), Color.Transparent)
-    val bgBase = bgColors.getOrElse(bgColorIndex) { Color.Black }
+    val bgBase = OVERLAY_BG_COLORS.getOrElse(bgColorIndex) { Color.Black }
     val effectiveBg = if (bgBase == Color.Transparent) Color.Transparent else bgBase.copy(alpha = opacity)
 
     val effectiveBorderColor = when (borderColorIndex) {
@@ -106,6 +162,7 @@ fun OverlayPreviewContent(
 
     Box(
         modifier = modifier
+            .animateContentSize()
             .clip(RoundedCornerShape(8.dp))
             .background(effectiveBg)
             .border(effectiveBorderWidth, effectiveBorderColor, RoundedCornerShape(8.dp))
@@ -229,7 +286,7 @@ fun OverlayPreviewContent(
 @Composable
 private fun EmptyModulesText(textScale: Float, fontFamily: FontFamily?) {
     Text(
-        text = "No modules",
+        text = stringResource(R.string.overlay_no_modules),
         color = Color.Gray,
         fontFamily = fontFamily,
         fontSize = (12 * textScale).sp,

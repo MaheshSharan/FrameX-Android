@@ -33,6 +33,10 @@ import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.ui.screens.performance.ActiveGamingSession
 import com.framex.app.ui.screens.performance.components.StatusBlock
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun HeroGamingCard(
@@ -50,17 +54,17 @@ fun HeroGamingCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(20.dp),
+            .padding(horizontal = FrameXSpacing.XLarge),
+        shape = FrameXShapes.Card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(
-            1.dp,
-            if (isActive) activeColor.copy(0.25f) else Color.White.copy(alpha = 0.08f)
+            FrameXBorders.ActiveBorderWidth,
+            if (isActive) activeColor.copy(0.25f) else FrameXBorders.CardStroke
         )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(FrameXSpacing.Large)) {
 
                 // ── Title + Status Badge ──────────────────────────────────────
                 Row(
@@ -101,30 +105,30 @@ fun HeroGamingCard(
                                     gamingState is GamingModeState.Error -> primaryRed.copy(0.1f)
                                     else -> Color.Gray.copy(0.1f)
                                 },
-                                shape = CircleShape
+                                shape = FrameXShapes.Pill
                             )
                             .border(
-                                1.dp,
+                                FrameXBorders.ActiveBorderWidth,
                                 color = when {
                                     isActive -> activeColor.copy(0.25f)
                                     gamingState is GamingModeState.Error -> primaryRed.copy(0.25f)
                                     else -> Color.Gray.copy(0.2f)
                                 },
-                                shape = CircleShape
+                                shape = FrameXShapes.Pill
                             )
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = FrameXSpacing.Medium, vertical = 6.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(FrameXSpacing.Small)
                                     .background(
                                         color = when {
                                             isActive -> activeColor
                                             gamingState is GamingModeState.Error -> primaryRed
                                             else -> Color.Gray
                                         },
-                                        shape = CircleShape
+                                        shape = FrameXShapes.Pill
                                     )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -213,15 +217,15 @@ fun HeroGamingCard(
                             onClick = onDeactivate,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
-                            shape = CircleShape,
+                                .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight),
+                            shape = FrameXShapes.Pill,
                             colors = ButtonDefaults.buttonColors(
                             containerColor = primaryRed.copy(0.15f),
                                 contentColor = primaryRed
                             )
                         ) {
                             Icon(Icons.Default.Stop, null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
                             Text("Deactivate Gaming Mode", fontWeight = FontWeight.Bold)
                         }
                     } else if (gamingState is GamingModeState.Error && gamingState.message.contains("Deactivation", ignoreCase = true)) {
@@ -229,15 +233,15 @@ fun HeroGamingCard(
                             onClick = onDeactivate,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
-                            shape = CircleShape,
+                                .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight),
+                            shape = FrameXShapes.Pill,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = primaryRed,
                                 contentColor = Color.White
                             )
                         ) {
                             Icon(Icons.Default.Stop, null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
                             Text("Retry Deactivation", fontWeight = FontWeight.Bold)
                         }
                     } else {
@@ -246,8 +250,8 @@ fun HeroGamingCard(
                             enabled = canActivate,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
-                            shape = CircleShape,
+                                .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight),
+                            shape = FrameXShapes.Pill,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = Color.White,
@@ -256,7 +260,7 @@ fun HeroGamingCard(
                             )
                         ) {
                             Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
                             Text(
                                 if (canActivate) "Activate Gaming Mode" else "Complete setup first",
                                 fontWeight = FontWeight.Bold
@@ -269,8 +273,8 @@ fun HeroGamingCard(
                         enabled = false,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        shape = CircleShape,
+                            .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight),
+                        shape = FrameXShapes.Pill,
                         colors = ButtonDefaults.buttonColors(
                             disabledContainerColor = Color.White.copy(0.06f),
                             disabledContentColor = Color.Gray
@@ -293,7 +297,7 @@ fun HeroGamingCard(
     }
 }
 
-private val SessionCardShape = RoundedCornerShape(16.dp)
+private val SessionCardShape = FrameXShapes.Large
 private val HeaderTagShape = RoundedCornerShape(4.dp)
 
 @Composable
@@ -312,13 +316,13 @@ private fun ActiveSessionStatusCard(session: ActiveGamingSession?) {
         colors = CardDefaults.cardColors(containerColor = accentColor.copy(0.08f)),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, accentColor.copy(0.2f), SessionCardShape)
+            .border(FrameXBorders.ActiveBorderWidth, accentColor.copy(0.2f), SessionCardShape)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(FrameXSpacing.Standard),
+            verticalArrangement = Arrangement.spacedBy(FrameXSpacing.Small)
         ) {
             ActiveSessionHeaderRow(
                 title = session?.title ?: "Gaming Mode Active",

@@ -19,6 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -105,6 +109,19 @@ fun SwipeToActivate(
                 .clip(CircleShape)
                 .background(Color.White.copy(0.04f))
                 .border(1.dp, Color.White.copy(0.06f), CircleShape)
+                .semantics {
+                    contentDescription = if (isBusy) busyText else if (isCompleted || showResult) resultText else text
+                    customActions = listOf(
+                        CustomAccessibilityAction(label = text) {
+                            if (!isBusy && !isCompleted && !showResult) {
+                                isCompleted = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    )
+                }
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),

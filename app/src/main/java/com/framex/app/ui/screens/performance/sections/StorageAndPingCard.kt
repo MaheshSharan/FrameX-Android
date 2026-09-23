@@ -17,26 +17,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import com.framex.app.device.StorageInfo
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
+
 @Composable
 fun StorageAndPingCard(
-    storageInfo: Triple<Long, Long, Long>,
+    storageInfo: StorageInfo,
     currentPing: Int,
     isOptimizingNet: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(20.dp),
+            .padding(horizontal = FrameXSpacing.XLarge),
+        shape = FrameXShapes.Card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             com.framex.app.ui.components.WovenNetBackground(modifier = Modifier.matchParentSize())
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(FrameXSpacing.Large),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1.2f)) {
@@ -47,15 +52,15 @@ fun StorageAndPingCard(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${storageInfo.first} GB", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("${storageInfo.usedGb} GB", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("/ ${storageInfo.second} GB", color = Color.Gray, fontSize = 12.sp)
+                    Text("/ ${storageInfo.totalGb} GB", color = Color.Gray, fontSize = 12.sp)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("${storageInfo.third} GB FREE", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("${storageInfo.freeGb} GB FREE", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
                 LinearProgressIndicator(
-                    progress = { if (storageInfo.second > 0) storageInfo.first.toFloat() / storageInfo.second else 0f },
+                    progress = { if (storageInfo.totalGb > 0) storageInfo.usedGb.toFloat() / storageInfo.totalGb else 0f },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)

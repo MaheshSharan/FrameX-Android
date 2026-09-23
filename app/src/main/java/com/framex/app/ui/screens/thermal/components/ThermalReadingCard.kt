@@ -28,22 +28,24 @@ import com.framex.app.ui.screens.thermal.iconColorForLabel
 import com.framex.app.ui.screens.thermal.iconForLabel
 import com.framex.app.ui.screens.thermal.plateBgForLabel
 import com.framex.app.ui.screens.thermal.plateBorderForLabel
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
 import java.util.Locale
 
 @Composable
 fun ReadingCard(
     label: String,
     value: String,
+    modifier: Modifier = Modifier,
     delta30s: Float = 0f,
     peakVal: Float = 0f,
-    avgVal: Float = 0f,
-    modifier: Modifier = Modifier
+    avgVal: Float = 0f
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = FrameXShapes.Card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             WovenNetBackground(modifier = Modifier.matchParentSize())
@@ -138,9 +140,9 @@ fun TopProcessCard(
 
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = FrameXShapes.Card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             WovenNetBackground(modifier = Modifier.matchParentSize())

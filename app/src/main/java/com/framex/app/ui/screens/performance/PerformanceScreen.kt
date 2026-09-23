@@ -1,101 +1,72 @@
 package com.framex.app.ui.screens.performance
 
-import android.app.NotificationManager
-import android.content.Context
-import android.os.Environment
-import android.os.StatFs
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.ui.components.DeepFreezeSafeguardDialog
-import com.framex.app.ui.screens.performance.PerformanceViewModel
-import com.framex.app.ui.screens.performance.dialogs.*
-import com.framex.app.ui.screens.performance.sections.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.framex.app.ui.screens.performance.dialogs.AddGameModal
+import com.framex.app.ui.screens.performance.dialogs.DeployingGameModal
+import com.framex.app.ui.screens.performance.dialogs.GameConfigModal
+import com.framex.app.ui.screens.performance.dialogs.RamSuccessBanner
+import com.framex.app.ui.screens.performance.sections.AppWhitelistSection
+import com.framex.app.ui.screens.performance.sections.FixedPerformanceModeCard
+import com.framex.app.ui.screens.performance.sections.GameLauncherSection
+import com.framex.app.ui.screens.performance.sections.GoogleAppsSection
+import com.framex.app.ui.screens.performance.sections.HeroGamingCard
+import com.framex.app.ui.screens.performance.sections.OemPackagesSection
+import com.framex.app.ui.screens.performance.sections.OptimizationSlidersSection
+import com.framex.app.ui.screens.performance.sections.ProtectedDaemonsSection
+import com.framex.app.ui.screens.performance.sections.RequirementsSection
+import com.framex.app.ui.screens.performance.sections.StorageAndPingCard
+import com.framex.app.ui.screens.performance.sections.SystemAuditLogSection
+import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
+import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerformanceScreen(
+    uiState: PerformanceUiState,
+    onEvent: (PerformanceUiEvent) -> Unit,
+    getGameConfigBoostRam: (String) -> Boolean,
+    setGameConfigBoostRam: (String, Boolean) -> Unit,
+    getGameConfigMemc: (String) -> Boolean,
     onNavigateBack: () -> Unit,
-    viewModel: PerformanceViewModel = hiltViewModel()
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    val gamingState by viewModel.gamingModeState.collectAsState()
-    val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsState()
-    val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsState()
-    val whitelist by viewModel.whitelist.collectAsState()
-    val launcherGames by viewModel.launcherGames.collectAsState()
-    val userApps by viewModel.userApps.collectAsState()
-    val googleApps by viewModel.googleApps.collectAsState()
-    val metricsState by viewModel.metricsState.collectAsState()
-    val fixedPerformanceMode by viewModel.fixedPerformanceMode.collectAsState()
-    val deepFreezeEnabled by viewModel.deepFreezeEnabled.collectAsState()
-    val hasSeenDeepFreezeNotice by viewModel.hasSeenDeepFreezeNotice.collectAsState()
-    val activeGamingSession by viewModel.activeGamingSession.collectAsState()
-    val isVivoSuiteEnabled by viewModel.isVivoSuiteEnabled.collectAsState()
-
-    val nm = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
-
-    var hasDndAccess by remember { mutableStateOf(nm.isNotificationPolicyAccessGranted) }
-    var hasNotifListenerAccess by remember {
-        mutableStateOf(
-            android.provider.Settings.Secure.getString(
-                context.contentResolver, "enabled_notification_listeners"
-            )?.contains(context.packageName) == true
-        )
-    }
-    var hasWriteSettingsAccess by remember { mutableStateOf(android.provider.Settings.System.canWrite(context)) }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasDndAccess = nm.isNotificationPolicyAccessGranted
-                hasNotifListenerAccess = android.provider.Settings.Secure.getString(
-                    context.contentResolver, "enabled_notification_listeners"
-                )?.contains(context.packageName) == true
-                hasWriteSettingsAccess = android.provider.Settings.System.canWrite(context)
-                viewModel.loadUserApps()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.toastEvent.collect { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val shizukuReady = isShizukuAvailable && hasShizukuPermission
+    val shizukuReady = uiState.isShizukuAvailable && uiState.hasShizukuPermission
     val canActivate = shizukuReady
 
-    val isActive = gamingState is GamingModeState.Active
-    val isBusy = gamingState is GamingModeState.Enabling || gamingState is GamingModeState.Disabling
+    val isActive = uiState.gamingState is GamingModeState.Active
+    val isBusy = uiState.gamingState is GamingModeState.Enabling || uiState.gamingState is GamingModeState.Disabling
 
     val activeColor = Color(0xFF22C55E)
     val primaryRed = MaterialTheme.colorScheme.primary
 
-    val progressTarget = when (val s = gamingState) {
+    val progressTarget = when (val s = uiState.gamingState) {
         is GamingModeState.Enabling -> s.progress
         is GamingModeState.Disabling -> 0.5f
         else -> 0f
@@ -106,62 +77,41 @@ fun PerformanceScreen(
         label = "progress"
     )
 
-    val ramPercentage = if (metricsState.ramTotalGb > 0f) {
-        (metricsState.ramUsedGb / metricsState.ramTotalGb * 100f).coerceIn(0f, 100f)
+    val ramPercentage = if (uiState.metricsState.ramTotalGb > 0f) {
+        (uiState.metricsState.ramUsedGb / uiState.metricsState.ramTotalGb * 100f).coerceIn(0f, 100f)
     } else {
         0f
     }
 
-    val storageInfo by produceState(initialValue = Triple(0L, 0L, 0L)) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val stat = StatFs(Environment.getDataDirectory().path)
-                val totalBytes = stat.blockCountLong * stat.blockSizeLong
-                val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
-                val totalGb = totalBytes / (1024L * 1024L * 1024L)
-                val freeGb = freeBytes / (1024L * 1024L * 1024L)
-                val usedGb = totalGb - freeGb
-                Triple(usedGb, totalGb, freeGb)
-            } catch (e: Exception) {
-                Triple(0L, 0L, 0L)
-            }
-        }
-    }
-
-    val scope = rememberCoroutineScope()
-    var isBoostingRam by remember { mutableStateOf(false) }
-    var showRamResult by remember { mutableStateOf(false) }
-    var isOptimizingNet by remember { mutableStateOf(false) }
-    var showPingResult by remember { mutableStateOf(false) }
-    var isResettingDefaults by remember { mutableStateOf(false) }
-    var showResetResult by remember { mutableStateOf(false) }
-    var showRamSuccessBanner by remember { mutableStateOf<String?>(null) }
-    var activeLatencyDiagnostic by remember { mutableStateOf<Int?>(null) }
-
-    var showAddGameSheet by remember { mutableStateOf(false) }
-    var configGamePkg by remember { mutableStateOf<String?>(null) }
-    var activeDeployingGamePkg by remember { mutableStateOf<String?>(null) }
-
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .navigationBarsPadding()
         ) {
-            // Header
+            // Header with statusBarsPadding
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
                     }
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        "Performance",
+                        text = "Performance",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White
                     )
@@ -173,16 +123,16 @@ fun PerformanceScreen(
             // Hero Gaming Mode card
             item {
                 HeroGamingCard(
-                    gamingState = gamingState,
+                    gamingState = uiState.gamingState,
                     animatedProgress = animatedProgress,
                     canActivate = canActivate,
                     isActive = isActive,
                     isBusy = isBusy,
                     activeColor = activeColor,
                     primaryRed = primaryRed,
-                    activeSession = activeGamingSession,
-                    onActivate = { if (canActivate) viewModel.enableGamingMode(context) },
-                    onDeactivate = { viewModel.disableGamingMode(context) }
+                    activeSession = uiState.activeGamingSession,
+                    onActivate = { if (canActivate) onEvent(PerformanceUiEvent.EnableGamingMode) },
+                    onDeactivate = { onEvent(PerformanceUiEvent.DisableGamingMode) }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -191,46 +141,43 @@ fun PerformanceScreen(
             item {
                 RequirementsSection(
                     shizukuReady = shizukuReady,
-                    isShizukuAvailable = isShizukuAvailable,
-                    hasWriteSettingsAccess = hasWriteSettingsAccess,
-                    hasDndAccess = hasDndAccess,
-                    hasNotifListenerAccess = hasNotifListenerAccess
+                    isShizukuAvailable = uiState.isShizukuAvailable,
+                    hasWriteSettingsAccess = uiState.hasWriteSettingsAccess,
+                    hasDndAccess = uiState.hasDndAccess,
+                    hasNotifListenerAccess = uiState.hasNotifListenerAccess
                 )
             }
 
-            // Dedicated Vivo & iQOO Hardware Suite (AOT Speed Compile & Game Space Whitelist)
-            if (isVivoSuiteEnabled) {
+            // Dedicated Vivo & iQOO Hardware Suite
+            if (uiState.isVivoSuiteEnabled) {
                 item {
-                    val perfGameList by viewModel.vivoPerfGameList.collectAsState()
-                    val rawPerfGameList by viewModel.rawPerfGameList.collectAsState()
                     VivoPerformanceToolsSection(
-                        launcherGames = launcherGames,
-                        perfGameList = perfGameList,
-                        rawPerfGameList = rawPerfGameList,
-                        onRefreshPerfList = { viewModel.refreshVivoPerfGameList() },
-                        onAddAllToPerfList = { pkgs, cb -> viewModel.addAllLauncherGamesToPerfList(pkgs, cb) },
-                        onRemoveAllFromPerfList = { pkgs, cb -> viewModel.removeAllLauncherGamesFromPerfList(pkgs, cb) },
-                        onCompileAll = { pkgs, cb -> viewModel.compileAllLauncherGamesSpeed(pkgs, cb) }
+                        launcherGames = uiState.launcherGames,
+                        perfGameList = uiState.vivoPerfGameList,
+                        rawPerfGameList = uiState.rawPerfGameList,
+                        onRefreshPerfList = { onEvent(PerformanceUiEvent.RefreshVivoPerfList) },
+                        onAddAllToPerfList = { pkgs, _ -> onEvent(PerformanceUiEvent.AddAllToPerfList(pkgs)) },
+                        onRemoveAllFromPerfList = { pkgs, _ -> onEvent(PerformanceUiEvent.RemoveAllFromPerfList(pkgs)) },
+                        onCompileAll = { pkgs, _ -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs)) }
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
 
-
             // System Health Gauges
             item {
                 SystemHealthGaugesSection(
                     ramPercentage = ramPercentage,
-                    cpuPercentage = metricsState.cpuPercentage?.toFloat()
+                    cpuPercentage = uiState.metricsState.cpuPercentage?.toFloat()
                 )
             }
 
             // Storage & Ping card
             item {
                 StorageAndPingCard(
-                    storageInfo = storageInfo,
-                    currentPing = activeLatencyDiagnostic ?: metricsState.pingMs,
-                    isOptimizingNet = isOptimizingNet
+                    storageInfo = uiState.storageInfo,
+                    currentPing = uiState.activeLatencyDiagnostic ?: uiState.metricsState.pingMs,
+                    isOptimizingNet = uiState.isOptimizingNet
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -238,60 +185,23 @@ fun PerformanceScreen(
             // Optimization sliders
             item {
                 OptimizationSlidersSection(
-                    isBoostingRam = isBoostingRam,
-                    showRamResult = showRamResult,
-                    isOptimizingNet = isOptimizingNet,
-                    showPingResult = showPingResult,
-                    isResettingDefaults = isResettingDefaults,
-                    showResetResult = showResetResult,
-                    onBoostRam = {
-                        scope.launch {
-                            isBoostingRam = true
-                            val (freed, stopped) = viewModel.manualBoostRam(whitelist)
-                            isBoostingRam = false
-                            showRamResult = true
-                            showRamSuccessBanner = "Boosted! Freed $freed MB, stopped $stopped apps"
-                            delay(2500)
-                            showRamResult = false
-                            delay(300)
-                            showRamSuccessBanner = null
-                        }
-                    },
-                    onCheckPing = {
-                        scope.launch {
-                            isOptimizingNet = true
-                            val pingRes = viewModel.measureNetworkLatency()
-                            isOptimizingNet = false
-                            showPingResult = true
-                            activeLatencyDiagnostic = pingRes ?: 0
-                            showRamSuccessBanner = if (pingRes != null) "Latency check complete: $pingRes ms" else "Latency check failed: network unreachable"
-                            delay(2500)
-                            showPingResult = false
-                            delay(300)
-                            showRamSuccessBanner = null
-                        }
-                    },
-                    onResetDefaults = {
-                        scope.launch {
-                            isResettingDefaults = true
-                            val resetOk = viewModel.resetToDeviceDefaults()
-                            isResettingDefaults = false
-                            showResetResult = true
-                            showRamSuccessBanner = if (resetOk) "Device settings reset to OS defaults" else "Device reset partially completed"
-                            delay(2500)
-                            showResetResult = false
-                            delay(300)
-                            showRamSuccessBanner = null
-                        }
-                    }
+                    isBoostingRam = uiState.isBoostingRam,
+                    showRamResult = uiState.showRamResult,
+                    isOptimizingNet = uiState.isOptimizingNet,
+                    showPingResult = uiState.showPingResult,
+                    isResettingDefaults = uiState.isResettingDefaults,
+                    showResetResult = uiState.showResetResult,
+                    onBoostRam = { onEvent(PerformanceUiEvent.BoostRam) },
+                    onCheckPing = { onEvent(PerformanceUiEvent.CheckPing) },
+                    onResetDefaults = { onEvent(PerformanceUiEvent.ResetDefaults) }
                 )
             }
 
             // Fixed Performance Mode Toggle Card
             item {
-                com.framex.app.ui.screens.performance.sections.FixedPerformanceModeCard(
-                    enabled = fixedPerformanceMode,
-                    onToggle = { viewModel.toggleFixedPerformanceMode(it) }
+                FixedPerformanceModeCard(
+                    enabled = uiState.fixedPerformanceMode,
+                    onToggle = { onEvent(PerformanceUiEvent.ToggleFixedPerformanceMode(it)) }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -299,110 +209,102 @@ fun PerformanceScreen(
             // Game Launcher
             item {
                 GameLauncherSection(
-                    launcherGames = launcherGames,
-                    userApps = userApps,
-                    onAddGameClicked = { showAddGameSheet = true },
-                    onGameConfigClicked = { pkg -> configGamePkg = pkg },
-                    onRemoveGame = { pkg -> viewModel.toggleLauncherGame(pkg) }
+                    launcherGames = uiState.launcherGames,
+                    userApps = uiState.userApps,
+                    onAddGameClicked = { onEvent(PerformanceUiEvent.SetAddGameSheetVisible(true)) },
+                    onGameConfigClicked = { pkg -> onEvent(PerformanceUiEvent.SetConfigGamePkg(pkg)) },
+                    onRemoveGame = { pkg -> onEvent(PerformanceUiEvent.ToggleLauncherGame(pkg)) }
                 )
             }
 
-            // App Whitelist (100% Lazy Composition)
+            // App Whitelist
             AppWhitelistSection(
-                userApps = userApps,
-                whitelist = whitelist,
-                onToggleWhitelist = { pkg -> viewModel.toggleWhitelist(pkg) }
+                userApps = uiState.userApps,
+                whitelist = uiState.whitelist,
+                onToggleWhitelist = { pkg -> onEvent(PerformanceUiEvent.ToggleWhitelist(pkg)) }
             )
 
-            // Google Apps (100% Lazy Composition)
+            // Google Apps
             GoogleAppsSection(
-                googleApps = googleApps,
-                whitelist = whitelist,
-                onToggleWhitelist = { pkg -> viewModel.toggleWhitelist(pkg) },
-                deepFreezeEnabled = deepFreezeEnabled,
-                onToggleDeepFreeze = { enabled -> viewModel.toggleDeepFreeze(enabled) }
+                googleApps = uiState.googleApps,
+                whitelist = uiState.whitelist,
+                onToggleWhitelist = { pkg -> onEvent(PerformanceUiEvent.ToggleWhitelist(pkg)) },
+                deepFreezeEnabled = uiState.deepFreezeEnabled,
+                onToggleDeepFreeze = { enabled -> onEvent(PerformanceUiEvent.ToggleDeepFreeze(enabled)) }
             )
 
-            // Protected Daemons & OEM Suspended Packages (Visible only when Deep Freeze is enabled)
-            if (deepFreezeEnabled) {
+            // Protected Daemons & OEM Suspended Packages
+            if (uiState.deepFreezeEnabled) {
                 item {
-                    ProtectedDaemonsSection(daemonsList = viewModel.gamingDaemonsList)
+                    ProtectedDaemonsSection(daemonsList = uiState.gamingDaemonsList)
                 }
 
                 item {
-                    OemPackagesSection(safeToSuspendList = viewModel.safeToSuspendList)
+                    OemPackagesSection(safeToSuspendList = uiState.safeToSuspendList)
                 }
             }
 
-            // System Optimization Audit Console (Activation, Deactivation, 2-Min Pulse logs)
+            // System Optimization Audit Console
             item {
-                val auditLogs by viewModel.vivoAuditLogs.collectAsState()
-                val isAuditLoggingEnabled by viewModel.auditLoggingEnabled.collectAsState()
-                com.framex.app.ui.screens.performance.sections.SystemAuditLogSection(
-                    isLoggingEnabled = isAuditLoggingEnabled,
-                    onToggleLogging = { viewModel.setAuditLoggingEnabled(it) },
-                    auditLogs = auditLogs,
-                    onClearLogs = { viewModel.clearVivoAuditLogs() }
+                SystemAuditLogSection(
+                    isLoggingEnabled = uiState.auditLoggingEnabled,
+                    onToggleLogging = { onEvent(PerformanceUiEvent.ToggleAuditLogging(it)) },
+                    auditLogs = uiState.vivoAuditLogs,
+                    onClearLogs = { onEvent(PerformanceUiEvent.ClearAuditLogs) }
                 )
             }
         }
 
-        // Deep Freeze Safeguard Notice Dialog (One-time modal)
-        if (!hasSeenDeepFreezeNotice) {
+        // Deep Freeze Safeguard Notice Dialog
+        if (!uiState.hasSeenDeepFreezeNotice) {
             DeepFreezeSafeguardDialog(
-                onDismiss = { viewModel.dismissDeepFreezeNotice() },
+                onDismiss = { onEvent(PerformanceUiEvent.DismissDeepFreezeNotice) },
                 onConfirmEnable = {
-                    viewModel.toggleDeepFreeze(true)
-                    viewModel.dismissDeepFreezeNotice()
+                    onEvent(PerformanceUiEvent.ToggleDeepFreeze(true))
+                    onEvent(PerformanceUiEvent.DismissDeepFreezeNotice)
                 }
             )
         }
 
         // Floating Success Banner
-        RamSuccessBanner(bannerText = showRamSuccessBanner)
+        RamSuccessBanner(bannerText = uiState.bannerMessage)
 
         // Add Game Modal
-        if (showAddGameSheet) {
+        if (uiState.showAddGameSheet) {
             AddGameModal(
-                userApps = userApps,
-                launcherGames = launcherGames,
-                onDismiss = { showAddGameSheet = false },
-                onToggleLauncherGame = { pkg -> viewModel.toggleLauncherGame(pkg) }
+                userApps = uiState.userApps,
+                launcherGames = uiState.launcherGames,
+                onDismiss = { onEvent(PerformanceUiEvent.SetAddGameSheetVisible(false)) },
+                onToggleLauncherGame = { pkg -> onEvent(PerformanceUiEvent.ToggleLauncherGame(pkg)) }
             )
         }
 
         // Per-Game Config Modal
-        configGamePkg?.let { targetPkg ->
+        uiState.configGamePkg?.let { targetPkg ->
             GameConfigModal(
                 pkg = targetPkg,
-                userApps = userApps,
-                getGameConfigBoostRam = { p -> viewModel.getGameConfigBoostRam(p) },
-                setGameConfigBoostRam = { p, v -> viewModel.setGameConfigBoostRam(p, v) },
-                getGameConfigMemc = { p -> viewModel.getGameConfigMemc(p) },
-                maxRefreshRate = viewModel.maxRefreshRate,
+                userApps = uiState.userApps,
+                getGameConfigBoostRam = getGameConfigBoostRam,
+                setGameConfigBoostRam = setGameConfigBoostRam,
+                getGameConfigMemc = getGameConfigMemc,
+                maxRefreshRate = uiState.maxRefreshRate,
                 onBoostClicked = { tPkg ->
-                    configGamePkg = null
-                    activeDeployingGamePkg = tPkg
+                    onEvent(PerformanceUiEvent.SetConfigGamePkg(null))
+                    onEvent(PerformanceUiEvent.SetDeployingGamePkg(tPkg))
                 },
-                onDismiss = { configGamePkg = null },
-                isVivo = isVivoSuiteEnabled,
-                onToggleMemc = { p, v, cb -> viewModel.toggleMemc(p, v, cb) }
+                onDismiss = { onEvent(PerformanceUiEvent.SetConfigGamePkg(null)) },
+                isVivo = uiState.isVivoSuiteEnabled,
+                onToggleMemc = { p, v, cb -> onEvent(PerformanceUiEvent.ToggleMemc(p, v, cb)) }
             )
         }
 
         // Deploying Game Modal
-        activeDeployingGamePkg?.let { pkg ->
+        uiState.activeDeployingGamePkg?.let { pkg ->
             DeployingGameModal(
                 pkg = pkg,
                 onAnimationComplete = { tPkg ->
-                    viewModel.launchGameWithOptimizations(context, tPkg) { freed ->
-                        activeDeployingGamePkg = null
-                        scope.launch {
-                            showRamSuccessBanner = "Game boosted successfully! Freed $freed MB of RAM"
-                            delay(2500)
-                            showRamSuccessBanner = null
-                        }
-                    }
+                    onEvent(PerformanceUiEvent.SetDeployingGamePkg(null))
+                    onEvent(PerformanceUiEvent.LaunchGame(tPkg))
                 }
             )
         }

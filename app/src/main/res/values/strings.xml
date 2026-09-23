@@ -11,4 +11,157 @@
     <string name="quick_tile_overlay_active">Active</string>
     <string name="quick_tile_overlay_inactive">Inactive</string>
     <string name="quick_tile_add_prompt">Add FrameX Overlay Tile</string>
+
+    <!-- Common UI Labels & Actions -->
+    <string name="action_start">Start</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_applied">Applied</string>
+    <string name="action_apply_changes">Apply Changes</string>
+    <string name="action_save">Save</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_next">Next</string>
+    <string name="action_skip">Skip</string>
+    <string name="action_back">Back</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_grant">Grant</string>
+    <string name="action_granted">Granted</string>
+    <string name="action_move_up">Move item up</string>
+    <string name="action_move_down">Move item down</string>
+
+    <!-- Accessibility -->
+    <string name="cd_app_logo">FrameX Logo</string>
+    <string name="cd_settings_button">Settings Button</string>
+    <string name="cd_drag_handle">Drag to reorder</string>
+    <string name="cd_status_dot">Status Indicator</string>
+    <string name="cd_sparkline_chart">Live Frame Rate History Graph</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">FrameX</string>
+    <string name="dashboard_subtitle">Real-time performance overlay</string>
+    <string name="dashboard_overlay_status">OVERLAY STATUS</string>
+    <string name="dashboard_status_active">Monitoring Active</string>
+    <string name="dashboard_status_ready">Ready to Monitor</string>
+    <string name="dashboard_badge_active">ACTIVE</string>
+    <string name="dashboard_badge_inactive">INACTIVE</string>
+    <string name="dashboard_frame_rate">FRAME RATE</string>
+    <string name="dashboard_fps_unit">FPS</string>
+    <string name="dashboard_avg_fps">AVG</string>
+    <string name="dashboard_one_percent_low">1% LOW</string>
+    <string name="dashboard_frametime">FRAMETIME</string>
+    <string name="dashboard_start_overlay">Start Overlay</string>
+    <string name="dashboard_stop_overlay">Stop Overlay</string>
+    <string name="dashboard_complete_setup">Complete Setup First</string>
+    <string name="dashboard_missing_prefix">Missing: </string>
+    <string name="dashboard_quick_access">QUICK ACCESS</string>
+    <string name="dashboard_metrics_title">Metrics</string>
+    <string name="dashboard_metrics_desc">FPS · CPU · GPU · RAM</string>
+    <string name="dashboard_theme_title">Theme</string>
+    <string name="dashboard_theme_desc">Colors · Opacity · Size</string>
+    <string name="dashboard_performance_title">Performance</string>
+    <string name="dashboard_performance_desc">Game mode</string>
+    <string name="dashboard_shizuku_title">Shizuku</string>
+    <string name="dashboard_connected">Connected</string>
+    <string name="dashboard_disconnected">Disconnected</string>
+    <string name="dashboard_thermal_title">Thermal diagnostics</string>
+    <string name="dashboard_thermal_desc">Find what\'s causing frame drops</string>
+
+    <!-- Overlay Preview -->
+    <string name="overlay_no_modules">No modules</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_page1_title">FPS-First Philosophy</string>
+    <string name="onboarding_page1_desc">FrameX prioritizes frame rates above all else. Experience a modular system designed to keep your workflow at maximum refresh rates.</string>
+    <string name="onboarding_page2_title">Real-time Metrics</string>
+    <string name="onboarding_page2_desc">Monitor your device\'s core vitals including CPU, RAM, and GPU workloads in a single glance without leaving your game.</string>
+    <string name="onboarding_page3_title">Powered by Shizuku</string>
+    <string name="onboarding_page3_desc">Advanced system-level privileges allow FrameX to gather deeper Android telemetry without touching root or voiding your warranty.</string>
+    <string name="onboarding_page_n_of_m">Page %1$d of %2$d</string>
+
+    <!-- Permissions Screen -->
+    <string name="perm_screen_title">System Status</string>
+    <string name="perm_setup_title">Setup FrameX</string>
+    <string name="perm_setup_desc">FrameX needs specific permissions to monitor performance metrics like FPS, thermal stats, and power usage without root access.</string>
+    <string name="perm_shizuku_title">Shizuku Service</string>
+    <string name="perm_shizuku_desc">The core bridge for non-root access. Please ensure Shizuku is running via ADB or Wireless Debugging.</string>
+    <string name="perm_shizuku_running_granted">RUNNING &amp; GRANTED</string>
+    <string name="perm_shizuku_perm_required">PERMISSION REQUIRED</string>
+    <string name="perm_shizuku_not_running">NOT RUNNING</string>
+    <string name="perm_launch_app">Launch App</string>
+    <string name="perm_grant_access">Grant Access</string>
+    <string name="perm_authorized">Authorized</string>
+    <string name="perm_required_section">REQUIRED PERMISSIONS</string>
+    <string name="perm_overlay_title">Overlay Permission</string>
+    <string name="perm_overlay_desc">Required for the FPS counter overlay</string>
+    <string name="perm_usage_title">Usage Access</string>
+    <string name="perm_usage_desc">Read app-specific performance data</string>
+    <string name="perm_battery_title">Battery Optimization</string>
+    <string name="perm_battery_desc">Prevents OS from killing overlay</string>
+    <string name="perm_battery_disable">Disable</string>
+    <string name="perm_notifications_title">Notifications</string>
+    <string name="perm_notifications_desc">Shows overlay status and Gaming Mode recovery alerts</string>
+    <string name="perm_write_settings_title">Write System Settings</string>
+    <string name="perm_write_settings_desc">Required to toggle auto-brightness &amp; rotation</string>
+    <string name="perm_why_title">Why are these needed?</string>
+    <string name="perm_why_desc">FrameX operates as a high-privilege tool. Without overlay access, we cannot draw the HUD. Without usage stats, we cannot identify which game is running. Shizuku allows us to bypass Android 14+ restrictions securely.</string>
+    <string name="perm_return_dashboard">Return to Dashboard</string>
+    <string name="perm_shizuku_not_found">Shizuku app not found</string>
+    <string name="perm_start_shizuku_first">Start Shizuku service first</string>
+    <string name="perm_status_format">%1$s: %2$s</string>
+
+    <!-- Overlay Customization -->
+    <string name="overlay_config_title">Overlay Config</string>
+    <string name="overlay_active_modules">Active Modules</string>
+    <string name="overlay_reorder_hint">Drag to reorder. Tap icon to toggle icon. Switch to show in overlay.</string>
+    <string name="overlay_reset_order_cd">Reset to default order</string>
+    <string name="overlay_order_reset_toast">Order reset to default</string>
+    <string name="overlay_saved_toast">Overlay configuration saved!</string>
+    <string name="overlay_preview_label">Preview</string>
+    <string name="overlay_mode_minimal">Minimal</string>
+    <string name="overlay_mode_compact">Compact</string>
+    <string name="overlay_mode_expanded">Expanded</string>
+    <string name="overlay_icon_enabled_cd">Icon enabled (tap to disable)</string>
+    <string name="overlay_icon_disabled_cd">Icon disabled (tap to enable)</string>
+
+    <!-- Appearance Screen -->
+    <string name="appearance_title">Appearance</string>
+    <string name="appearance_preview_header">PREVIEW</string>
+    <string name="appearance_preview_subtitle">Respects selected Metrics config</string>
+    <string name="appearance_visibility_header">VISIBILITY</string>
+    <string name="appearance_opacity_title">Overlay Opacity</string>
+    <string name="appearance_container_header">CONTAINER</string>
+    <string name="appearance_background_title">Background</string>
+    <string name="appearance_border_title">Border</string>
+    <string name="appearance_typography_header">TYPOGRAPHY</string>
+    <string name="appearance_text_size_scale_title">Text Size &amp; Scale</string>
+    <string name="appearance_monospace_title">Monospace Metrics</string>
+    <string name="appearance_monospace_desc">Use JetBrains Mono font</string>
+    <string name="appearance_theme_header">THEME</string>
+    <string name="appearance_accent_color_title">Accent Color</string>
+    <string name="appearance_custom_label">Custom</string>
+    <string name="appearance_value_color_title">Value Color</string>
+    <string name="appearance_cpu_hot_title">CPU Hot Warning</string>
+    <string name="appearance_cpu_hot_desc">Show HOT / CRIT alerts on thermal overlay when CPU temperature rises</string>
+    <string name="appearance_apply_changes">Apply Changes</string>
+    <string name="appearance_applied">Applied</string>
+    <string name="appearance_saved_toast">Appearance configuration saved!</string>
+    <string name="appearance_bg_black">Black</string>
+    <string name="appearance_bg_navy">Navy</string>
+    <string name="appearance_bg_charcoal">Charcoal</string>
+    <string name="appearance_bg_clear">Clear</string>
+    <string name="appearance_border_accent">Accent</string>
+    <string name="appearance_border_none">None</string>
+    <string name="appearance_border_subtle">Subtle</string>
+    <string name="appearance_border_ghost">Ghost</string>
+    <string name="appearance_size_small">Small</string>
+    <string name="appearance_size_medium">Medium</string>
+    <string name="appearance_size_large">Large</string>
+    <string name="appearance_value_color_white">White</string>
+    <string name="appearance_value_color_accent">Accent</string>
+    <string name="appearance_value_color_silver">Silver</string>
+    <string name="appearance_value_color_auto">Auto (Dynamic FPS)</string>
+    <string name="appearance_value_color_auto_desc">Auto Value Color: Dynamically colors metrics (Green, Yellow, Red) based on live FPS performance</string>
 </resources>
