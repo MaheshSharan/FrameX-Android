@@ -111,4 +111,18 @@
     <string name="perm_shizuku_not_found">Shizuku app not found</string>
     <string name="perm_start_shizuku_first">Start Shizuku service first</string>
     <string name="perm_status_format">%1$s: %2$s</string>
+
+    <!-- Overlay Customization -->
+    <string name="overlay_config_title">Overlay Config</string>
+    <string name="overlay_active_modules">Active Modules</string>
+    <string name="overlay_reorder_hint">Drag to reorder. Tap icon to toggle icon. Switch to show in overlay.</string>
+    <string name="overlay_reset_order_cd">Reset to default order</string>
+    <string name="overlay_order_reset_toast">Order reset to default</string>
+    <string name="overlay_saved_toast">Overlay configuration saved!</string>
+    <string name="overlay_preview_label">Preview</string>
+    <string name="overlay_mode_minimal">Minimal</string>
+    <string name="overlay_mode_compact">Compact</string>
+    <string name="overlay_mode_expanded">Expanded</string>
+    <string name="overlay_icon_enabled_cd">Icon enabled (tap to disable)</string>
+    <string name="overlay_icon_disabled_cd">Icon disabled (tap to enable)</string>
 </resources>

@@ -9,7 +9,7 @@ import com.framex.app.ui.screens.AboutScreen
 import com.framex.app.ui.screens.AppearanceScreen
 import com.framex.app.ui.screens.dashboard.DashboardRoute
 import com.framex.app.ui.screens.onboarding.OnboardingRoute
-import com.framex.app.ui.screens.OverlayCustomizationScreen
+import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
 import com.framex.app.ui.screens.permissions.PermissionsRoute
 import com.framex.app.ui.screens.SplashScreen
 import com.framex.app.ui.screens.thermal.ThermalDiagnosticsScreen
@@ -61,7 +61,7 @@ fun FrameXNavGraph(
             AppearanceScreen(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.OverlayCustomization.route) {
-            OverlayCustomizationScreen(onNavigateBack = { navController.safePopBackStack() })
+            OverlayCustomizationRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.Permissions.route) {
             PermissionsRoute(onNavigateBack = { navController.safePopBackStack() })
