@@ -43,39 +43,9 @@ import com.framex.app.ui.screens.thermal.components.GraphLegend
 import com.framex.app.ui.screens.thermal.components.ModernInteractiveGraph
 import com.framex.app.ui.screens.thermal.components.ReadingCard
 import com.framex.app.ui.screens.thermal.components.ThermalDetailsSection
+import com.framex.app.ui.screens.thermal.components.ThermalExportSection
+import com.framex.app.ui.screens.thermal.components.ThermalGraphControls
 import java.util.Locale
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun dropdownFieldColors(): TextFieldColors =
-    ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-        // These fields are readOnly selectors, not text entry — Compose's
-        // ExposedDropdownMenuBox keeps the field focused after a selection closes the
-        // menu, so a focus-driven border color was getting stuck "on" indefinitely
-        // (issue #55). Using the same color for focused/unfocused removes that stuck
-        // highlight without fighting the focus system.
-        focusedBorderColor = Color.White.copy(alpha = 0.15f),
-        unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-        disabledBorderColor = Color.White.copy(alpha = 0.08f),
-        errorBorderColor = MaterialTheme.colorScheme.primary,
-        focusedLabelColor = Color.Gray,
-        unfocusedLabelColor = Color.Gray,
-        disabledLabelColor = Color.Gray,
-        errorLabelColor = MaterialTheme.colorScheme.primary,
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.5f),
-        errorTextColor = Color.White,
-        cursorColor = MaterialTheme.colorScheme.primary,
-        errorCursorColor = MaterialTheme.colorScheme.primary,
-        focusedTrailingIconColor = Color.White,
-        unfocusedTrailingIconColor = Color.Gray,
-        errorTrailingIconColor = Color.Gray,
-        focusedContainerColor = Color.Transparent,
-        unfocusedContainerColor = Color.Transparent,
-        disabledContainerColor = Color.Transparent,
-        errorContainerColor = Color.Transparent
-    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,8 +83,6 @@ fun ThermalDiagnosticsScreen(
             runCatching { GraphMetricMode.valueOf(persistedGraphModeName) }.getOrDefault(GraphMetricMode.FPS_THERMAL)
         )
     }
-    var timeDropdownExpanded by remember { mutableStateOf(false) }
-    var modeDropdownExpanded by remember { mutableStateOf(false) }
     var isSensorDetailsExpanded by remember { mutableStateOf(false) }
 
     val filteredSnapshots = remember(snapshotHistory, selectedWindow) {
@@ -416,83 +384,18 @@ fun ThermalDiagnosticsScreen(
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Dropdowns Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Time Window Dropdown
-                    ExposedDropdownMenuBox(
-                        expanded = timeDropdownExpanded,
-                        onExpandedChange = { timeDropdownExpanded = !timeDropdownExpanded },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
-                            value = selectedWindow.label,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Timeframe", fontSize = 11.sp) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = timeDropdownExpanded) },
-                            colors = dropdownFieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            textStyle = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = timeDropdownExpanded,
-                            onDismissRequest = { timeDropdownExpanded = false },
-                            modifier = Modifier.background(Color(0xFF1E1E2A))
-                        ) {
-                            TimeWindow.values().forEach { window ->
-                                DropdownMenuItem(
-                                    text = { Text(window.label, fontSize = 13.sp, color = Color.White) },
-                                    onClick = {
-                                        selectedWindow = window
-                                        viewModel.setThermalTimeWindow(window)
-                                        timeDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
+                ThermalGraphControls(
+                    selectedWindow = selectedWindow,
+                    onWindowSelected = { window ->
+                        selectedWindow = window
+                        viewModel.setThermalTimeWindow(window)
+                    },
+                    selectedMode = selectedGraphMode,
+                    onModeSelected = { mode ->
+                        selectedGraphMode = mode
+                        viewModel.setThermalGraphMode(mode)
                     }
-
-                    // Metric Mode Dropdown
-                    ExposedDropdownMenuBox(
-                        expanded = modeDropdownExpanded,
-                        onExpandedChange = { modeDropdownExpanded = !modeDropdownExpanded },
-                        modifier = Modifier.weight(1.3f)
-                    ) {
-                        OutlinedTextField(
-                            value = selectedGraphMode.label,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Graph Mode", fontSize = 11.sp) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeDropdownExpanded) },
-                            colors = dropdownFieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            textStyle = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                            maxLines = 1
-                        )
-                        ExposedDropdownMenu(
-                            expanded = modeDropdownExpanded,
-                            onDismissRequest = { modeDropdownExpanded = false },
-                            modifier = Modifier.background(Color(0xFF1E1E2A))
-                        ) {
-                            GraphMetricMode.values().forEach { mode ->
-                                DropdownMenuItem(
-                                    text = { Text(mode.label, fontSize = 13.sp, color = Color.White) },
-                                    onClick = {
-                                        selectedGraphMode = mode
-                                        viewModel.setThermalGraphMode(mode)
-                                        modeDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -546,93 +449,24 @@ fun ThermalDiagnosticsScreen(
                 Spacer(modifier = Modifier.height(28.dp))
 
                 // 6. Action Buttons Layout with Restored Green "Ready to Export" Banner
-                Text("Session Recording & Export", style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold)
-                Text(
-                    "Capture gaming telemetry logs or copy a Markdown report for GitHub issues.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-
                 val sampleCount = viewModel.recordedSampleCount(snapshotHistory)
-                if (isRecording) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFEF4444).copy(alpha = 0.1f))
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.FiberManualRecord, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Recording — ${sampleCount}s captured", color = Color.White, fontWeight = FontWeight.Bold)
+                ThermalExportSection(
+                    isRecording = isRecording,
+                    sampleCount = sampleCount,
+                    onToggleRecording = { viewModel.toggleRecording() },
+                    onExportCsv = {
+                        viewModel.exportAndShare(
+                            onReady = { intent -> context.startActivity(Intent.createChooser(intent, "Share session log")) },
+                            onEmpty = { Toast.makeText(context, "Nothing recorded yet — start a session first", Toast.LENGTH_SHORT).show() }
+                        )
+                    },
+                    onCopyReport = {
+                        val summary = viewModel.buildDiagnosticSummaryText(snapshotHistory)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("FrameX Diagnostic Summary", summary))
+                        Toast.makeText(context, "Diagnostic summary copied to clipboard!", Toast.LENGTH_LONG).show()
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                } else if (sampleCount > 0) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF34D399).copy(alpha = 0.1f))
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.FiberManualRecord, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Last Session — ${sampleCount}s ready to export", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Row 1: Primary Record / Stop Button
-                Button(
-                    onClick = { viewModel.toggleRecording() },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isRecording) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(if (isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isRecording) "Stop Session Recording" else "Start Session Recording", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Row 2: Secondary Action Buttons
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.exportAndShare(
-                                onReady = { intent -> context.startActivity(Intent.createChooser(intent, "Share session log")) },
-                                onEmpty = { Toast.makeText(context, "Nothing recorded yet — start a session first", Toast.LENGTH_SHORT).show() }
-                            )
-                        },
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.IosShare, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export CSV", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            val summary = viewModel.buildDiagnosticSummaryText(snapshotHistory)
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("FrameX Diagnostic Summary", summary))
-                            Toast.makeText(context, "Diagnostic summary copied to clipboard!", Toast.LENGTH_LONG).show()
-                        },
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Copy Report", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(40.dp))
             }
