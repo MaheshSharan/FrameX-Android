@@ -115,14 +115,12 @@ fun GameLauncherSection(
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = app.packageName) {
-                                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                val drawable = context.packageManager.getApplicationIcon(app.packageName)
-                                                drawable.toBitmap().asImageBitmap()
-                                            } catch (e: Exception) {
-                                                null
-                                            }
+                                    val iconBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+                                        initialValue = com.framex.app.ui.screens.performance.AppIconCache.get(app.packageName),
+                                        key1 = app.packageName
+                                    ) {
+                                        if (value == null) {
+                                            value = com.framex.app.ui.screens.performance.AppIconCache.loadIcon(context, app.packageName)
                                         }
                                     }
                                     val currentBitmap = iconBitmap

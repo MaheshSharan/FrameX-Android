@@ -82,14 +82,12 @@ fun AddGameModal(
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val iconBitmap by produceState<ImageBitmap?>(initialValue = null, key1 = app.packageName) {
-                                value = withContext(Dispatchers.IO) {
-                                    try {
-                                        val drawable = context.packageManager.getApplicationIcon(app.packageName)
-                                        drawable.toBitmap().asImageBitmap()
-                                    } catch (e: Exception) {
-                                        null
-                                    }
+                            val iconBitmap by produceState<ImageBitmap?>(
+                                initialValue = com.framex.app.ui.screens.performance.AppIconCache.get(app.packageName),
+                                key1 = app.packageName
+                            ) {
+                                if (value == null) {
+                                    value = com.framex.app.ui.screens.performance.AppIconCache.loadIcon(context, app.packageName)
                                 }
                             }
                             val currentBitmap = iconBitmap

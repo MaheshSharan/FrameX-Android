@@ -4,76 +4,107 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.AppInfo
 import com.framex.app.gaming.EsportsOptimizationEngine
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeService
 import com.framex.app.gaming.GamingModeState
+import com.framex.app.gaming.GamingPlatformPath
 import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.gaming.VivoGamingOptimizer
+import com.framex.app.gaming.VivoSuiteGate
+import com.framex.app.gaming.ledger.ExecutionLedger
+import com.framex.app.metrics.MetricsEngine
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.shizuku.ShizukuManager
-import com.framex.app.gaming.ledger.ExecutionLedger
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import com.framex.app.gaming.GamingPlatformPath
-import com.framex.app.gaming.VivoSuiteGate
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+private data class SystemSettingsGroup(
+    val fixedPerformanceMode: Boolean,
+    val deepFreezeEnabled: Boolean,
+    val hasSeenDeepFreezeNotice: Boolean,
+    val auditLoggingEnabled: Boolean
+)
+
+private data class ShizukuAndGamingGroup(
+    val gamingState: GamingModeState,
+    val isShizukuAvailable: Boolean,
+    val hasShizukuPermission: Boolean,
+    val whitelist: Set<String>,
+    val launcherGames: Set<String>
+)
+
+private data class VivoGroup(
+    val isVivoSuiteEnabled: Boolean,
+    val rawPerfGameList: String?,
+    val vivoPerfGameList: List<String>,
+    val vivoAuditLogs: List<SystemAuditLog>
+)
+
 @HiltViewModel
 class PerformanceViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val gamingModeEngine: GamingModeEngine,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
-    private val metricsEngine: com.framex.app.metrics.MetricsEngine,
-    private val deviceDiagnosticManager: com.framex.app.device.DeviceDiagnosticManager,
+    private val metricsEngine: MetricsEngine,
+    private val deviceDiagnosticManager: DeviceDiagnosticManager,
     private val executionLedger: ExecutionLedger,
     private val vivoSuiteGate: VivoSuiteGate
 ) : ViewModel() {
 
-    private val _toastEvent = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    val toastEvent = _toastEvent.asSharedFlow()
+    private val _effectChannel = Channel<PerformanceUiEffect>(Channel.BUFFERED)
+    val effect = _effectChannel.receiveAsFlow()
 
     val maxRefreshRate: Int = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60)
 
-    val gamingModeState = gamingModeEngine.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GamingModeState.Idle)
+    // Dynamic state streams
+    private val _userApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val userApps = _userApps.asStateFlow()
 
-    val isShizukuAvailable = shizukuManager.isShizukuAvailable
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    private val _googleApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val googleApps = _googleApps.asStateFlow()
 
-    val hasShizukuPermission = shizukuManager.hasPermission
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    private val _rawPerfGameList = MutableStateFlow<String?>(null)
+    val rawPerfGameList = _rawPerfGameList.asStateFlow()
 
-    val whitelist: StateFlow<Set<String>> = settingsRepository.gamingModeWhitelist
-    val launcherGames: StateFlow<Set<String>> = settingsRepository.launcherGames
+    private val _vivoPerfGameList = MutableStateFlow<List<String>>(emptyList())
+    val vivoPerfGameList = _vivoPerfGameList.asStateFlow()
 
-    val metricsState = metricsEngine.metricsState
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.framex.app.metrics.MetricsState())
+    // Interactive Action states
+    private val _isBoostingRam = MutableStateFlow(false)
+    private val _isOptimizingNet = MutableStateFlow(false)
+    private val _isResettingDefaults = MutableStateFlow(false)
+    private val _bannerMessage = MutableStateFlow<String?>(null)
+    private val _activeLatencyDiagnostic = MutableStateFlow<Int?>(null)
+    private val _showRamResult = MutableStateFlow(false)
+    private val _showPingResult = MutableStateFlow(false)
+    private val _showResetResult = MutableStateFlow(false)
 
-    val cpuPriorityLock: StateFlow<Boolean> = settingsRepository.cpuPriorityLock
-    val networkFirewall: StateFlow<Boolean> = settingsRepository.networkFirewall
-    val refreshRateLock: StateFlow<Boolean> = settingsRepository.refreshRateLock
-    val touchBoost: StateFlow<Boolean> = settingsRepository.touchBoost
-    val framePacingOverlay: StateFlow<Boolean> = settingsRepository.framePacingOverlay
-    val fixedPerformanceMode: StateFlow<Boolean> = settingsRepository.fixedPerformanceMode
-    val deepFreezeEnabled: StateFlow<Boolean> = settingsRepository.deepFreezeEnabled
-    val hasSeenDeepFreezeNotice: StateFlow<Boolean> = settingsRepository.hasSeenDeepFreezeNotice
+    // Dialog & Modal visibility states
+    private val _showAddGameSheet = MutableStateFlow(false)
+    private val _configGamePkg = MutableStateFlow<String?>(null)
+    private val _activeDeployingGamePkg = MutableStateFlow<String?>(null)
 
+    // Active session stream
     val activeGamingSession: StateFlow<ActiveGamingSession?> = combine(
         gamingModeEngine.state,
         gamingModeEngine.activeGamePackage,
@@ -83,31 +114,114 @@ class PerformanceViewModel @Inject constructor(
         if (state !is GamingModeState.Active) {
             null
         } else {
-            val isVivo = vivoSuiteGate.isVivoHardware
             ActiveGamingSession(
                 title = "Gaming Mode Active",
-                isVivoDevice = isVivo,
+                isVivoDevice = vivoSuiteGate.isVivoHardware,
                 activeGamePackage = activePkg,
                 suspendedAppsCount = suspendedCount,
                 summary = executionLedger.getSummary()
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun toggleCpuPriorityLock(enabled: Boolean) = settingsRepository.setCpuPriorityLock(enabled)
-    fun toggleNetworkFirewall(enabled: Boolean) = settingsRepository.setNetworkFirewall(enabled)
-    fun toggleRefreshRateLock(enabled: Boolean) = settingsRepository.setRefreshRateLock(enabled)
-    fun toggleTouchBoost(enabled: Boolean) = settingsRepository.setTouchBoost(enabled)
-    fun toggleFramePacingOverlay(enabled: Boolean) = settingsRepository.setFramePacingOverlay(enabled)
-    fun toggleFixedPerformanceMode(enabled: Boolean) = settingsRepository.setFixedPerformanceMode(enabled)
-    fun toggleDeepFreeze(enabled: Boolean) = settingsRepository.setDeepFreezeEnabled(enabled)
-    fun dismissDeepFreezeNotice() = settingsRepository.setHasSeenDeepFreezeNotice(true)
+    // Grouped streams to stay strictly within combine limits
+    private val shizukuAndGamingStream = combine(
+        gamingModeEngine.state,
+        shizukuManager.isShizukuAvailable,
+        shizukuManager.hasPermission,
+        settingsRepository.gamingModeWhitelist,
+        settingsRepository.launcherGames
+    ) { state, available, perm, wl, games ->
+        ShizukuAndGamingGroup(state, available, perm, wl, games)
+    }
 
-    private val _userApps = MutableStateFlow<List<AppInfo>>(emptyList())
-    val userApps = _userApps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val systemSettingsStream = combine(
+        settingsRepository.fixedPerformanceMode,
+        settingsRepository.deepFreezeEnabled,
+        settingsRepository.hasSeenDeepFreezeNotice,
+        settingsRepository.auditLoggingEnabled
+    ) { fixedPerf, deepFreeze, hasSeenNotice, auditEnabled ->
+        SystemSettingsGroup(fixedPerf, deepFreeze, hasSeenNotice, auditEnabled)
+    }
 
-    private val _googleApps = MutableStateFlow<List<AppInfo>>(emptyList())
-    val googleApps = _googleApps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val vivoStream = combine(
+        vivoSuiteGate.isVivoSuiteEnabledFlow,
+        _rawPerfGameList,
+        _vivoPerfGameList,
+        vivoGamingOptimizer.auditLogs
+    ) { enabled, raw, list, logs ->
+        VivoGroup(enabled, raw, list, logs)
+    }
+
+    private val actionStateStream = combine(
+        _isBoostingRam,
+        _isOptimizingNet,
+        _isResettingDefaults,
+        _bannerMessage,
+        _activeLatencyDiagnostic
+    ) { boosting, optimizingNet, resetting, banner, ping ->
+        ActionStateGroup(boosting, optimizingNet, resetting, banner, ping)
+    }
+
+    private val dialogStateStream = combine(
+        _showAddGameSheet,
+        _configGamePkg,
+        _activeDeployingGamePkg,
+        _showRamResult,
+        combine(_showPingResult, _showResetResult) { p, r -> Pair(p, r) }
+    ) { addGame, configPkg, deployingPkg, ramRes, (pingRes, resetRes) ->
+        DialogStateGroup(addGame, configPkg, deployingPkg, ramRes, pingRes, resetRes)
+    }
+
+    val uiState: StateFlow<PerformanceUiState> = combine(
+        shizukuAndGamingStream,
+        systemSettingsStream,
+        vivoStream,
+        metricsEngine.metricsState,
+        combine(
+            _userApps,
+            _googleApps,
+            activeGamingSession,
+            actionStateStream,
+            dialogStateStream
+        ) { user, google, session, actions, dialogs ->
+            IntermediateUiState(user, google, session, actions, dialogs)
+        }
+    ) { sg, sys, vivo, metrics, inter ->
+        PerformanceUiState(
+            gamingState = sg.gamingState,
+            isShizukuAvailable = sg.isShizukuAvailable,
+            hasShizukuPermission = sg.hasShizukuPermission,
+            whitelist = sg.whitelist,
+            launcherGames = sg.launcherGames,
+            userApps = inter.userApps,
+            googleApps = inter.googleApps,
+            metricsState = metrics,
+            fixedPerformanceMode = sys.fixedPerformanceMode,
+            deepFreezeEnabled = sys.deepFreezeEnabled,
+            hasSeenDeepFreezeNotice = sys.hasSeenDeepFreezeNotice,
+            activeGamingSession = inter.activeSession,
+            isVivoSuiteEnabled = vivo.isVivoSuiteEnabled,
+            rawPerfGameList = vivo.rawPerfGameList,
+            vivoPerfGameList = vivo.vivoPerfGameList,
+            vivoAuditLogs = vivo.vivoAuditLogs,
+            auditLoggingEnabled = sys.auditLoggingEnabled,
+            maxRefreshRate = maxRefreshRate,
+            safeToSuspendList = gamingModeEngine.safeToSuspendPackages,
+            gamingDaemonsList = if (vivo.isVivoSuiteEnabled) GamingModeEngine.GAMING_DAEMONS else emptyList(),
+            isBoostingRam = inter.actions.isBoostingRam,
+            isOptimizingNet = inter.actions.isOptimizingNet,
+            isResettingDefaults = inter.actions.isResettingDefaults,
+            bannerMessage = inter.actions.bannerMessage,
+            activeLatencyDiagnostic = inter.actions.activeLatencyDiagnostic,
+            showRamResult = inter.dialogs.showRamResult,
+            showPingResult = inter.dialogs.showPingResult,
+            showResetResult = inter.dialogs.showResetResult,
+            showAddGameSheet = inter.dialogs.showAddGameSheet,
+            configGamePkg = inter.dialogs.configGamePkg,
+            activeDeployingGamePkg = inter.dialogs.activeDeployingGamePkg
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PerformanceUiState())
 
     init {
         loadUserApps()
@@ -117,6 +231,34 @@ class PerformanceViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "performance_screen")
+    }
+
+    fun onEvent(event: PerformanceUiEvent) {
+        when (event) {
+            is PerformanceUiEvent.ToggleWhitelist -> settingsRepository.toggleGamingWhitelistApp(event.packageName)
+            is PerformanceUiEvent.ToggleLauncherGame -> settingsRepository.toggleLauncherGame(event.packageName)
+            is PerformanceUiEvent.ToggleFixedPerformanceMode -> settingsRepository.setFixedPerformanceMode(event.enabled)
+            is PerformanceUiEvent.ToggleDeepFreeze -> settingsRepository.setDeepFreezeEnabled(event.enabled)
+            PerformanceUiEvent.DismissDeepFreezeNotice -> settingsRepository.setHasSeenDeepFreezeNotice(true)
+            PerformanceUiEvent.EnableGamingMode -> enableGamingMode()
+            PerformanceUiEvent.DisableGamingMode -> disableGamingMode()
+            is PerformanceUiEvent.LaunchGame -> launchGameWithOptimizations(event.packageName)
+            PerformanceUiEvent.BoostRam -> boostRamAction()
+            PerformanceUiEvent.CheckPing -> checkPingAction()
+            PerformanceUiEvent.ResetDefaults -> resetDefaultsAction()
+            PerformanceUiEvent.RefreshVivoPerfList -> refreshVivoPerfGameList()
+            is PerformanceUiEvent.AddAllToPerfList -> addAllLauncherGamesToPerfList(event.packages) {}
+            is PerformanceUiEvent.RemoveAllFromPerfList -> removeAllLauncherGamesFromPerfList(event.packages) {}
+            is PerformanceUiEvent.CompileAllSpeed -> compileAllLauncherGamesSpeed(event.packages) {}
+            is PerformanceUiEvent.ToggleAuditLogging -> setAuditLoggingEnabled(event.enabled)
+            PerformanceUiEvent.ClearAuditLogs -> clearVivoAuditLogs()
+            PerformanceUiEvent.RefreshInstalledApps -> loadUserApps()
+            is PerformanceUiEvent.SetAddGameSheetVisible -> _showAddGameSheet.value = event.visible
+            is PerformanceUiEvent.SetConfigGamePkg -> _configGamePkg.value = event.packageName
+            is PerformanceUiEvent.SetDeployingGamePkg -> _activeDeployingGamePkg.value = event.packageName
+            is PerformanceUiEvent.SetGameConfigBoostRam -> settingsRepository.setGameConfigBoostRam(event.packageName, event.enabled)
+            is PerformanceUiEvent.ToggleMemc -> toggleMemc(event.packageName, event.enabled, event.onComplete)
+        }
     }
 
     fun loadUserApps() {
@@ -130,7 +272,6 @@ class PerformanceViewModel @Inject constructor(
             _userApps.value = installedUser
             _googleApps.value = installedGoogle
 
-            // Auto-prune uninstalled packages from launcherGames
             val installedPkgs = installedUser.map { it.packageName }.toSet()
             if (installedPkgs.isNotEmpty()) {
                 val currentLauncher = settingsRepository.launcherGames.value
@@ -142,93 +283,9 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
-    fun toggleWhitelist(packageName: String) {
-        settingsRepository.toggleGamingWhitelistApp(packageName)
-    }
-
-    fun toggleLauncherGame(packageName: String) {
-        settingsRepository.toggleLauncherGame(packageName)
-    }
-
-    fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)
-    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigBoostRam(pkg, enabled)
-
-    fun getGameConfigDisableBrightness(pkg: String): Boolean = settingsRepository.getGameConfigDisableBrightness(pkg)
-    fun setGameConfigDisableBrightness(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigDisableBrightness(pkg, enabled)
-
-    fun getGameConfigDisableRotate(pkg: String): Boolean = settingsRepository.getGameConfigDisableRotate(pkg)
-    fun setGameConfigDisableRotate(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigDisableRotate(pkg, enabled)
-
-    fun getGameConfigRingtoneVol(pkg: String): Int = settingsRepository.getGameConfigRingtoneVol(pkg)
-    fun setGameConfigRingtoneVol(pkg: String, vol: Int) = settingsRepository.setGameConfigRingtoneVol(pkg, vol)
-
-    suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> {
-        val availBefore = deviceDiagnosticManager.getAvailableMemoryBytes()
-
-        var stoppedCount = 0
-        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
-            try {
-                shizukuManager.executeCommand("pm trim-caches 4G")
-                val targets = withContext(Dispatchers.IO) {
-                    gamingModeEngine.getInstalledUserApps()
-                        .filter { it.packageName !in whitelist }
-                }
-                for (app in targets) {
-                    try {
-                        shizukuManager.executeCommand("am force-stop ${app.packageName}")
-                        stoppedCount++
-                    } catch (e: Exception) {
-                        com.framex.app.utils.FrameXLog.w("Failed to force-stop ${app.packageName}", e)
-                    }
-                }
-                shizukuManager.executeCommand("am kill-all")
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Error during manual RAM boost via Shizuku", e)
-            }
-        }
-        System.gc()
-
-        val availAfter = deviceDiagnosticManager.getAvailableMemoryBytes()
-
-        val freed = ((availAfter - availBefore) / BYTES_TO_MB).coerceAtLeast(0L)
-        return Pair(freed, stoppedCount)
-    }
-
-    suspend fun measureNetworkLatency(): Int? {
-        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
-            try {
-                val output = shizukuManager.executeCommand("ping -c 1 8.8.8.8")
-                if (output.contains("time=")) {
-                    val pingMs = output.split("time=").getOrNull(1)
-                        ?.split(" ")?.getOrNull(0)
-                        ?.toFloatOrNull()
-                        ?.toInt()
-                    if (pingMs != null && pingMs > 0) return pingMs
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Shizuku ping check failed, falling back to socket probe", e)
-            }
-        }
-        var minPing: Int? = null
-        for (i in 1..3) {
-            try {
-                val start = System.currentTimeMillis()
-                val socket = java.net.Socket()
-                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), SOCKET_TIMEOUT_MS)
-                val latency = (System.currentTimeMillis() - start).toInt()
-                socket.close()
-                minPing = minOf(minPing ?: latency, latency)
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.w("Socket ping probe iteration $i failed", e)
-            }
-            delay(RETRY_DELAY_MS)
-        }
-        return minPing
-    }
-
-    fun enableGamingMode(context: Context) {
+    fun enableGamingMode() {
         if (settingsRepository.launcherGames.value.isEmpty()) {
-            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
             return
         }
         viewModelScope.launch {
@@ -237,13 +294,24 @@ class PerformanceViewModel @Inject constructor(
             if (gamingModeEngine.state.value == GamingModeState.Active) {
                 context.startForegroundService(Intent(context, GamingModeService::class.java))
                 if (settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO) {
-                    _toastEvent.emit("Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.")
+                    _effectChannel.send(PerformanceUiEffect.ShowToast("Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations."))
                 }
             }
         }
     }
 
-    fun launchGameWithOptimizations(context: Context, packageName: String, onLaunched: (Long) -> Unit) {
+    fun disableGamingMode() {
+        viewModelScope.launch {
+            gamingModeEngine.disableGamingMode()
+            context.startService(
+                Intent(context, GamingModeService::class.java).apply {
+                    action = GamingModeService.ACTION_STOP
+                }
+            )
+        }
+    }
+
+    fun launchGameWithOptimizations(packageName: String, onLaunched: ((Long) -> Unit)? = null) {
         viewModelScope.launch {
             val isGamingModeActive = gamingModeEngine.state.value is GamingModeState.Active
             val shouldBoostRam = settingsRepository.getGameConfigBoostRam(packageName)
@@ -252,14 +320,15 @@ class PerformanceViewModel @Inject constructor(
             if (shouldBoostRam) {
                 val currentWhitelist = settingsRepository.gamingModeWhitelist.value
                 val (freed, _) = manualBoostRam(currentWhitelist + packageName)
-                freedMb = (freed / (1024L * 1024L)).coerceAtLeast(0L)
+                // Critical Fix: manualBoostRam already returns freed in MB, do not divide by 1024*1024 again!
+                freedMb = freed.coerceAtLeast(0L)
             }
 
             val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
             if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
 
-                // Promote PID and attach per-game optimizations if Gaming Mode is actively running
                 if (isGamingModeActive) {
                     val sessionPath = settingsRepository.getGamingPlatformPath()
                     if (sessionPath == GamingPlatformPath.VIVO) {
@@ -281,53 +350,115 @@ class PerformanceViewModel @Inject constructor(
                 }
             }
 
-            onLaunched(freedMb)
+            onLaunched?.invoke(freedMb)
         }
     }
 
-    fun disableGamingMode(context: Context) {
+    private fun boostRamAction() {
         viewModelScope.launch {
-            gamingModeEngine.disableGamingMode()
-            context.startService(
-                Intent(context, GamingModeService::class.java).apply {
-                    action = GamingModeService.ACTION_STOP
+            _isBoostingRam.value = true
+            val (freed, stopped) = manualBoostRam(settingsRepository.gamingModeWhitelist.value)
+            _isBoostingRam.value = false
+            _showRamResult.value = true
+            _bannerMessage.value = "Boosted! Freed $freed MB, stopped $stopped apps"
+            delay(2500)
+            _showRamResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    private fun checkPingAction() {
+        viewModelScope.launch {
+            _isOptimizingNet.value = true
+            val pingRes = measureNetworkLatency()
+            _isOptimizingNet.value = false
+            _showPingResult.value = true
+            _activeLatencyDiagnostic.value = pingRes ?: 0
+            _bannerMessage.value = if (pingRes != null) "Latency check complete: $pingRes ms" else "Latency check failed: network unreachable"
+            delay(2500)
+            _showPingResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    private fun resetDefaultsAction() {
+        viewModelScope.launch {
+            _isResettingDefaults.value = true
+            val resetOk = resetToDeviceDefaults()
+            _isResettingDefaults.value = false
+            _showResetResult.value = true
+            _bannerMessage.value = if (resetOk) "Device settings reset to OS defaults" else "Device reset partially completed"
+            delay(2500)
+            _showResetResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> {
+        val availBefore = deviceDiagnosticManager.getAvailableMemoryBytes()
+
+        var stoppedCount = 0
+        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            try {
+                shizukuManager.executeCommand("pm trim-caches 4G")
+                val targets = withContext(Dispatchers.IO) {
+                    gamingModeEngine.getInstalledUserApps()
+                        .filter { it.packageName !in whitelist }
                 }
-            )
-        }
-    }
-
-    fun compileGameSpeed(packageName: String, onComplete: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val result = vivoGamingOptimizer.compileSpeedAot(packageName)
-            onComplete(result)
-        }
-    }
-
-    fun checkGameSpeedCompiled(packageName: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val result = vivoGamingOptimizer.isSpeedCompiled(packageName)
-            onResult(result)
-        }
-    }
-
-    fun getGameConfigMemc(pkg: String): Boolean = settingsRepository.getGameConfigMemc(pkg)
-
-    fun toggleMemc(packageName: String, enabled: Boolean, onComplete: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val result = vivoGamingOptimizer.setMemcTargetFps(packageName, enabled)
-            if (result) {
-                settingsRepository.setGameConfigMemc(packageName, enabled)
+                for (app in targets) {
+                    try {
+                        shizukuManager.executeCommand("am force-stop ${app.packageName}")
+                        stoppedCount++
+                    } catch (e: Exception) {
+                        FrameXLog.w("Failed to force-stop ${app.packageName}", e)
+                    }
+                }
+                shizukuManager.executeCommand("am kill-all")
+            } catch (e: Exception) {
+                FrameXLog.w("Error during manual RAM boost via Shizuku", e)
             }
-            onComplete(result)
         }
+        System.gc()
+
+        val availAfter = deviceDiagnosticManager.getAvailableMemoryBytes()
+        val freed = ((availAfter - availBefore) / BYTES_TO_MB).coerceAtLeast(0L)
+        return Pair(freed, stoppedCount)
     }
 
-    // null = not yet loaded, blank string = device returned empty list
-    private val _rawPerfGameList = MutableStateFlow<String?>(null)
-    val rawPerfGameList: StateFlow<String?> = _rawPerfGameList.asStateFlow()
-
-    private val _vivoPerfGameList = MutableStateFlow<List<String>>(emptyList())
-    val vivoPerfGameList: StateFlow<List<String>> = _vivoPerfGameList.asStateFlow()
+    suspend fun measureNetworkLatency(): Int? {
+        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            try {
+                val output = shizukuManager.executeCommand("ping -c 1 8.8.8.8")
+                if (output.contains("time=")) {
+                    val pingMs = output.split("time=").getOrNull(1)
+                        ?.split(" ")?.getOrNull(0)
+                        ?.toFloatOrNull()
+                        ?.toInt()
+                    if (pingMs != null && pingMs > 0) return pingMs
+                }
+            } catch (e: Exception) {
+                FrameXLog.w("Shizuku ping check failed, falling back to socket probe", e)
+            }
+        }
+        var minPing: Int? = null
+        for (i in 1..3) {
+            try {
+                val start = System.currentTimeMillis()
+                val socket = java.net.Socket()
+                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), SOCKET_TIMEOUT_MS)
+                val latency = (System.currentTimeMillis() - start).toInt()
+                socket.close()
+                minPing = minOf(minPing ?: latency, latency)
+            } catch (e: Exception) {
+                FrameXLog.w("Socket ping probe iteration $i failed", e)
+            }
+            delay(RETRY_DELAY_MS)
+        }
+        return minPing
+    }
 
     fun refreshVivoPerfGameList() {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return
@@ -338,17 +469,9 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
-    fun getPackageCompileFilter(packageName: String, onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            val filter = vivoGamingOptimizer.getPackageCompileFilter(packageName)
-            onResult(filter)
-        }
-    }
-
-    /** Adds all launcher games to perf_game_list one by one, refreshes list on completion. */
     fun addAllLauncherGamesToPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
             onComplete(false)
             return
         }
@@ -362,15 +485,14 @@ class PerformanceViewModel @Inject constructor(
             _rawPerfGameList.value = raw
             _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
             val msg = if (allSuccess) "Added ${packages.size} game(s) to Perf List ✓" else "Some games could not be added to Perf List"
-            _toastEvent.emit(msg)
+            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
             onComplete(allSuccess)
         }
     }
 
-    /** Removes all launcher games from perf_game_list one by one, refreshes list on completion. */
     fun removeAllLauncherGamesFromPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
             onComplete(false)
             return
         }
@@ -384,15 +506,14 @@ class PerformanceViewModel @Inject constructor(
             _rawPerfGameList.value = raw
             _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
             val msg = if (allSuccess) "Removed ${packages.size} game(s) from Perf List ✓" else "Some games could not be removed from Perf List"
-            _toastEvent.emit(msg)
+            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
             onComplete(allSuccess)
         }
     }
 
-    /** Compiles all launcher games with AOT speed mode. Reports overall success. */
     fun compileAllLauncherGamesSpeed(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _toastEvent.tryEmit("Kindly add a minimum of one game in game launcher")
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
             onComplete(false)
             return
         }
@@ -403,15 +524,10 @@ class PerformanceViewModel @Inject constructor(
                 if (!ok) allSuccess = false
             }
             val msg = if (allSuccess) "AOT compiled ${packages.size} app(s) to speed filter ✓" else "AOT compilation failed for one or more apps"
-            _toastEvent.emit(msg)
+            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
             onComplete(allSuccess)
         }
     }
-
-    val isVivoDevice: Boolean get() = vivoSuiteGate.isVivoHardware
-    val isVivoSuiteEnabled: StateFlow<Boolean> = vivoSuiteGate.isVivoSuiteEnabledFlow
-
-    val auditLoggingEnabled: StateFlow<Boolean> = settingsRepository.auditLoggingEnabled
 
     fun setAuditLoggingEnabled(enabled: Boolean) {
         settingsRepository.setAuditLoggingEnabled(enabled)
@@ -420,8 +536,6 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
-    val vivoAuditLogs: StateFlow<List<SystemAuditLog>> = vivoGamingOptimizer.auditLogs
-
     fun clearVivoAuditLogs() {
         vivoGamingOptimizer.clearAuditLogs()
     }
@@ -429,8 +543,21 @@ class PerformanceViewModel @Inject constructor(
     suspend fun resetToDeviceDefaults(): Boolean =
         esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)
 
+    fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)
+    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigBoostRam(pkg, enabled)
+    fun getGameConfigMemc(pkg: String): Boolean = settingsRepository.getGameConfigMemc(pkg)
+
+    fun toggleMemc(packageName: String, enabled: Boolean, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = vivoGamingOptimizer.setMemcTargetFps(packageName, enabled)
+            if (result) {
+                settingsRepository.setGameConfigMemc(packageName, enabled)
+            }
+            onComplete(result)
+        }
+    }
+
     val safeToSuspendList: List<String> get() = gamingModeEngine.safeToSuspendPackages
-    val googleSafeToSuspendList: List<String> get() = GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND
     val gamingDaemonsList: List<String>
         get() = if (vivoSuiteGate.isVivoSuiteEnabled) GamingModeEngine.GAMING_DAEMONS else emptyList()
 
@@ -440,3 +567,28 @@ class PerformanceViewModel @Inject constructor(
         private const val RETRY_DELAY_MS = 150L
     }
 }
+
+private data class ActionStateGroup(
+    val isBoostingRam: Boolean,
+    val isOptimizingNet: Boolean,
+    val isResettingDefaults: Boolean,
+    val bannerMessage: String?,
+    val activeLatencyDiagnostic: Int?
+)
+
+private data class DialogStateGroup(
+    val showAddGameSheet: Boolean,
+    val configGamePkg: String?,
+    val activeDeployingGamePkg: String?,
+    val showRamResult: Boolean,
+    val showPingResult: Boolean,
+    val showResetResult: Boolean
+)
+
+private data class IntermediateUiState(
+    val userApps: List<AppInfo>,
+    val googleApps: List<AppInfo>,
+    val activeSession: ActiveGamingSession?,
+    val actions: ActionStateGroup,
+    val dialogs: DialogStateGroup
+)
