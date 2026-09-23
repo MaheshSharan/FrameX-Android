@@ -80,4 +80,35 @@
     <string name="onboarding_page3_title">Powered by Shizuku</string>
     <string name="onboarding_page3_desc">Advanced system-level privileges allow FrameX to gather deeper Android telemetry without touching root or voiding your warranty.</string>
     <string name="onboarding_page_n_of_m">Page %1$d of %2$d</string>
+
+    <!-- Permissions Screen -->
+    <string name="perm_screen_title">System Status</string>
+    <string name="perm_setup_title">Setup FrameX</string>
+    <string name="perm_setup_desc">FrameX needs specific permissions to monitor performance metrics like FPS, thermal stats, and power usage without root access.</string>
+    <string name="perm_shizuku_title">Shizuku Service</string>
+    <string name="perm_shizuku_desc">The core bridge for non-root access. Please ensure Shizuku is running via ADB or Wireless Debugging.</string>
+    <string name="perm_shizuku_running_granted">RUNNING &amp; GRANTED</string>
+    <string name="perm_shizuku_perm_required">PERMISSION REQUIRED</string>
+    <string name="perm_shizuku_not_running">NOT RUNNING</string>
+    <string name="perm_launch_app">Launch App</string>
+    <string name="perm_grant_access">Grant Access</string>
+    <string name="perm_authorized">Authorized</string>
+    <string name="perm_required_section">REQUIRED PERMISSIONS</string>
+    <string name="perm_overlay_title">Overlay Permission</string>
+    <string name="perm_overlay_desc">Required for the FPS counter overlay</string>
+    <string name="perm_usage_title">Usage Access</string>
+    <string name="perm_usage_desc">Read app-specific performance data</string>
+    <string name="perm_battery_title">Battery Optimization</string>
+    <string name="perm_battery_desc">Prevents OS from killing overlay</string>
+    <string name="perm_battery_disable">Disable</string>
+    <string name="perm_notifications_title">Notifications</string>
+    <string name="perm_notifications_desc">Shows overlay status and Gaming Mode recovery alerts</string>
+    <string name="perm_write_settings_title">Write System Settings</string>
+    <string name="perm_write_settings_desc">Required to toggle auto-brightness &amp; rotation</string>
+    <string name="perm_why_title">Why are these needed?</string>
+    <string name="perm_why_desc">FrameX operates as a high-privilege tool. Without overlay access, we cannot draw the HUD. Without usage stats, we cannot identify which game is running. Shizuku allows us to bypass Android 14+ restrictions securely.</string>
+    <string name="perm_return_dashboard">Return to Dashboard</string>
+    <string name="perm_shizuku_not_found">Shizuku app not found</string>
+    <string name="perm_start_shizuku_first">Start Shizuku service first</string>
+    <string name="perm_status_format">%1$s: %2$s</string>
 </resources>
