@@ -69,4 +69,10 @@ class PerformanceStateTest {
         AppIconCache.clear()
         assertNull(AppIconCache.get(pkg))
     }
+
+    @Test
+    fun performanceUiStateHonorsPersistedDeepFreezeNotice() {
+        val state = PerformanceUiState(hasSeenDeepFreezeNotice = true)
+        assertTrue(state.hasSeenDeepFreezeNotice)
+    }
 }

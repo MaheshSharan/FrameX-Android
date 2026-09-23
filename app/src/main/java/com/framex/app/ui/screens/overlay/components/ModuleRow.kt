@@ -33,10 +33,10 @@ fun ModuleRow(
     module: ModuleRowState,
     accentColor: Color,
     isDragging: Boolean,
-    dragHandleModifier: Modifier?,
     onEnabledChanged: (Boolean) -> Unit,
     onToggleIcon: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dragHandleModifier: Modifier? = null
 ) {
     val info = METRIC_MODULE_REGISTRY.getValue(module.id)
 

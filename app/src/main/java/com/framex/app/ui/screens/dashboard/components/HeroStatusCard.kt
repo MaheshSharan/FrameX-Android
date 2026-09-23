@@ -26,6 +26,11 @@ import com.framex.app.R
 import com.framex.app.ui.components.PrimaryButton
 import com.framex.app.ui.components.SectionCard
 import com.framex.app.ui.screens.dashboard.DashboardUiState
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXMotion
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun HeroStatusCard(
@@ -40,7 +45,7 @@ fun HeroStatusCard(
 
     val activeColor by animateColorAsState(
         targetValue = if (uiState.isOverlayRunning) emeraldColor else Color.Gray,
-        animationSpec = tween(400),
+        animationSpec = tween(FrameXMotion.DurationSlow),
         label = "statusBadgeColor"
     )
 
@@ -49,7 +54,7 @@ fun HeroStatusCard(
         initialValue = 0.4f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
+            animation = tween(1000, easing = FrameXMotion.StandardEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "heroGlowDotAlpha"
@@ -92,21 +97,21 @@ fun HeroStatusCard(
             // Animated Status Chip
             Box(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(FrameXShapes.Pill)
                     .background(activeColor.copy(alpha = 0.12f))
-                    .border(1.dp, activeColor.copy(alpha = 0.25f), CircleShape)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .border(FrameXBorders.ActiveBorderWidth, activeColor.copy(alpha = 0.25f), FrameXShapes.Pill)
+                    .padding(horizontal = FrameXSpacing.Medium, vertical = 6.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(FrameXSpacing.Small)
                             .graphicsLayer {
                                 if (uiState.isOverlayRunning) {
                                     alpha = dotAlpha
                                 }
                             }
-                            .background(activeColor, CircleShape)
+                            .background(activeColor, FrameXShapes.Pill)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -123,7 +128,7 @@ fun HeroStatusCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(FrameXSpacing.Large))
 
         // Sparkline Graph Card
         LiveFpsSparklineCard(
@@ -131,7 +136,7 @@ fun HeroStatusCard(
             stats = uiState.fpsStats
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(FrameXSpacing.XLarge))
 
         // Action CTA Row with animated state transitions
         AnimatedContent(
@@ -141,7 +146,7 @@ fun HeroStatusCard(
                 else -> OverlayActionState.MISSING_PERMISSIONS
             },
             transitionSpec = {
-                fadeIn(tween(300)) + expandVertically() togetherWith fadeOut(tween(200)) + shrinkVertically()
+                fadeIn(tween(FrameXMotion.DurationMedium)) + expandVertically() togetherWith fadeOut(tween(FrameXMotion.DurationFast)) + shrinkVertically()
             },
             label = "overlayActionTransition"
         ) { actionState ->
@@ -154,10 +159,10 @@ fun HeroStatusCard(
                             containerColor = primaryAccent.copy(alpha = 0.15f),
                             contentColor = primaryAccent
                         ),
-                        shape = CircleShape,
+                        shape = FrameXShapes.Pill,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 56.dp)
+                            .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight)
                     ) {
                         Text(
                             text = stringResource(R.string.dashboard_stop_overlay),
@@ -197,17 +202,17 @@ fun HeroStatusCard(
                                 containerColor = amberColor.copy(alpha = 0.12f),
                                 contentColor = amberColor
                             ),
-                            shape = CircleShape,
+                            shape = FrameXShapes.Pill,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .defaultMinSize(minHeight = 56.dp)
+                                .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight)
                         ) {
                             Icon(
                                 Icons.Default.Settings,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
                             Text(
                                 text = stringResource(R.string.dashboard_complete_setup),
                                 style = MaterialTheme.typography.titleMedium,

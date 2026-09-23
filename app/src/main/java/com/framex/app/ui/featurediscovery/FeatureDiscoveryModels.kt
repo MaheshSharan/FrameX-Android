@@ -35,3 +35,7 @@ data class DiscoveryCompletionEvent(
     val message: String,
     val actionLabel: String? = null
 )
+
+sealed interface DiscoveryUiEffect {
+    data class LaunchAction(val action: DiscoveryAction) : DiscoveryUiEffect
+}

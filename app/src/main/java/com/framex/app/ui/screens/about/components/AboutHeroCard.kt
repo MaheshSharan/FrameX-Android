@@ -31,6 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun AboutHeroCard(
@@ -60,7 +64,7 @@ fun AboutHeroCard(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(FrameXSpacing.Standard))
 
         Text(
             text = "FrameX",
@@ -76,7 +80,7 @@ fun AboutHeroCard(
             fontWeight = FontWeight.Medium
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(FrameXSpacing.XLarge))
 
         Button(
             onClick = {
@@ -84,10 +88,10 @@ fun AboutHeroCard(
                 context.startActivity(intent)
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = CircleShape,
+            shape = FrameXShapes.Pill,
             modifier = Modifier
-                .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                .height(48.dp)
+                .border(FrameXBorders.ActiveBorderWidth, FrameXBorders.FocusedStroke, FrameXShapes.Pill)
+                .height(FrameXAccessibility.MinTouchTarget)
         ) {
             Icon(
                 imageVector = Icons.Default.Mail,
@@ -95,7 +99,7 @@ fun AboutHeroCard(
                 tint = accentColor,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
             Text(
                 text = "Contact Developer",
                 color = Color.White,

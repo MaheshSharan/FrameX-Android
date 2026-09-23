@@ -41,9 +41,7 @@ import com.framex.app.ui.screens.permissions.components.ShizukuStatusCard
 fun PermissionsScreen(
     uiState: PermissionsUiState,
     onNavigateBack: () -> Unit,
-    onLaunchShizuku: () -> Unit,
-    onRequestShizukuPermission: () -> Unit,
-    onRequestPermission: (PermissionId) -> Unit,
+    onEvent: (PermissionsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val permissionItems = remember(uiState) {
@@ -149,8 +147,8 @@ fun PermissionsScreen(
                 ShizukuStatusCard(
                     isShizukuAvailable = uiState.isShizukuAvailable,
                     hasShizukuPermission = uiState.hasShizukuPermission,
-                    onLaunchShizuku = onLaunchShizuku,
-                    onRequestPermission = onRequestShizukuPermission
+                    onLaunchShizuku = { onEvent(PermissionsUiEvent.LaunchShizukuApp) },
+                    onRequestPermission = { onEvent(PermissionsUiEvent.RequestShizukuPermission) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -168,7 +166,7 @@ fun PermissionsScreen(
                     permissionItems.forEach { item ->
                         PermissionRow(
                             item = item,
-                            onGrantClick = { onRequestPermission(item.id) }
+                            onGrantClick = { onEvent(PermissionsUiEvent.RequestPermission(item.id)) }
                         )
                     }
                 }

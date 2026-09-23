@@ -209,3 +209,29 @@ fun iconForLabel(label: String): ImageVector = when (label) {
     "TOP PROCESS" -> Icons.Default.Layers
     else -> Icons.Default.LocalFireDepartment
 }
+
+fun buildDiagnosticSummaryText(
+    state: MetricsState,
+    snapshots: List<MetricsEngine.MetricsSnapshot>
+): String {
+    val recent = snapshots.takeLast(60)
+    val maxCpu = recent.maxOfOrNull { it.state.thermalCpuC } ?: state.thermalCpuC
+    val maxSkin = recent.maxOfOrNull { it.state.thermalSkinC } ?: state.thermalSkinC
+    val avgFps = if (recent.isNotEmpty()) recent.map { it.state.fps }.average().toInt() else state.fps
+    val minFps = recent.minOfOrNull { it.state.fps } ?: state.fps
+    val maxJank = recent.maxOfOrNull { it.state.jankyFrames } ?: state.jankyFrames
+    val topProcess = state.topProcessName ?: "None"
+
+    val statusText = getThermalStatusLabel(state.thermalStatus)
+
+    return """
+### FrameX Thermal Diagnostic Summary
+- **Device**: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android ${android.os.Build.VERSION.RELEASE}, API ${android.os.Build.VERSION.SDK_INT})
+- **System Thermal State**: $statusText
+- **CPU Peak (60s)**: ${String.format(Locale.US, "%.1f°C", maxCpu)}
+- **Skin Peak (60s)**: ${String.format(Locale.US, "%.1f°C", maxSkin)}
+- **FPS Avg / Min**: $avgFps / $minFps FPS
+- **Jank Peak**: $maxJank frames
+- **Top Process**: $topProcess (${String.format(Locale.US, "%.0f%%", state.topProcessCpuPercent)})
+""".trimIndent()
+}

@@ -37,6 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.ui.components.WovenNetBackground
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun AppUpdatesCard(
@@ -57,19 +61,19 @@ fun AppUpdatesCard(
             fontWeight = FontWeight.SemiBold,
             color = Color.Gray,
             letterSpacing = 0.06.sp,
-            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
+            modifier = Modifier.padding(start = FrameXSpacing.XSmall, bottom = FrameXSpacing.Medium)
         )
 
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = FrameXShapes.Card,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke),
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 WovenNetBackground(modifier = Modifier.matchParentSize())
 
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(FrameXSpacing.Large)) {
                     // Auto-update toggle row
                     Row(
                         modifier = Modifier
@@ -84,14 +88,14 @@ fun AppUpdatesCard(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f).padding(end = 16.dp)
+                            modifier = Modifier.weight(1f).padding(end = FrameXSpacing.Standard)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(42.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(FrameXShapes.Medium)
                                     .background(accentColor.copy(alpha = 0.14f))
-                                    .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
+                                    .border(FrameXBorders.ActiveBorderWidth, accentColor.copy(alpha = 0.28f), FrameXShapes.Medium),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -125,8 +129,8 @@ fun AppUpdatesCard(
                     }
 
                     HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.06f),
-                        modifier = Modifier.padding(vertical = 16.dp)
+                        color = FrameXBorders.SubtleStroke,
+                        modifier = Modifier.padding(vertical = FrameXSpacing.Standard)
                     )
 
                     // Version status and Check button
@@ -150,8 +154,8 @@ fun AppUpdatesCard(
                                 containerColor = accentColor.copy(alpha = 0.15f),
                                 contentColor = accentColor
                             ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.height(48.dp) // WCAG 48dp minimum
+                            shape = FrameXShapes.Medium,
+                            modifier = Modifier.height(FrameXAccessibility.MinTouchTarget)
                         ) {
                             if (isCheckingUpdate) {
                                 CircularProgressIndicator(

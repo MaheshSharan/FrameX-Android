@@ -22,6 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.framex.app.R
 import com.framex.app.ui.screens.permissions.PermissionItem
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun PermissionRow(
@@ -41,10 +45,11 @@ fun PermissionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .defaultMinSize(minHeight = FrameXAccessibility.StandardRowHeight)
+            .clip(FrameXShapes.Large)
             .background(Color.White.copy(0.05f))
-            .border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .border(FrameXBorders.ActiveBorderWidth, FrameXBorders.SubtleStroke, FrameXShapes.Large)
+            .padding(FrameXSpacing.Standard)
             .semantics(mergeDescendants = true) {
                 contentDescription = fullSemanticsDescription
             },
@@ -53,8 +58,8 @@ fun PermissionRow(
         // Leading Icon Container
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(FrameXAccessibility.MinTouchTarget)
+                .clip(FrameXShapes.Medium)
                 .background(Color.White.copy(0.08f)),
             contentAlignment = Alignment.Center
         ) {
@@ -96,13 +101,13 @@ fun PermissionRow(
             if (isGranted) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp),
+                        .size(FrameXAccessibility.MinTouchTarget),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
+                            .clip(FrameXShapes.Pill)
                             .background(emeraldColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -117,13 +122,13 @@ fun PermissionRow(
             } else {
                 Button(
                     onClick = onGrantClick,
-                    shape = CircleShape,
+                    shape = FrameXShapes.Pill,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                    contentPadding = PaddingValues(horizontal = FrameXSpacing.Standard, vertical = FrameXSpacing.Small),
+                    modifier = Modifier.defaultMinSize(minHeight = FrameXAccessibility.MinTouchTarget)
                 ) {
                     Text(
                         text = stringResource(item.actionTextRes),

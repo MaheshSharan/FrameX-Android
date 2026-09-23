@@ -1,6 +1,7 @@
 package com.framex.app.ui.screens.performance
 
 import androidx.compose.runtime.Immutable
+import com.framex.app.device.StorageInfo
 import com.framex.app.gaming.AppInfo
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.SystemAuditLog
@@ -46,6 +47,12 @@ data class PerformanceUiState(
     val safeToSuspendList: List<String> = emptyList(),
     val gamingDaemonsList: List<String> = emptyList(),
 
+    // Storage & System Access
+    val storageInfo: StorageInfo = StorageInfo(),
+    val hasDndAccess: Boolean = false,
+    val hasNotifListenerAccess: Boolean = false,
+    val hasWriteSettingsAccess: Boolean = false,
+
     // Action execution states
     val isBoostingRam: Boolean = false,
     val isOptimizingNet: Boolean = false,
@@ -89,6 +96,7 @@ sealed interface PerformanceUiEvent {
     data object ClearAuditLogs : PerformanceUiEvent
 
     data object RefreshInstalledApps : PerformanceUiEvent
+    data object RefreshSystemState : PerformanceUiEvent
     data class SetAddGameSheetVisible(val visible: Boolean) : PerformanceUiEvent
     data class SetConfigGamePkg(val packageName: String?) : PerformanceUiEvent
     data class SetDeployingGamePkg(val packageName: String?) : PerformanceUiEvent
@@ -102,3 +110,58 @@ sealed interface PerformanceUiEvent {
 sealed interface PerformanceUiEffect {
     data class ShowToast(val message: String) : PerformanceUiEffect
 }
+
+data class SystemSettingsGroup(
+    val fixedPerformanceMode: Boolean,
+    val deepFreezeEnabled: Boolean,
+    val hasSeenDeepFreezeNotice: Boolean,
+    val auditLoggingEnabled: Boolean
+)
+
+data class ShizukuAndGamingGroup(
+    val gamingState: GamingModeState,
+    val isShizukuAvailable: Boolean,
+    val hasShizukuPermission: Boolean,
+    val whitelist: Set<String>,
+    val launcherGames: Set<String>
+)
+
+data class VivoGroup(
+    val isVivoSuiteEnabled: Boolean,
+    val rawPerfGameList: String?,
+    val vivoPerfGameList: List<String>,
+    val vivoAuditLogs: List<SystemAuditLog>
+)
+
+data class SystemAccessGroup(
+    val storageInfo: StorageInfo,
+    val hasDndAccess: Boolean,
+    val hasNotifListenerAccess: Boolean,
+    val hasWriteSettingsAccess: Boolean
+)
+
+data class ActionStateGroup(
+    val isBoostingRam: Boolean,
+    val isOptimizingNet: Boolean,
+    val isResettingDefaults: Boolean,
+    val bannerMessage: String?,
+    val activeLatencyDiagnostic: Int?
+)
+
+data class DialogStateGroup(
+    val showAddGameSheet: Boolean,
+    val configGamePkg: String?,
+    val activeDeployingGamePkg: String?,
+    val showRamResult: Boolean,
+    val showPingResult: Boolean,
+    val showResetResult: Boolean
+)
+
+data class IntermediateUiState(
+    val userApps: List<AppInfo>,
+    val googleApps: List<AppInfo>,
+    val activeSession: ActiveGamingSession?,
+    val actions: ActionStateGroup,
+    val dialogs: DialogStateGroup,
+    val systemAccess: SystemAccessGroup
+)

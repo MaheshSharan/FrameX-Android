@@ -1,12 +1,16 @@
 package com.framex.app.ui.featurediscovery
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,6 +23,9 @@ class FeatureDiscoveryViewModel @Inject constructor(
 
     private val _completionEvent = MutableStateFlow<DiscoveryCompletionEvent?>(null)
     val completionEvent: StateFlow<DiscoveryCompletionEvent?> = _completionEvent.asStateFlow()
+
+    private val _effect = MutableSharedFlow<DiscoveryUiEffect>()
+    val effect: SharedFlow<DiscoveryUiEffect> = _effect.asSharedFlow()
 
     fun onScreenEntered(screenId: DiscoveryScreenId) {
         val guide = FeatureDiscoveryCatalog.guideFor(screenId) ?: return
@@ -62,15 +69,9 @@ class FeatureDiscoveryViewModel @Inject constructor(
         _guideState.value = DiscoveryGuideState.Hidden
     }
 
-    fun launchAction(context: Context, action: DiscoveryAction) {
-        runCatching {
-            context.startActivity(
-                action.intentBuilder(context).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
-        }.onFailure { error ->
-            FrameXLog.w("Failed to launch discovery action intent", error, tag = TAG)
+    fun launchAction(action: DiscoveryAction) {
+        viewModelScope.launch {
+            _effect.emit(DiscoveryUiEffect.LaunchAction(action))
         }
     }
 

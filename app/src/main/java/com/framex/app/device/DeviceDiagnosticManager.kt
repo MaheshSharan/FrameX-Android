@@ -41,4 +41,39 @@ open class DeviceDiagnosticManager @Inject constructor(
         am.getMemoryInfo(memInfo)
         return memInfo.availMem
     }
+
+    fun getStorageInfo(): StorageInfo {
+        return try {
+            val stat = android.os.StatFs(android.os.Environment.getDataDirectory().path)
+            val totalBytes = stat.blockCountLong * stat.blockSizeLong
+            val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
+            val totalGb = totalBytes / (1024L * 1024L * 1024L)
+            val freeGb = freeBytes / (1024L * 1024L * 1024L)
+            val usedGb = totalGb - freeGb
+            StorageInfo(usedGb = usedGb, totalGb = totalGb, freeGb = freeGb)
+        } catch (e: Exception) {
+            StorageInfo()
+        }
+    }
+
+    fun hasDndAccess(): Boolean {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+        return nm?.isNotificationPolicyAccessGranted == true
+    }
+
+    fun hasNotificationListenerAccess(): Boolean {
+        return android.provider.Settings.Secure.getString(
+            context.contentResolver, "enabled_notification_listeners"
+        )?.contains(context.packageName) == true
+    }
+
+    fun hasWriteSettingsAccess(): Boolean {
+        return android.provider.Settings.System.canWrite(context)
+    }
 }
+
+data class StorageInfo(
+    val usedGb: Long = 0L,
+    val totalGb: Long = 0L,
+    val freeGb: Long = 0L
+)

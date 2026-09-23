@@ -1,43 +1,34 @@
 package com.framex.app.ui.screens.permissions
 
-import android.Manifest
-import android.app.AppOpsManager
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import android.os.PowerManager
-import android.os.Process
-import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.framex.app.R
+import com.framex.app.repository.SystemPermissionRepository
 import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class PermissionsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val systemPermissionRepository: SystemPermissionRepository,
     private val shizukuManager: ShizukuManager
 ) : ViewModel() {
 
-    val isShizukuAvailable: StateFlow<Boolean> = shizukuManager.isShizukuAvailable
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    private val _effectChannel = Channel<PermissionsUiEffect>(Channel.BUFFERED)
+    val effect = _effectChannel.receiveAsFlow()
 
-    val hasShizukuPermission: StateFlow<Boolean> = shizukuManager.hasPermission
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    private val systemPermissionsState = MutableStateFlow(readSystemPermissions())
+    private val systemPermissionsState = MutableStateFlow(systemPermissionRepository.getPermissionsSnapshot())
 
     val uiState: StateFlow<PermissionsUiState> = combine(
-        isShizukuAvailable,
-        hasShizukuPermission,
+        shizukuManager.isShizukuAvailable,
+        shizukuManager.hasPermission,
         systemPermissionsState
     ) { isAvailable, hasPermission, sysState ->
         PermissionsUiState(
@@ -57,71 +48,49 @@ class PermissionsViewModel @Inject constructor(
 
     fun onEvent(event: PermissionsUiEvent) {
         when (event) {
+            PermissionsUiEvent.LaunchShizukuApp -> launchShizukuApp()
             PermissionsUiEvent.RequestShizukuPermission -> requestShizukuPermission()
+            is PermissionsUiEvent.RequestPermission -> requestPermission(event.id)
             PermissionsUiEvent.RefreshPermissions -> refreshPermissions()
+            is PermissionsUiEvent.UpdateNotificationPermission -> updateNotificationPermission(event.granted)
         }
     }
 
-    fun requestShizukuPermission() {
-        shizukuManager.requestPermission()
+    private fun launchShizukuApp() {
+        if (systemPermissionRepository.isShizukuAppInstalled()) {
+            _effectChannel.trySend(PermissionsUiEffect.LaunchShizukuApp)
+        } else {
+            _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_shizuku_not_found))
+        }
+    }
+
+    private fun requestShizukuPermission() {
+        if (shizukuManager.isShizukuAvailable.value) {
+            shizukuManager.requestPermission()
+        } else {
+            _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_start_shizuku_first))
+        }
+    }
+
+    private fun requestPermission(id: PermissionId) {
+        val effect = when (id) {
+            PermissionId.OVERLAY -> PermissionsUiEffect.OpenOverlaySettings
+            PermissionId.USAGE_STATS -> PermissionsUiEffect.OpenUsageSettings
+            PermissionId.BATTERY_OPT -> PermissionsUiEffect.OpenBatterySettings
+            PermissionId.NOTIFICATIONS -> PermissionsUiEffect.RequestNotificationPermission
+            PermissionId.WRITE_SETTINGS -> PermissionsUiEffect.OpenWriteSettings
+        }
+        _effectChannel.trySend(effect)
     }
 
     fun refreshPermissions() {
         shizukuManager.refreshState()
-        systemPermissionsState.value = readSystemPermissions()
+        systemPermissionsState.value = systemPermissionRepository.getPermissionsSnapshot()
     }
 
     fun updateNotificationPermission(granted: Boolean) {
         systemPermissionsState.value = systemPermissionsState.value.copy(
             hasNotificationPermission = granted
         )
-    }
-
-    private fun readSystemPermissions(): PermissionsUiState {
-        val hasOverlay = Settings.canDrawOverlays(context)
-        val hasWriteSettings = Settings.System.canWrite(context)
-        val hasUsage = checkUsageStatsPermission()
-        val hasBattery = checkBatteryOptimizationDisabled()
-        val hasNotifications = checkNotificationPermission()
-
-        return PermissionsUiState(
-            hasOverlayPermission = hasOverlay,
-            hasUsageStatsPermission = hasUsage,
-            hasBatteryOptDisabled = hasBattery,
-            hasNotificationPermission = hasNotifications,
-            hasWriteSettingsPermission = hasWriteSettings
-        )
-    }
-
-    private fun checkNotificationPermission(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun checkUsageStatsPermission(): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
-
-    private fun checkBatteryOptimizationDisabled(): Boolean {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
-        return powerManager.isIgnoringBatteryOptimizations(context.packageName)
     }
 }

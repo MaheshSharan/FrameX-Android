@@ -63,8 +63,8 @@ private const val COMPACT_SINGLE_ROW_MAX_ITEMS = 3
 @Composable
 fun OverlayPreviewContent(
     config: OverlayDisplayConfig,
-    metricsState: MetricsState? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    metricsState: MetricsState? = null
 ) {
     OverlayPreviewContent(
         mode = config.mode,
@@ -92,17 +92,17 @@ fun OverlayPreviewContent(
     enabledModules: Set<String>,
     moduleOrder: List<String>,
     opacity: Float,
-    textSize: Int = 1,
-    overlayScale: Float = 1.0f,
     useMonospace: Boolean,
     colorIndex: Int,
+    modifier: Modifier = Modifier,
+    textSize: Int = 1,
+    overlayScale: Float = 1.0f,
     bgColorIndex: Int = 0,
     borderColorIndex: Int = 0,
     textColorIndex: Int = 0,
     enabledModuleIcons: Set<String> = emptySet(),
     cpuHotWarningEnabled: Boolean = true,
-    metricsState: MetricsState? = null,
-    modifier: Modifier = Modifier
+    metricsState: MetricsState? = null
 ) {
     val activeList = remember(
         moduleOrder,

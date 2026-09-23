@@ -1,7 +1,5 @@
 package com.framex.app.ui.screens.performance
 
-import android.os.Environment
-import android.os.StatFs
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -24,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,15 +46,10 @@ import com.framex.app.ui.screens.performance.sections.StorageAndPingCard
 import com.framex.app.ui.screens.performance.sections.SystemAuditLogSection
 import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
 import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun PerformanceScreen(
     uiState: PerformanceUiState,
-    hasDndAccess: Boolean,
-    hasNotifListenerAccess: Boolean,
-    hasWriteSettingsAccess: Boolean,
     onEvent: (PerformanceUiEvent) -> Unit,
     getGameConfigBoostRam: (String) -> Boolean,
     setGameConfigBoostRam: (String, Boolean) -> Unit,
@@ -89,22 +81,6 @@ fun PerformanceScreen(
         (uiState.metricsState.ramUsedGb / uiState.metricsState.ramTotalGb * 100f).coerceIn(0f, 100f)
     } else {
         0f
-    }
-
-    val storageInfo by produceState(initialValue = Triple(0L, 0L, 0L)) {
-        value = withContext(Dispatchers.IO) {
-            try {
-                val stat = StatFs(Environment.getDataDirectory().path)
-                val totalBytes = stat.blockCountLong * stat.blockSizeLong
-                val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
-                val totalGb = totalBytes / (1024L * 1024L * 1024L)
-                val freeGb = freeBytes / (1024L * 1024L * 1024L)
-                val usedGb = totalGb - freeGb
-                Triple(usedGb, totalGb, freeGb)
-            } catch (e: Exception) {
-                Triple(0L, 0L, 0L)
-            }
-        }
     }
 
     Box(
@@ -166,9 +142,9 @@ fun PerformanceScreen(
                 RequirementsSection(
                     shizukuReady = shizukuReady,
                     isShizukuAvailable = uiState.isShizukuAvailable,
-                    hasWriteSettingsAccess = hasWriteSettingsAccess,
-                    hasDndAccess = hasDndAccess,
-                    hasNotifListenerAccess = hasNotifListenerAccess
+                    hasWriteSettingsAccess = uiState.hasWriteSettingsAccess,
+                    hasDndAccess = uiState.hasDndAccess,
+                    hasNotifListenerAccess = uiState.hasNotifListenerAccess
                 )
             }
 
@@ -199,7 +175,7 @@ fun PerformanceScreen(
             // Storage & Ping card
             item {
                 StorageAndPingCard(
-                    storageInfo = storageInfo,
+                    storageInfo = uiState.storageInfo,
                     currentPing = uiState.activeLatencyDiagnostic ?: uiState.metricsState.pingMs,
                     isOptimizingNet = uiState.isOptimizingNet
                 )

@@ -29,6 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
 import com.framex.app.ui.screens.dashboard.FpsStatsSummary
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXMotion
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 @Composable
 fun LiveFpsSparklineCard(
@@ -37,20 +41,14 @@ fun LiveFpsSparklineCard(
     modifier: Modifier = Modifier
 ) {
     val lineColor = MaterialTheme.colorScheme.primary
-    val gridColor = Color.White.copy(alpha = 0.05f)
-
-    val animatedFps by animateIntAsState(
-        targetValue = stats.currentFps,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "animatedFps"
-    )
+    val gridColor = FrameXBorders.SubtleStroke
 
     val infiniteTransition = rememberInfiniteTransition(label = "sparklineDotPulse")
     val dotGlowRadius by infiniteTransition.animateFloat(
         initialValue = 6f,
         targetValue = 10f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
+            animation = tween(1200, easing = FrameXMotion.StandardEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "dotGlowRadius"
@@ -63,9 +61,9 @@ fun LiveFpsSparklineCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0C0C0D), RoundedCornerShape(18.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
-            .padding(16.dp)
+            .background(Color(0xFF0C0C0D), FrameXShapes.Card)
+            .border(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke, FrameXShapes.Card)
+            .padding(FrameXSpacing.Standard)
             .semantics(mergeDescendants = true) {
                 contentDescription = sparklineDescription
             }
@@ -85,7 +83,7 @@ fun LiveFpsSparklineCard(
             )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = "$animatedFps",
+                    text = "${stats.currentFps}",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -197,9 +195,9 @@ fun LiveFpsSparklineCard(
                 }
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(FrameXSpacing.Medium))
+        HorizontalDivider(color = FrameXBorders.CardStroke)
+        Spacer(modifier = Modifier.height(FrameXSpacing.Small))
 
         // Floor stats row: Avg, 1% Low, Frametime (Accessible merged row)
         Row(

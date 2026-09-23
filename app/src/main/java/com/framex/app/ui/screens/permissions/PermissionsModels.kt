@@ -50,6 +50,19 @@ data class PermissionsUiState(
 }
 
 sealed interface PermissionsUiEvent {
-    object RequestShizukuPermission : PermissionsUiEvent
-    object RefreshPermissions : PermissionsUiEvent
+    data object RequestShizukuPermission : PermissionsUiEvent
+    data object LaunchShizukuApp : PermissionsUiEvent
+    data object RefreshPermissions : PermissionsUiEvent
+    data class RequestPermission(val id: PermissionId) : PermissionsUiEvent
+    data class UpdateNotificationPermission(val granted: Boolean) : PermissionsUiEvent
+}
+
+sealed interface PermissionsUiEffect {
+    data object LaunchShizukuApp : PermissionsUiEffect
+    data object OpenOverlaySettings : PermissionsUiEffect
+    data object OpenUsageSettings : PermissionsUiEffect
+    data object OpenBatterySettings : PermissionsUiEffect
+    data object OpenWriteSettings : PermissionsUiEffect
+    data object RequestNotificationPermission : PermissionsUiEffect
+    data class ShowToast(@StringRes val messageRes: Int) : PermissionsUiEffect
 }

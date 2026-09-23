@@ -12,7 +12,7 @@ import com.framex.app.ui.screens.onboarding.OnboardingRoute
 import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
 import com.framex.app.ui.screens.permissions.PermissionsRoute
 import com.framex.app.ui.screens.splash.SplashRoute
-import com.framex.app.ui.screens.thermal.ThermalDiagnosticsScreen
+import com.framex.app.ui.screens.thermal.ThermalDiagnosticsRoute
 import com.framex.app.ui.screens.performance.PerformanceRoute
 
 sealed class Screen(val route: String) {
@@ -73,7 +73,7 @@ fun FrameXNavGraph(
             PerformanceRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.ThermalDiagnostics.route) {
-            ThermalDiagnosticsScreen(onNavigateBack = { navController.safePopBackStack() })
+            ThermalDiagnosticsRoute(onNavigateBack = { navController.safePopBackStack() })
         }
     }
 }

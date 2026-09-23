@@ -1,21 +1,18 @@
 package com.framex.app.ui.screens.about
 
-import android.content.Context
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.BuildConfig
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.VivoSuiteGate
+import com.framex.app.repository.CrashLogRepository
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.update.AppUpdateInfo
 import com.framex.app.update.InstallResult
 import com.framex.app.update.UpdateInstaller
 import com.framex.app.update.UpdateRepository
-import com.framex.app.utils.CrashHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,8 +45,8 @@ private data class UpdateActionSnapshot(
 
 @HiltViewModel
 class AboutViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    private val crashLogRepository: CrashLogRepository,
     val deviceDiagnosticManager: DeviceDiagnosticManager,
     val updateRepository: UpdateRepository,
     val updateInstaller: UpdateInstaller,
@@ -139,24 +136,10 @@ class AboutViewModel @Inject constructor(
     }
 
     private fun loadPackageAndCrashInfo() {
+        _versionName.value = BuildConfig.VERSION_NAME
+        _versionCode.value = BuildConfig.VERSION_CODE.toLong()
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.packageManager.getPackageInfo(context.packageName, 0)
-                }
-                _versionName.value = pInfo?.versionName ?: BuildConfig.VERSION_NAME
-                val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    pInfo?.longVersionCode ?: BuildConfig.VERSION_CODE.toLong()
-                } else {
-                    @Suppress("DEPRECATION")
-                    pInfo?.versionCode?.toLong() ?: BuildConfig.VERSION_CODE.toLong()
-                }
-                _versionCode.value = code
-            }
-            _hasCrashLog.value = CrashHandler.hasCrashLog(context)
+            _hasCrashLog.value = crashLogRepository.hasCrashLog()
         }
     }
 
@@ -185,9 +168,9 @@ class AboutViewModel @Inject constructor(
             AboutUiEvent.CancelOrResetDownload -> updateRepository.resetDownloadState()
             AboutUiEvent.HandleSignatureMismatchUninstall -> handleSignatureMismatch()
             AboutUiEvent.OnResumeCheckInstallPermission -> checkPendingInstallOnResume()
-            AboutUiEvent.ShareCrashLog -> CrashHandler.shareCrashLog(context)
+            AboutUiEvent.ShareCrashLog -> crashLogRepository.shareCrashLog()
             AboutUiEvent.ClearCrashLog -> {
-                CrashHandler.clearCrashLog(context)
+                crashLogRepository.clearCrashLog()
                 _hasCrashLog.value = false
             }
         }
