@@ -38,14 +38,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
 import com.framex.app.metrics.MetricModuleId
+import com.framex.app.metrics.isIconShown
 import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.ui.components.ReorderableList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
-/** Editable row state for one metric module: identity plus whether it's shown in the overlay. */
-internal data class ModuleRowState(val id: MetricModuleId, val enabled: Boolean)
+/** Editable row state for one metric module: identity, overlay visibility, and icon visibility. */
+internal data class ModuleRowState(
+    val id: MetricModuleId,
+    val enabled: Boolean,
+    val showIcon: Boolean = true
+)
 
 /** Exact rendered height every module row must occupy — see ReorderableList's itemHeight contract. */
 private val MODULE_ROW_HEIGHT = 84.dp
@@ -59,6 +64,7 @@ class OverlayCustomizationViewModel @Inject constructor(
 ) : ViewModel() {
     val savedMode = settingsRepository.overlayMode
     val savedModules = settingsRepository.enabledModules
+    val savedModuleIcons = settingsRepository.enabledModuleIcons
     val savedModuleOrder = settingsRepository.moduleOrder
     val opacity = settingsRepository.overlayOpacity
     val textSize = settingsRepository.overlayTextSize
@@ -69,6 +75,7 @@ class OverlayCustomizationViewModel @Inject constructor(
     internal fun saveSettings(mode: String, orderedModules: List<ModuleRowState>) {
         settingsRepository.setOverlayMode(mode)
         settingsRepository.setEnabledModules(orderedModules.filter { it.enabled }.map { it.id.storageKey }.toSet())
+        settingsRepository.setEnabledModuleIcons(orderedModules.filter { it.showIcon }.map { it.id.storageKey }.toSet())
         settingsRepository.setModuleOrder(orderedModules.map { it.id.storageKey })
     }
 }
@@ -80,6 +87,7 @@ fun OverlayCustomizationScreen(
 ) {
     val savedMode by viewModel.savedMode.collectAsState()
     val savedModules by viewModel.savedModules.collectAsState()
+    val savedModuleIcons by viewModel.savedModuleIcons.collectAsState()
     val savedModuleOrder by viewModel.savedModuleOrder.collectAsState()
     val opacity by viewModel.opacity.collectAsState()
     val overlayScale by viewModel.overlayScale.collectAsState()
@@ -100,15 +108,24 @@ fun OverlayCustomizationScreen(
         listOf(MetricModuleId.FPS) + withoutFps
     }
 
-    var modules by remember(savedModules, savedModuleOrder) {
+    var modules by remember(savedModules, savedModuleIcons, savedModuleOrder) {
         mutableStateOf(
-            savedOrderIds.map { id -> ModuleRowState(id = id, enabled = savedModules.contains(id.storageKey)) }
+            savedOrderIds.map { id ->
+                ModuleRowState(
+                    id = id,
+                    enabled = savedModules.contains(id.storageKey),
+                    showIcon = isIconShown(savedModuleIcons, id.storageKey)
+                )
+            }
         )
     }
 
+    val currentEnabledSet = modules.filter { it.enabled }.map { it.id.storageKey }.toSet()
+    val currentIconSet = modules.filter { it.showIcon }.map { it.id.storageKey }.toSet()
     val hasChanges = selectedMode != savedMode ||
         modules.map { it.id } != savedOrderIds ||
-        modules.filter { it.enabled }.map { it.id.storageKey }.toSet() != savedModules
+        currentEnabledSet != savedModules ||
+        currentIconSet != savedModuleIcons
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -136,6 +153,7 @@ fun OverlayCustomizationScreen(
                 selectedMode = selectedMode,
                 opacity = opacity,
                 accentColor = accentColor,
+                colorIndex = colorIndex,
                 fontFamily = fontFamily,
                 textScale = textScale,
                 modifier = Modifier.padding(horizontal = 24.dp)
@@ -149,7 +167,7 @@ fun OverlayCustomizationScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Active Modules", style = MaterialTheme.typography.titleMedium, color = Color.White)
                     Text(
-                        "Drag to reorder. Toggle to show in overlay.",
+                        "Drag to reorder. Tap icon to toggle icon. Switch to show in overlay.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
@@ -157,8 +175,13 @@ fun OverlayCustomizationScreen(
                 IconButton(
                     onClick = {
                         val enabledById = modules.associate { it.id to it.enabled }
+                        val showIconById = modules.associate { it.id to it.showIcon }
                         modules = DEFAULT_METRIC_MODULE_ORDER.map { id ->
-                            ModuleRowState(id = id, enabled = enabledById[id] ?: false)
+                            ModuleRowState(
+                                id = id,
+                                enabled = enabledById[id] ?: false,
+                                showIcon = showIconById[id] ?: true
+                            )
                         }
                         Toast.makeText(context, "Order reset to default", Toast.LENGTH_SHORT).show()
                     }
@@ -187,6 +210,9 @@ fun OverlayCustomizationScreen(
                     dragHandleModifier = dragHandleModifier,
                     onEnabledChanged = { isChecked ->
                         modules = modules.map { if (it.id == module.id) it.copy(enabled = isChecked) else it }
+                    },
+                    onToggleIcon = {
+                        modules = modules.map { if (it.id == module.id) it.copy(showIcon = !it.showIcon) else it }
                     }
                 )
             }

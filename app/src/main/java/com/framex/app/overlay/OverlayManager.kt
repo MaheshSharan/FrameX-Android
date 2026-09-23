@@ -74,12 +74,16 @@ class OverlayManager @Inject constructor(
             return
         }
 
+        metricsEngine.resetSessionTimer()
+
         FrameXLog.d("Creating new ComposeView...")
         composeView = ComposeView(context).apply {
             setContent {
                 FrameXTheme {
                     val mode by settingsRepository.overlayMode.collectAsState()
                     val enabledModules by settingsRepository.enabledModules.collectAsState()
+                    val enabledModuleIcons by settingsRepository.enabledModuleIcons.collectAsState()
+                    val cpuHotWarningEnabled by settingsRepository.cpuHotWarningEnabled.collectAsState()
                     val moduleOrder by settingsRepository.moduleOrder.collectAsState()
                     val opacity by settingsRepository.overlayOpacity.collectAsState()
                     val textSize by settingsRepository.overlayTextSize.collectAsState()
@@ -94,6 +98,8 @@ class OverlayManager @Inject constructor(
                     OverlayContent(
                         mode = mode,
                         enabledModules = enabledModules,
+                        enabledModuleIcons = enabledModuleIcons,
+                        cpuHotWarningEnabled = cpuHotWarningEnabled,
                         moduleOrder = moduleOrder,
                         opacity = opacity,
                         textSize = textSize,
@@ -230,6 +236,7 @@ class OverlayManager @Inject constructor(
             windowParams = null
         }
         _isOverlayVisible.value = false
+        metricsEngine.resetSessionTimer()
     }
 
     fun handleOrientationChange(orientation: Int) {
@@ -290,6 +297,8 @@ class OverlayManager @Inject constructor(
 fun OverlayContent(
     mode: String,
     enabledModules: Set<String>,
+    enabledModuleIcons: Set<String> = emptySet(),
+    cpuHotWarningEnabled: Boolean = true,
     moduleOrder: List<String>,
     opacity: Float,
     textSize: Int = 1,
@@ -308,6 +317,8 @@ fun OverlayContent(
     com.framex.app.ui.components.OverlayPreviewContent(
         mode = mode,
         enabledModules = enabledModules,
+        enabledModuleIcons = enabledModuleIcons,
+        cpuHotWarningEnabled = cpuHotWarningEnabled,
         moduleOrder = moduleOrder,
         opacity = opacity,
         textSize = textSize,

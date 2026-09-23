@@ -1,13 +1,22 @@
 package com.framex.app.metrics
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DeveloperBoard
-import androidx.compose.material.icons.filled.DeviceThermostat
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.outlined.Battery3Bar
+import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.BatteryFull
+import androidx.compose.material.icons.outlined.BatteryStd
+import androidx.compose.material.icons.outlined.DeveloperBoard
+import androidx.compose.material.icons.outlined.DeviceThermostat
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Sensors
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.util.Locale
 
 /**
  * Every metric the overlay can display. [storageKey] is the identifier persisted to
@@ -21,6 +30,9 @@ enum class MetricModuleId(val storageKey: String) {
     RAM_USAGE("ram"),
     BATTERY_TEMPERATURE("temp"),
     THERMAL_MONITOR("thermal"),
+    BATTERY_LEVEL("battery_level"),
+    CLOCK("clock"),
+    SESSION_TIMER("session_timer"),
     NETWORK_SPEED("net"),
     PING("ping");
 
@@ -52,32 +64,80 @@ val DEFAULT_METRIC_MODULE_ORDER: List<MetricModuleId> = listOf(
     MetricModuleId.RAM_USAGE,
     MetricModuleId.BATTERY_TEMPERATURE,
     MetricModuleId.THERMAL_MONITOR,
+    MetricModuleId.BATTERY_LEVEL,
+    MetricModuleId.CLOCK,
+    MetricModuleId.SESSION_TIMER,
     MetricModuleId.NETWORK_SPEED,
     MetricModuleId.PING
 )
 
 val METRIC_MODULE_REGISTRY: Map<MetricModuleId, MetricModuleInfo> = listOf(
-    MetricModuleInfo(MetricModuleId.FPS, "Frames Per Second", "FPS", Icons.Default.Speed, "120"),
-    MetricModuleInfo(MetricModuleId.CPU_FREQUENCY, "CPU Frequency", "CPU", Icons.Default.Memory, "2.8 GHz"),
+    MetricModuleInfo(MetricModuleId.FPS, "Frames Per Second", "FPS", Icons.Outlined.Speed, "120"),
+    MetricModuleInfo(MetricModuleId.CPU_FREQUENCY, "CPU Frequency", "CPU", Icons.Outlined.Memory, "2.8 GHz"),
     MetricModuleInfo(
         MetricModuleId.CPU_CLUSTERS,
         "CPU Clusters",
         "CPU Clusters",
-        Icons.Default.Memory,
+        Icons.Outlined.DeveloperBoard,
         "U: 2.8G | P: 2.2G | E: 1.6G"
     ),
-    MetricModuleInfo(MetricModuleId.RAM_USAGE, "RAM Usage", "RAM", Icons.Default.DeveloperBoard, "4.2 GB"),
-    MetricModuleInfo(MetricModuleId.BATTERY_TEMPERATURE, "Battery Temp", "TEMP", Icons.Default.DeviceThermostat, "38°C"),
+    MetricModuleInfo(MetricModuleId.RAM_USAGE, "RAM Usage", "RAM", Icons.Outlined.Storage, "4.2 GB"),
+    MetricModuleInfo(MetricModuleId.BATTERY_TEMPERATURE, "Battery Temp", "TEMP", Icons.Outlined.DeviceThermostat, "38°C"),
     MetricModuleInfo(
         MetricModuleId.THERMAL_MONITOR,
         "Thermal Monitor",
         "THERMAL",
-        Icons.Default.LocalFireDepartment,
+        Icons.Outlined.LocalFireDepartment,
         "CPU 63°C · MODERATE"
     ),
-    MetricModuleInfo(MetricModuleId.NETWORK_SPEED, "Network Speed", "NET", Icons.Default.NetworkCheck, "1.2 MB"),
-    MetricModuleInfo(MetricModuleId.PING, "Ping Latency", "PING", Icons.Default.NetworkCheck, "35 ms")
+    MetricModuleInfo(MetricModuleId.BATTERY_LEVEL, "Battery Level", "BAT", Icons.Outlined.BatteryStd, "85%"),
+    MetricModuleInfo(MetricModuleId.CLOCK, "Clock (Time)", "TIME", Icons.Outlined.Schedule, "18:08"),
+    MetricModuleInfo(MetricModuleId.SESSION_TIMER, "Session Timer", "SESSION", Icons.Outlined.Timer, "24:10"),
+    MetricModuleInfo(MetricModuleId.NETWORK_SPEED, "Network Speed", "NET", Icons.Outlined.SwapVert, "1.2 MB"),
+    MetricModuleInfo(MetricModuleId.PING, "Ping Latency", "PING", Icons.Outlined.Sensors, "35 ms")
 ).associateBy { it.id }
+
+/**
+ * Resolves whether an icon should be shown for [storageKey].
+ * If [savedIcons] is empty (fresh install or uncustomized state), all icons are shown by default.
+ */
+fun isIconShown(savedIcons: Set<String>, storageKey: String): Boolean =
+    savedIcons.isEmpty() || savedIcons.contains(storageKey)
+
+/**
+ * Returns dynamic battery level icon based on charge percentage.
+ */
+fun getBatteryIcon(batteryLevel: Int): ImageVector = when {
+    batteryLevel in 0..20 -> Icons.Outlined.BatteryAlert
+    batteryLevel in 21..60 -> Icons.Outlined.Battery3Bar
+    batteryLevel > 60 -> Icons.Outlined.BatteryFull
+    else -> Icons.Outlined.BatteryStd
+}
+
+/**
+ * Resolves appropriate icon for a module, taking live metric state into account if available.
+ */
+fun resolveModuleIcon(id: MetricModuleId, metricsState: MetricsState? = null): ImageVector {
+    if (id == MetricModuleId.BATTERY_LEVEL && metricsState != null) {
+        return getBatteryIcon(metricsState.batteryLevel)
+    }
+    return METRIC_MODULE_REGISTRY.getValue(id).icon
+}
+
+/**
+ * Formats elapsed session seconds into a human-readable duration string (e.g. "24:10" or "1:15:30").
+ */
+fun formatSessionDuration(seconds: Long): String {
+    val s = seconds.coerceAtLeast(0L)
+    val hrs = s / 3600
+    val mins = (s % 3600) / 60
+    val secs = s % 60
+    return if (hrs > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hrs, mins, secs)
+    } else {
+        String.format(Locale.US, "%02d:%02d", mins, secs)
+    }
+}
 
 /**
  * Reconciles a persisted, user-customized order against the current set of known
@@ -95,33 +155,48 @@ fun resolveMetricModuleOrder(persistedOrder: List<String>): List<MetricModuleId>
 }
 
 /** Formats the live value of [id] from [metricsState] for display in the overlay. */
-fun metricValueFor(id: MetricModuleId, metricsState: MetricsState): String = when (id) {
+fun metricValueFor(
+    id: MetricModuleId,
+    metricsState: MetricsState,
+    cpuHotWarningEnabled: Boolean = true
+): String = when (id) {
     MetricModuleId.FPS -> "${metricsState.fps}"
     MetricModuleId.CPU_FREQUENCY -> "${metricsState.cpuMhz} MHz"
     MetricModuleId.CPU_CLUSTERS -> String.format(
+        Locale.US,
         "U:%d P:%d E:%d",
         metricsState.cpuClusterUltraMhz,
         metricsState.cpuClusterPerfMhz,
         metricsState.cpuClusterEffMhz
     )
-    MetricModuleId.RAM_USAGE -> String.format("%.1f GB", metricsState.ramUsedGb)
-    MetricModuleId.BATTERY_TEMPERATURE -> String.format("%.1f°C", metricsState.batteryTempC)
-    MetricModuleId.THERMAL_MONITOR -> String.format(
-        "%.0f°C %s",
-        metricsState.thermalCpuC,
-        thermalStatusShortLabel(
-            status = metricsState.thermalStatus,
-            cpuTempC = metricsState.thermalCpuC,
-            skinTempC = metricsState.thermalSkinC,
-            isThrottling = metricsState.isThrottling
-        )
-    )
+    MetricModuleId.RAM_USAGE -> String.format(Locale.US, "%.1f GB", metricsState.ramUsedGb)
+    MetricModuleId.BATTERY_TEMPERATURE -> String.format(Locale.US, "%.1f°C", metricsState.batteryTempC)
+    MetricModuleId.BATTERY_LEVEL -> if (metricsState.batteryLevel >= 0) "${metricsState.batteryLevel}%" else "--%"
+    MetricModuleId.CLOCK -> metricsState.currentTime.ifEmpty { "--:--" }
+    MetricModuleId.SESSION_TIMER -> formatSessionDuration(metricsState.sessionElapsedSec)
+    MetricModuleId.THERMAL_MONITOR -> {
+        if (!cpuHotWarningEnabled) {
+            String.format(Locale.US, "%.0f°C", metricsState.thermalCpuC)
+        } else {
+            val label = thermalStatusShortLabel(
+                status = metricsState.thermalStatus,
+                cpuTempC = metricsState.thermalCpuC,
+                skinTempC = metricsState.thermalSkinC,
+                isThrottling = metricsState.isThrottling
+            )
+            if (label.isBlank() || label == "OK" || label == "NOR") {
+                String.format(Locale.US, "%.0f°C", metricsState.thermalCpuC)
+            } else {
+                String.format(Locale.US, "%.0f°C %s", metricsState.thermalCpuC, label)
+            }
+        }
+    }
     MetricModuleId.NETWORK_SPEED -> {
         val totalKbps = metricsState.networkRxKbps + metricsState.networkTxKbps
         if (totalKbps > KBPS_PER_MBPS) {
-            String.format("%.1f MB/s", totalKbps / KBPS_PER_MBPS)
+            String.format(Locale.US, "%.1f MB/s", totalKbps / KBPS_PER_MBPS)
         } else {
-            String.format("%.0f KB/s", totalKbps)
+            String.format(Locale.US, "%.0f KB/s", totalKbps)
         }
     }
     MetricModuleId.PING -> when (metricsState.pingReadStatus) {
@@ -160,3 +235,4 @@ fun thermalStatusShortLabel(
 }
 
 private const val KBPS_PER_MBPS = 1024f
+

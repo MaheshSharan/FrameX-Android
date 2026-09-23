@@ -12,14 +12,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.metrics.METRIC_MODULE_REGISTRY
 import com.framex.app.metrics.MetricsState
+import com.framex.app.metrics.isIconShown
 import com.framex.app.metrics.metricValueFor
 import com.framex.app.metrics.resolveMetricModuleOrder
+import com.framex.app.metrics.resolveModuleIcon
+
+private data class MetricRenderItem(
+    val storageKey: String,
+    val shortLabel: String,
+    val displayValue: String,
+    val icon: ImageVector,
+    val showIcon: Boolean
+)
 
 @Composable
 fun OverlayPreviewContent(
@@ -34,6 +45,8 @@ fun OverlayPreviewContent(
     bgColorIndex: Int = 0,
     borderColorIndex: Int = 0,
     textColorIndex: Int = 0,
+    enabledModuleIcons: Set<String> = emptySet(),
+    cpuHotWarningEnabled: Boolean = true,
     metricsState: MetricsState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -41,12 +54,20 @@ fun OverlayPreviewContent(
         .filter { enabledModules.contains(it.storageKey) }
         .map { id ->
             val info = METRIC_MODULE_REGISTRY.getValue(id)
+            val icon = resolveModuleIcon(id, metricsState)
             val displayValue = if (metricsState != null) {
-                metricValueFor(id, metricsState)
+                metricValueFor(id, metricsState, cpuHotWarningEnabled)
             } else {
                 info.previewSampleValue
             }
-            Triple(id.storageKey, info.overlayShortLabel, displayValue) to info.icon
+            val showIcon = isIconShown(enabledModuleIcons, id.storageKey)
+            MetricRenderItem(
+                storageKey = id.storageKey,
+                shortLabel = info.overlayShortLabel,
+                displayValue = displayValue,
+                icon = icon,
+                showIcon = showIcon
+            )
         }
 
     val accentColor = com.framex.app.ui.theme.getAccentColor(colorIndex)
@@ -87,12 +108,14 @@ fun OverlayPreviewContent(
     ) {
         if (mode == "Expanded") {
             Column(verticalArrangement = Arrangement.spacedBy((8 * textScale).dp)) {
-                activeList.forEach { (info, icon) ->
+                activeList.forEach { item ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
-                        Spacer(modifier = Modifier.width((8 * textScale).dp))
-                        Text(info.second, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
-                        Text(info.third, color = textValueColor, fontSize = (12 * textScale).sp, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                        if (item.showIcon) {
+                            Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
+                            Spacer(modifier = Modifier.width((8 * textScale).dp))
+                        }
+                        Text(item.shortLabel, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
+                        Text(item.displayValue, color = textValueColor, fontSize = (12 * textScale).sp, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
             }
@@ -102,13 +125,25 @@ fun OverlayPreviewContent(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = (4 * textScale).dp)
             ) {
-                activeList.forEachIndexed { index, (info, _) ->
+                activeList.forEachIndexed { index, item ->
                     if (mode == "Minimal") {
-                        Text(info.third, color = textValueColor, fontFamily = fontFamily, fontSize = (14 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (item.showIcon) {
+                                Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((13 * textScale).dp))
+                                Spacer(modifier = Modifier.width((4 * textScale).dp))
+                            }
+                            Text(item.displayValue, color = textValueColor, fontFamily = fontFamily, fontSize = (14 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                        }
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(info.second, color = Color.Gray, fontFamily = fontFamily, fontSize = (10 * textScale).sp, fontWeight = FontWeight.Bold)
-                            Text(info.third, color = textValueColor, fontFamily = fontFamily, fontSize = (16 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (item.showIcon) {
+                                    Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((10 * textScale).dp))
+                                    Spacer(modifier = Modifier.width((3 * textScale).dp))
+                                }
+                                Text(item.shortLabel, color = Color.Gray, fontFamily = fontFamily, fontSize = (10 * textScale).sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text(item.displayValue, color = textValueColor, fontFamily = fontFamily, fontSize = (16 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                         }
                     }
                     if (index < activeList.size - 1) {
@@ -122,3 +157,4 @@ fun OverlayPreviewContent(
         }
     }
 }
+
