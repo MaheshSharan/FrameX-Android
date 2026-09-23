@@ -8,7 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import com.framex.app.ui.screens.AboutScreen
 import com.framex.app.ui.screens.AppearanceScreen
 import com.framex.app.ui.screens.dashboard.DashboardRoute
-import com.framex.app.ui.screens.OnboardingScreen
+import com.framex.app.ui.screens.onboarding.OnboardingRoute
 import com.framex.app.ui.screens.OverlayCustomizationScreen
 import com.framex.app.ui.screens.PermissionsScreen
 import com.framex.app.ui.screens.SplashScreen
@@ -43,7 +43,7 @@ fun FrameXNavGraph(
             )
         }
         composable(Screen.Onboarding.route) {
-            OnboardingScreen(
+            OnboardingRoute(
                 onFinishOnboarding = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
         }

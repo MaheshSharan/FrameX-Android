@@ -71,4 +71,13 @@
 
     <!-- Overlay Preview -->
     <string name="overlay_no_modules">No modules</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_page1_title">FPS-First Philosophy</string>
+    <string name="onboarding_page1_desc">FrameX prioritizes frame rates above all else. Experience a modular system designed to keep your workflow at maximum refresh rates.</string>
+    <string name="onboarding_page2_title">Real-time Metrics</string>
+    <string name="onboarding_page2_desc">Monitor your device\'s core vitals including CPU, RAM, and GPU workloads in a single glance without leaving your game.</string>
+    <string name="onboarding_page3_title">Powered by Shizuku</string>
+    <string name="onboarding_page3_desc">Advanced system-level privileges allow FrameX to gather deeper Android telemetry without touching root or voiding your warranty.</string>
+    <string name="onboarding_page_n_of_m">Page %1$d of %2$d</string>
 </resources>
