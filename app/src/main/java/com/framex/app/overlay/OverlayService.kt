@@ -87,6 +87,7 @@ class OverlayService : Service() {
         )
 
         overlayManager.showOverlay()
+        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -107,6 +108,7 @@ class OverlayService : Service() {
         overlayManager.hideOverlay()
         runCatching { unregisterReceiver(screenStateReceiver) }
         releaseWakeLock()
+        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

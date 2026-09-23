@@ -7,5 +7,8 @@
     <string name="overlay_notif_action_stop">Stop Overlay</string>
     <string name="overlay_notif_action_open">Open App</string>
     <string name="overlay_notif_action_exit">Exit App</string>
+    <string name="quick_tile_overlay">FrameX Overlay</string>
+    <string name="quick_tile_overlay_active">Active</string>
+    <string name="quick_tile_overlay_inactive">Inactive</string>
+    <string name="quick_tile_add_prompt">Add FrameX Overlay Tile</string>
 </resources>
-
