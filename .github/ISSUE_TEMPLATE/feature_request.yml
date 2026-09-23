@@ -1,0 +1,57 @@
+﻿name: Feature request
+description: Suggest a new FrameX capability or an improvement to existing behavior.
+title: "[Feature]: "
+labels:
+  - "type:feature"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem first. A feature request does not need device information or logs unless they are technically relevant.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: "I want to start the overlay without opening the FrameX app."
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What behavior do you want?
+      placeholder: "Add a Quick Settings tile that starts and stops the overlay."
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Why is the current behavior insufficient?
+      placeholder: "The existing Home screen button requires opening FrameX first."
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example or reference
+      description: Optional screenshots, examples from other apps, mockups, or links.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true

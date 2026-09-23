@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.annotation.SuppressLint
 import com.framex.app.MainActivity
 import com.framex.app.R
 import com.framex.app.overlay.OverlayService
@@ -87,6 +88,7 @@ class FrameXOverlayTileService : TileService() {
         tile.updateTile()
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openAppForPermission() {
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

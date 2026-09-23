@@ -1,0 +1,11 @@
+﻿blank_issues_enabled: false
+contact_links:
+  - name: FrameX Documentation
+    url: https://github.com/MaheshSharan/FrameX-Android/tree/main/docs
+    about: Read FrameX documentation and guides before opening an issue.
+  - name: FrameX Troubleshooting
+    url: https://github.com/MaheshSharan/FrameX-Android/blob/main/docs/SUPPORT.md
+    about: Check troubleshooting guidance and diagnostic collection instructions.
+  - name: Report a security vulnerability
+    url: https://github.com/MaheshSharan/FrameX-Android/security/advisories/new
+    about: Do not report security vulnerabilities through public GitHub issues.

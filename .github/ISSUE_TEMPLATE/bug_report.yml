@@ -1,0 +1,143 @@
+﻿name: Bug report
+description: Report a reproducible problem in FrameX with the information needed for investigation.
+title: "[Bug]: "
+labels:
+  - "type:bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a bug report, search the existing issues for duplicates.
+        Please provide accurate information. Do not include passwords, tokens,
+        account details, IMEI/serial numbers, or other private information.
+
+  - type: input
+    id: framex-version
+    attributes:
+      label: FrameX version
+      description: Use the version shown in FrameX > About, or the APK/release version.
+      placeholder: "1.5.25"
+    validations:
+      required: true
+
+  - type: input
+    id: device-manufacturer
+    attributes:
+      label: Device manufacturer
+      placeholder: "iQOO / Samsung / Google / Xiaomi"
+    validations:
+      required: true
+
+  - type: input
+    id: device-model
+    attributes:
+      label: Device model
+      placeholder: "iQOO 12"
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Android version
+      placeholder: "Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: rom
+    attributes:
+      label: ROM / OS skin
+      placeholder: "Funtouch OS 15 / One UI 7 / Pixel UI"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Overlay
+        - Metrics
+        - Appearance / Customization
+        - Gaming Mode
+        - Shizuku / Permissions
+        - Thermal Diagnostics
+        - Notifications
+        - Quick Settings
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and when it occurs.
+      placeholder: "The overlay disappears after approximately 10 minutes of gaming."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: "The overlay should remain visible while the overlay service is running."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give the shortest reliable sequence that reproduces the problem.
+      placeholder: |
+        1. Start the FrameX overlay.
+        2. Launch the affected app/game.
+        3. Wait or perform the action that triggers the problem.
+        4. Observe the result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Relevant FrameX configuration
+      description: "Include only settings relevant to this issue. Examples: overlay mode, enabled metrics, Gaming Mode, Shizuku status."
+      placeholder: |
+        Overlay mode: Compact
+        Metrics: FPS, CPU, RAM, TEMP
+        Gaming Mode: Enabled
+        Shizuku: Connected
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics, logs, or screenshots
+      description: Attach screenshots/videos or paste relevant logs when they help reproduce or diagnose the issue. Prefer FrameX's sanitized diagnostic information when available.
+      placeholder: "Drag files here or paste relevant diagnostic output."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Anything else that could help reproduce or diagnose the issue.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I am using a supported or recent FrameX build.
+          required: true
+        - label: I have provided the relevant diagnostic information available to me.
+          required: true

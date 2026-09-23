@@ -1,0 +1,118 @@
+﻿name: Performance issue
+description: Report FPS drops, latency, battery, thermal, memory, or other performance problems involving FrameX.
+title: "[Performance]: "
+labels:
+  - "type:performance"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for measurable performance or resource-impact problems.
+        If FrameX crashes or a normal feature is malfunctioning, use Bug report instead.
+
+  - type: input
+    id: framex-version
+    attributes:
+      label: FrameX version
+      placeholder: "1.5.25"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+      placeholder: "iQOO 12"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: rom
+    attributes:
+      label: ROM / OS skin
+      placeholder: "Funtouch OS 15"
+    validations:
+      required: true
+
+  - type: input
+    id: workload
+    attributes:
+      label: Game or app
+      placeholder: "PUBG Mobile"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-performance
+    attributes:
+      label: Expected performance
+      description: Include a measurable baseline where possible.
+      placeholder: "120 FPS with FrameX disabled."
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed-performance
+    attributes:
+      label: Observed performance
+      description: Include measurements, frequency, temperature, battery, or other relevant observations.
+      placeholder: "Drops to 80–90 FPS after enabling the overlay."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start FrameX.
+        2. Enable the overlay.
+        3. Launch the game.
+        4. Reproduce the workload.
+        5. Compare the result with FrameX disabled.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: state
+    attributes:
+      label: FrameX state
+      options:
+        - label: Overlay enabled
+        - label: Gaming Mode enabled
+        - label: Shizuku connected
+        - label: I tested the same workload with FrameX disabled
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Enabled metrics and relevant configuration
+      placeholder: "FPS, CPU, RAM, temperature; Compact overlay; 1.0x scale."
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Evidence
+      description: Attach screenshots, recordings, sanitized diagnostics, or relevant logs. Logs are not required unless they are relevant to the problem.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I have provided measurements or a reproducible comparison where possible.
+          required: true
