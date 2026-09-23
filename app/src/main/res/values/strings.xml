@@ -125,4 +125,43 @@
     <string name="overlay_mode_expanded">Expanded</string>
     <string name="overlay_icon_enabled_cd">Icon enabled (tap to disable)</string>
     <string name="overlay_icon_disabled_cd">Icon disabled (tap to enable)</string>
+
+    <!-- Appearance Screen -->
+    <string name="appearance_title">Appearance</string>
+    <string name="appearance_preview_header">PREVIEW</string>
+    <string name="appearance_preview_subtitle">Respects selected Metrics config</string>
+    <string name="appearance_visibility_header">VISIBILITY</string>
+    <string name="appearance_opacity_title">Overlay Opacity</string>
+    <string name="appearance_container_header">CONTAINER</string>
+    <string name="appearance_background_title">Background</string>
+    <string name="appearance_border_title">Border</string>
+    <string name="appearance_typography_header">TYPOGRAPHY</string>
+    <string name="appearance_text_size_scale_title">Text Size &amp; Scale</string>
+    <string name="appearance_monospace_title">Monospace Metrics</string>
+    <string name="appearance_monospace_desc">Use JetBrains Mono font</string>
+    <string name="appearance_theme_header">THEME</string>
+    <string name="appearance_accent_color_title">Accent Color</string>
+    <string name="appearance_custom_label">Custom</string>
+    <string name="appearance_value_color_title">Value Color</string>
+    <string name="appearance_cpu_hot_title">CPU Hot Warning</string>
+    <string name="appearance_cpu_hot_desc">Show HOT / CRIT alerts on thermal overlay when CPU temperature rises</string>
+    <string name="appearance_apply_changes">Apply Changes</string>
+    <string name="appearance_applied">Applied</string>
+    <string name="appearance_saved_toast">Appearance configuration saved!</string>
+    <string name="appearance_bg_black">Black</string>
+    <string name="appearance_bg_navy">Navy</string>
+    <string name="appearance_bg_charcoal">Charcoal</string>
+    <string name="appearance_bg_clear">Clear</string>
+    <string name="appearance_border_accent">Accent</string>
+    <string name="appearance_border_none">None</string>
+    <string name="appearance_border_subtle">Subtle</string>
+    <string name="appearance_border_ghost">Ghost</string>
+    <string name="appearance_size_small">Small</string>
+    <string name="appearance_size_medium">Medium</string>
+    <string name="appearance_size_large">Large</string>
+    <string name="appearance_value_color_white">White</string>
+    <string name="appearance_value_color_accent">Accent</string>
+    <string name="appearance_value_color_silver">Silver</string>
+    <string name="appearance_value_color_auto">Auto (Dynamic FPS)</string>
+    <string name="appearance_value_color_auto_desc">Auto Value Color: Dynamically colors metrics (Green, Yellow, Red) based on live FPS performance</string>
 </resources>

@@ -6,7 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.framex.app.ui.screens.AboutScreen
-import com.framex.app.ui.screens.AppearanceScreen
+import com.framex.app.ui.screens.appearance.AppearanceRoute
 import com.framex.app.ui.screens.dashboard.DashboardRoute
 import com.framex.app.ui.screens.onboarding.OnboardingRoute
 import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
@@ -58,7 +58,7 @@ fun FrameXNavGraph(
             )
         }
         composable(Screen.Appearance.route) {
-            AppearanceScreen(onNavigateBack = { navController.safePopBackStack() })
+            AppearanceRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.OverlayCustomization.route) {
             OverlayCustomizationRoute(onNavigateBack = { navController.safePopBackStack() })
