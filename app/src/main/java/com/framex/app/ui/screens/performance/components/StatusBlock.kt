@@ -62,7 +62,7 @@ private val SkippedTextGrey = Color(0xFF9CA3AF)
 private val AppliedTextWhite = Color(0xFFE2E8F0)
 private val ContainerBg = Color.White.copy(alpha = 0.02f)
 
-fun shouldAutoExpand(stageSummary: StageSummary): Boolean = false
+fun shouldAutoExpand(stageSummary: StageSummary): Boolean = stageSummary.status == StageStatus.FAILED
 
 @Composable
 fun StatusBlock(
@@ -72,7 +72,7 @@ fun StatusBlock(
     onToggleExpand: (() -> Unit)? = null
 ) {
     var internalExpanded by remember(stageSummary.stage) {
-        mutableStateOf(false)
+        mutableStateOf(shouldAutoExpand(stageSummary))
     }
 
     val effectiveExpanded = isExpanded ?: internalExpanded

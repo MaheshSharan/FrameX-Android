@@ -5,13 +5,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.framex.app.ui.screens.AboutScreen
+import com.framex.app.ui.screens.about.AboutRoute
 import com.framex.app.ui.screens.appearance.AppearanceRoute
 import com.framex.app.ui.screens.dashboard.DashboardRoute
 import com.framex.app.ui.screens.onboarding.OnboardingRoute
 import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
 import com.framex.app.ui.screens.permissions.PermissionsRoute
-import com.framex.app.ui.screens.SplashScreen
+import com.framex.app.ui.screens.splash.SplashRoute
 import com.framex.app.ui.screens.thermal.ThermalDiagnosticsScreen
 import com.framex.app.ui.screens.performance.PerformanceRoute
 
@@ -37,7 +37,7 @@ fun FrameXNavGraph(
         startDestination = startDestination
     ) {
         composable(Screen.Splash.route) {
-            SplashScreen(
+            SplashRoute(
                 onNavigateToOnboarding = { navController.navigate(Screen.Onboarding.route) { popUpTo(0) } },
                 onNavigateToDashboard = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
@@ -67,7 +67,7 @@ fun FrameXNavGraph(
             PermissionsRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.About.route) {
-            AboutScreen(onNavigateBack = { navController.safePopBackStack() })
+            AboutRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.Performance.route) {
             PerformanceRoute(onNavigateBack = { navController.safePopBackStack() })
