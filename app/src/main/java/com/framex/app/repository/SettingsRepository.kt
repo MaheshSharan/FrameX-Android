@@ -3,6 +3,7 @@ package com.framex.app.repository
 import android.content.Context
 import android.content.SharedPreferences
 import com.framex.app.gaming.GamingPlatformPath
+import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,12 @@ class SettingsRepository @Inject constructor(
         prefs.getStringSet(KEY_ENABLED_MODULES, setOf("fps")) ?: setOf("fps")
     )
     val enabledModules: StateFlow<Set<String>> = _enabledModules.asStateFlow()
+
+    // Default: all module icons enabled. Users can toggle individual module icons off.
+    private val _enabledModuleIcons = MutableStateFlow(
+        prefs.getStringSet(KEY_ENABLED_MODULE_ICONS, DEFAULT_MODULE_ICONS) ?: DEFAULT_MODULE_ICONS
+    )
+    val enabledModuleIcons: StateFlow<Set<String>> = _enabledModuleIcons.asStateFlow()
 
     // Display order of metric modules (both enabled and disabled), as module storage keys.
     // Stored as a single delimited string rather than a StringSet — SharedPreferences'
@@ -117,6 +124,11 @@ class SettingsRepository @Inject constructor(
     fun setEnabledModules(modules: Set<String>) {
         prefs.edit().putStringSet(KEY_ENABLED_MODULES, modules).apply()
         _enabledModules.value = modules
+    }
+
+    fun setEnabledModuleIcons(icons: Set<String>) {
+        prefs.edit().putStringSet(KEY_ENABLED_MODULE_ICONS, icons).apply()
+        _enabledModuleIcons.value = icons
     }
 
     fun setModuleOrder(order: List<String>) {
@@ -384,6 +396,14 @@ class SettingsRepository @Inject constructor(
         _disableThermalThrottling.value = enabled
     }
 
+    private val _cpuHotWarningEnabled = MutableStateFlow(prefs.getBoolean(KEY_CPU_HOT_WARNING_ENABLED, true))
+    val cpuHotWarningEnabled: StateFlow<Boolean> = _cpuHotWarningEnabled.asStateFlow()
+
+    fun setCpuHotWarningEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CPU_HOT_WARNING_ENABLED, enabled).apply()
+        _cpuHotWarningEnabled.value = enabled
+    }
+
     private val _hasSeenDeepFreezeNotice = MutableStateFlow(prefs.getBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, false))
     val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
 
@@ -473,6 +493,9 @@ class SettingsRepository @Inject constructor(
         private const val DEFAULT_THERMAL_TIME_WINDOW = "SEC_60"
         private const val DEFAULT_THERMAL_GRAPH_MODE = "FPS_THERMAL"
         private const val KEY_ENABLED_MODULES = "enabled_modules"
+        private const val KEY_ENABLED_MODULE_ICONS = "enabled_module_icons"
+        private val DEFAULT_MODULE_ICONS: Set<String> =
+            DEFAULT_METRIC_MODULE_ORDER.map { it.storageKey }.toSet()
         private const val KEY_MODULE_ORDER = "module_order"
         private const val MODULE_ORDER_DELIMITER = ","
         private const val KEY_OVERLAY_OPACITY = "overlay_opacity"
@@ -505,6 +528,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_FIXED_PERFORMANCE_MODE = "esports_fixed_performance_mode"
         private const val KEY_DEEP_FREEZE_ENABLED = "gaming_deep_freeze_enabled"
         private const val KEY_DISABLE_THERMAL_THROTTLING = "gaming_disable_thermal_throttling"
+        private const val KEY_CPU_HOT_WARNING_ENABLED = "cpu_hot_warning_enabled"
         private const val KEY_HAS_SEEN_DEEP_FREEZE_NOTICE = "has_seen_deep_freeze_notice"
         private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
         private const val KEY_OVERLAY_WAS_RUNNING = "overlay_was_running"

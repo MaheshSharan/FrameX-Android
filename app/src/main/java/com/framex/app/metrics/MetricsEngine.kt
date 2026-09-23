@@ -1,5 +1,6 @@
 package com.framex.app.metrics
 
+import android.os.SystemClock
 import com.framex.app.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +28,9 @@ data class MetricsState(
     val ramUsedGb: Float = 0f,
     val ramTotalGb: Float = 0f,
     val batteryTempC: Float = 0f,
+    val batteryLevel: Int = -1,
+    val currentTime: String = "",
+    val sessionElapsedSec: Long = 0L,
     val networkRxKbps: Float = 0f,
     val networkTxKbps: Float = 0f,
     val pingMs: Int = 0,
@@ -82,6 +88,17 @@ class MetricsEngine @Inject constructor(
     // SupervisorJob: one failing monitor coroutine never cancels the others.
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val moduleJobs = mutableMapOf<String, Job>()
+    private var sessionStartTimeMs: Long = SystemClock.elapsedRealtime()
+
+    fun resetSessionTimer() {
+        sessionStartTimeMs = SystemClock.elapsedRealtime()
+        _metricsState.value = _metricsState.value.copy(sessionElapsedSec = 0L)
+    }
+
+    private fun getCurrentFormattedTime(): String {
+        val now = LocalTime.now()
+        return String.format(Locale.US, "%02d:%02d", now.hour, now.minute)
+    }
 
     // Transient, NOT persisted, NOT shown in the overlay toggle UI.
     // Multiple independent callers (a screen wanting live readings, a recording
@@ -107,9 +124,17 @@ class MetricsEngine @Inject constructor(
 
     init {
         // FPS always runs — it is the core metric and has near-zero overhead.
+        // currentTime and monotonic sessionElapsedSec are refreshed on each ~1s frame tick.
         engineScope.launch {
             fpsMonitor.fpsState.collect { state ->
-                _metricsState.value = _metricsState.value.copy(fps = state.fps, jankyFrames = state.jankyFrames)
+                val elapsed = (SystemClock.elapsedRealtime() - sessionStartTimeMs) / 1000L
+                val timeStr = getCurrentFormattedTime()
+                _metricsState.value = _metricsState.value.copy(
+                    fps = state.fps,
+                    jankyFrames = state.jankyFrames,
+                    currentTime = timeStr,
+                    sessionElapsedSec = elapsed.coerceAtLeast(0L)
+                )
                 // Append to rolling history, capped at MAX_FPS_HISTORY_SIZE entries.
                 val next = ArrayDeque(_fpsHistory.value).also { d ->
                     d.addLast(state.fps)
@@ -138,13 +163,9 @@ class MetricsEngine @Inject constructor(
                 screenOverrideModules,
                 settingsRepository.isGamingModeActiveFlow
             ) { persisted, override, gamingActive ->
-                val base = if (gamingActive) {
-                    persisted + override + setOf("temp", "thermal")
-                } else {
-                    persisted + override
-                }
-                // Issue #86: Keep battery temp ("temp") continuously monitored for timeline recording.
-                // BatteryMonitor is a passive sticky broadcast check with zero IPC overhead.
+                val base = persisted + override + if (gamingActive) setOf("thermal") else emptySet()
+                // Issue #86: Keep battery temp continuously monitored for timeline recording.
+                // Battery temperature monitor is a passive sticky broadcast check.
                 base + setOf("temp")
             }.collect { enabled ->
                 toggleModule("cpu", enabled) {
@@ -187,6 +208,11 @@ class MetricsEngine @Inject constructor(
                 toggleModule("temp", enabled) {
                     batteryMonitor.batteryTemp.collect {
                         _metricsState.value = _metricsState.value.copy(batteryTempC = it)
+                    }
+                }
+                toggleModule("battery_level", enabled) {
+                    batteryMonitor.batteryLevel.collect {
+                        _metricsState.value = _metricsState.value.copy(batteryLevel = it)
                     }
                 }
                 toggleModule("thermal", enabled) {
@@ -248,6 +274,7 @@ class MetricsEngine @Inject constructor(
                 "ram"     -> _metricsState.value.copy(ramUsedGb = 0f, ramTotalGb = 0f)
                 "net"     -> _metricsState.value.copy(networkRxKbps = 0f, networkTxKbps = 0f)
                 "temp"    -> _metricsState.value.copy(batteryTempC = 0f)
+                "battery_level" -> _metricsState.value.copy(batteryLevel = -1)
                 "thermal" -> _metricsState.value.copy(
                     thermalCpuC = 0f, thermalGpuC = 0f, thermalNpuC = 0f,
                     thermalSkinC = 0f, thermalStatus = 0,

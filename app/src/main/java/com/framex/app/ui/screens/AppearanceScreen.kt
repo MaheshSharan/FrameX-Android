@@ -37,6 +37,8 @@ class AppearanceViewModel @Inject constructor(
 ) : ViewModel() {
     val overlayMode = settingsRepository.overlayMode
     val enabledModules = settingsRepository.enabledModules
+    val enabledModuleIcons = settingsRepository.enabledModuleIcons
+    val cpuHotWarningEnabled = settingsRepository.cpuHotWarningEnabled
     val moduleOrder = settingsRepository.moduleOrder
     val overlayOpacity = settingsRepository.overlayOpacity
     val overlayTextSize = settingsRepository.overlayTextSize
@@ -49,7 +51,8 @@ class AppearanceViewModel @Inject constructor(
 
     fun saveSettings(
         opacity: Float, scale: Float, useMonospace: Boolean, colorIndex: Int,
-        bgColorIndex: Int, borderColorIndex: Int, textColorIndex: Int
+        bgColorIndex: Int, borderColorIndex: Int, textColorIndex: Int,
+        cpuHotWarning: Boolean
     ) {
         settingsRepository.setOverlayOpacity(opacity)
         settingsRepository.setOverlayScale(scale)
@@ -58,6 +61,7 @@ class AppearanceViewModel @Inject constructor(
         settingsRepository.setOverlayBgColorIndex(bgColorIndex)
         settingsRepository.setOverlayBorderColorIndex(borderColorIndex)
         settingsRepository.setOverlayTextColorIndex(textColorIndex)
+        settingsRepository.setCpuHotWarningEnabled(cpuHotWarning)
     }
 }
 
@@ -74,8 +78,10 @@ fun AppearanceScreen(
     val savedBgColorIndex by viewModel.overlayBgColorIndex.collectAsState()
     val savedBorderColorIndex by viewModel.overlayBorderColorIndex.collectAsState()
     val savedTextColorIndex by viewModel.overlayTextColorIndex.collectAsState()
+    val savedCpuHotWarning by viewModel.cpuHotWarningEnabled.collectAsState()
     val mode by viewModel.overlayMode.collectAsState()
     val enabledModules by viewModel.enabledModules.collectAsState()
+    val enabledModuleIcons by viewModel.enabledModuleIcons.collectAsState()
     val moduleOrder by viewModel.moduleOrder.collectAsState()
     
     val context = LocalContext.current
@@ -88,12 +94,13 @@ fun AppearanceScreen(
     var selectedBgColorIndex by remember(savedBgColorIndex) { mutableStateOf(savedBgColorIndex) }
     var selectedBorderColorIndex by remember(savedBorderColorIndex) { mutableStateOf(savedBorderColorIndex) }
     var selectedTextColorIndex by remember(savedTextColorIndex) { mutableStateOf(savedTextColorIndex) }
+    var cpuHotWarning by remember(savedCpuHotWarning) { mutableStateOf(savedCpuHotWarning) }
     
     val hasChanges = opacity != savedOpacity || selectedTextSize != savedTextSize ||
         kotlin.math.abs(overlayScale - savedScale) > 0.01f ||
         useMonospace != savedUseMonospace || selectedColorIndex != savedColorIndex ||
         selectedBgColorIndex != savedBgColorIndex || selectedBorderColorIndex != savedBorderColorIndex ||
-        selectedTextColorIndex != savedTextColorIndex
+        selectedTextColorIndex != savedTextColorIndex || cpuHotWarning != savedCpuHotWarning
     
     val colors = com.framex.app.ui.theme.PresetAccentColors
 
@@ -141,6 +148,8 @@ fun AppearanceScreen(
                         com.framex.app.ui.components.OverlayPreviewContent(
                             mode = mode,
                             enabledModules = enabledModules,
+                            enabledModuleIcons = enabledModuleIcons,
+                            cpuHotWarningEnabled = cpuHotWarning,
                             moduleOrder = moduleOrder,
                             opacity = opacity,
                             textSize = selectedTextSize,
@@ -433,6 +442,31 @@ fun AppearanceScreen(
                                 }
                             }
                         }
+                        HorizontalDivider(color = Color.White.copy(0.05f), modifier = Modifier.padding(vertical = 16.dp))
+                        
+                        // CPU Hot Warning Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                                Text("CPU Hot Warning", color = Color.White, fontWeight = FontWeight.Medium)
+                                Text(
+                                    "Show HOT / CRIT alerts on thermal overlay when CPU temperature rises",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Switch(
+                                checked = cpuHotWarning,
+                                onCheckedChange = { cpuHotWarning = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = colors[selectedColorIndex]
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -451,7 +485,11 @@ fun AppearanceScreen(
             Button(
                 onClick = { 
                     if (hasChanges) {
-                        viewModel.saveSettings(opacity, overlayScale, useMonospace, selectedColorIndex, selectedBgColorIndex, selectedBorderColorIndex, selectedTextColorIndex)
+                        viewModel.saveSettings(
+                            opacity, overlayScale, useMonospace, selectedColorIndex,
+                            selectedBgColorIndex, selectedBorderColorIndex, selectedTextColorIndex,
+                            cpuHotWarning
+                        )
                         Toast.makeText(context, "Appearance configuration saved!", Toast.LENGTH_SHORT).show()
                     }
                 },

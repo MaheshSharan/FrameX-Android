@@ -406,12 +406,32 @@ class BatteryMonitor @Inject constructor(
         }
     }
 
+    val batteryLevel: Flow<Int> = flow {
+        while (true) {
+            emit(readBatteryLevel(context))
+            delay(BATTERY_POLL_INTERVAL_MS)
+        }
+    }
+
     private fun readBatteryTemp(context: Context): Float {
         val intent = context.registerReceiver(
             null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         )
         val raw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
         return raw / 10.0f
+    }
+
+    private fun readBatteryLevel(context: Context): Int {
+        val intent = context.registerReceiver(
+            null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        )
+        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        return if (level >= 0 && scale > 0) {
+            ((level * 100f) / scale).toInt().coerceIn(0, 100)
+        } else {
+            -1
+        }
     }
 
     companion object {
