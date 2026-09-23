@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.metrics.METRIC_MODULE_REGISTRY
@@ -32,6 +33,10 @@ private data class MetricRenderItem(
     val showIcon: Boolean
 )
 
+private const val MINIMAL_SINGLE_ROW_MAX_ITEMS = 4
+private const val COMPACT_SINGLE_ROW_MAX_ITEMS = 3
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverlayPreviewContent(
     mode: String,
@@ -106,55 +111,203 @@ fun OverlayPreviewContent(
             .border(effectiveBorderWidth, effectiveBorderColor, RoundedCornerShape(8.dp))
             .padding(if (mode == "Minimal") (4 * textScale).dp else (8 * textScale).dp)
     ) {
-        if (mode == "Expanded") {
-            Column(verticalArrangement = Arrangement.spacedBy((8 * textScale).dp)) {
-                activeList.forEach { item ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (item.showIcon) {
-                            Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((16 * textScale).dp))
-                            Spacer(modifier = Modifier.width((8 * textScale).dp))
+        if (activeList.isEmpty()) {
+            EmptyModulesText(textScale, fontFamily)
+        } else {
+            when (mode) {
+                "Expanded" -> {
+                    Column(
+                        modifier = Modifier.widthIn(min = (130 * textScale).dp, max = (200 * textScale).dp),
+                        verticalArrangement = Arrangement.spacedBy((6 * textScale).dp)
+                    ) {
+                        activeList.forEach { item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (item.showIcon) {
+                                    Icon(
+                                        item.icon,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size((14 * textScale).dp)
+                                    )
+                                    Spacer(modifier = Modifier.width((6 * textScale).dp))
+                                }
+                                Text(
+                                    text = item.shortLabel,
+                                    color = Color.Gray,
+                                    fontSize = (10 * textScale).sp,
+                                    fontFamily = fontFamily,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width((8 * textScale).dp))
+                                Text(
+                                    text = item.displayValue,
+                                    color = textValueColor,
+                                    fontSize = (12 * textScale).sp,
+                                    fontFamily = fontFamily,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
                         }
-                        Text(item.shortLabel, color = Color.Gray, fontSize = (10 * textScale).sp, fontFamily = fontFamily, modifier = Modifier.weight(1f))
-                        Text(item.displayValue, color = textValueColor, fontSize = (12 * textScale).sp, fontFamily = fontFamily, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
-            }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy((12 * textScale).dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = (4 * textScale).dp)
-            ) {
-                activeList.forEachIndexed { index, item ->
-                    if (mode == "Minimal") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (item.showIcon) {
-                                Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((13 * textScale).dp))
-                                Spacer(modifier = Modifier.width((4 * textScale).dp))
+                "Minimal" -> {
+                    if (activeList.size <= MINIMAL_SINGLE_ROW_MAX_ITEMS) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy((8 * textScale).dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = (4 * textScale).dp)
+                        ) {
+                            activeList.forEachIndexed { index, item ->
+                                MinimalMetricItem(item, textScale, accentColor, textValueColor, fontFamily)
+                                if (index < activeList.size - 1) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .height((12 * textScale).dp)
+                                            .background(Color.DarkGray)
+                                    )
+                                }
                             }
-                            Text(item.displayValue, color = textValueColor, fontFamily = fontFamily, fontSize = (14 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                         }
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (item.showIcon) {
-                                    Icon(item.icon, contentDescription = null, tint = accentColor, modifier = Modifier.size((10 * textScale).dp))
-                                    Spacer(modifier = Modifier.width((3 * textScale).dp))
-                                }
-                                Text(item.shortLabel, color = Color.Gray, fontFamily = fontFamily, fontSize = (10 * textScale).sp, fontWeight = FontWeight.Bold)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy((8 * textScale).dp),
+                            verticalArrangement = Arrangement.spacedBy((4 * textScale).dp),
+                            modifier = Modifier.padding(horizontal = (4 * textScale).dp)
+                        ) {
+                            activeList.forEach { item ->
+                                MinimalMetricItem(item, textScale, accentColor, textValueColor, fontFamily)
                             }
-                            Text(item.displayValue, color = textValueColor, fontFamily = fontFamily, fontSize = (16 * textScale).sp, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                         }
                     }
-                    if (index < activeList.size - 1) {
-                        Box(modifier = Modifier.width(1.dp).height(if (mode == "Minimal") (12 * textScale).dp else (24 * textScale).dp).background(Color.DarkGray))
-                    }
                 }
-                if (activeList.isEmpty()) {
-                    Text("No modules", color = Color.Gray, fontFamily = fontFamily, fontSize = (12 * textScale).sp)
+                else -> { // Compact
+                    if (activeList.size <= COMPACT_SINGLE_ROW_MAX_ITEMS) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy((10 * textScale).dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = (4 * textScale).dp)
+                        ) {
+                            activeList.forEachIndexed { index, item ->
+                                CompactMetricItem(item, textScale, accentColor, textValueColor, fontFamily)
+                                if (index < activeList.size - 1) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .height((24 * textScale).dp)
+                                            .background(Color.DarkGray)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy((10 * textScale).dp),
+                            verticalArrangement = Arrangement.spacedBy((6 * textScale).dp),
+                            modifier = Modifier.padding(horizontal = (4 * textScale).dp)
+                        ) {
+                            activeList.forEach { item ->
+                                CompactMetricItem(item, textScale, accentColor, textValueColor, fontFamily)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+@Composable
+private fun EmptyModulesText(textScale: Float, fontFamily: FontFamily?) {
+    Text(
+        text = "No modules",
+        color = Color.Gray,
+        fontFamily = fontFamily,
+        fontSize = (12 * textScale).sp,
+        maxLines = 1,
+        softWrap = false
+    )
+}
+
+@Composable
+private fun MinimalMetricItem(
+    item: MetricRenderItem,
+    textScale: Float,
+    accentColor: Color,
+    textValueColor: Color,
+    fontFamily: FontFamily?
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (item.showIcon) {
+            Icon(
+                item.icon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size((13 * textScale).dp)
+            )
+            Spacer(modifier = Modifier.width((4 * textScale).dp))
+        }
+        Text(
+            text = item.displayValue,
+            color = textValueColor,
+            fontFamily = fontFamily,
+            fontSize = (14 * textScale).sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+        )
+    }
+}
+
+@Composable
+private fun CompactMetricItem(
+    item: MetricRenderItem,
+    textScale: Float,
+    accentColor: Color,
+    textValueColor: Color,
+    fontFamily: FontFamily?
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (item.showIcon) {
+                Icon(
+                    item.icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size((10 * textScale).dp)
+                )
+                Spacer(modifier = Modifier.width((3 * textScale).dp))
+            }
+            Text(
+                text = item.shortLabel,
+                color = Color.Gray,
+                fontFamily = fontFamily,
+                fontSize = (10 * textScale).sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = item.displayValue,
+            color = textValueColor,
+            fontFamily = fontFamily,
+            fontSize = (16 * textScale).sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+        )
+    }
+}

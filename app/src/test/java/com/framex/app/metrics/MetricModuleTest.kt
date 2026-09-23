@@ -81,5 +81,11 @@ class MetricModuleTest {
         val withoutWarning = metricValueFor(MetricModuleId.THERMAL_MONITOR, hotState, cpuHotWarningEnabled = false)
         assertEquals("78°C", withoutWarning)
     }
-}
 
+    @Test
+    fun registry_labelsAndSampleValuesAreCompact() {
+        val clusters = METRIC_MODULE_REGISTRY.getValue(MetricModuleId.CPU_CLUSTERS)
+        assertEquals("CLUSTERS", clusters.overlayShortLabel)
+        assertEquals("U:2.8G P:2.2G E:1.6G", clusters.previewSampleValue)
+    }
+}

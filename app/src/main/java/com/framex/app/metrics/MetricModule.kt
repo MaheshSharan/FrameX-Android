@@ -77,9 +77,9 @@ val METRIC_MODULE_REGISTRY: Map<MetricModuleId, MetricModuleInfo> = listOf(
     MetricModuleInfo(
         MetricModuleId.CPU_CLUSTERS,
         "CPU Clusters",
-        "CPU Clusters",
+        "CLUSTERS",
         Icons.Outlined.DeveloperBoard,
-        "U: 2.8G | P: 2.2G | E: 1.6G"
+        "U:2.8G P:2.2G E:1.6G"
     ),
     MetricModuleInfo(MetricModuleId.RAM_USAGE, "RAM Usage", "RAM", Icons.Outlined.Storage, "4.2 GB"),
     MetricModuleInfo(MetricModuleId.BATTERY_TEMPERATURE, "Battery Temp", "TEMP", Icons.Outlined.DeviceThermostat, "38°C"),
