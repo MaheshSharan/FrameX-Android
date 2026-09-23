@@ -7,7 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.framex.app.ui.screens.AboutScreen
 import com.framex.app.ui.screens.AppearanceScreen
-import com.framex.app.ui.screens.DashboardScreen
+import com.framex.app.ui.screens.dashboard.DashboardRoute
 import com.framex.app.ui.screens.OnboardingScreen
 import com.framex.app.ui.screens.OverlayCustomizationScreen
 import com.framex.app.ui.screens.PermissionsScreen
@@ -48,7 +48,7 @@ fun FrameXNavGraph(
             )
         }
         composable(Screen.Dashboard.route) {
-            DashboardScreen(
+            DashboardRoute(
                 onNavigateToAppearance = { navController.navigate(Screen.Appearance.route) },
                 onNavigateToOverlayCustomization = { navController.navigate(Screen.OverlayCustomization.route) },
                 onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) },
