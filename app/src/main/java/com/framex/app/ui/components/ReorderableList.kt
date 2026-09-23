@@ -34,6 +34,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import com.framex.app.R
 import kotlin.math.roundToInt
 
 /** Content-space distance from the viewport edge, in px, that triggers autoscroll while held. */
@@ -214,12 +223,13 @@ fun <T> ReorderableList(
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val onMoveState = rememberUpdatedState(onMove)
+    val latestItems = rememberUpdatedState(items)
 
     val reorderState = remember(lazyListState, coroutineScope, itemHeightPx, itemSpacingPx, topContentPaddingPx, minReorderIndex) {
         UniformReorderState(
             lazyListState = lazyListState,
             coroutineScope = coroutineScope,
-            itemCount = { items.size },
+            itemCount = { latestItems.value.size },
             itemHeightPx = itemHeightPx,
             itemSpacingPx = itemSpacingPx,
             topContentPaddingPx = topContentPaddingPx,
@@ -227,6 +237,9 @@ fun <T> ReorderableList(
             onMoveState = onMoveState
         )
     }
+
+    val moveUpText = stringResource(R.string.action_move_up)
+    val moveDownText = stringResource(R.string.action_move_down)
 
     LazyColumn(
         state = lazyListState,
@@ -237,6 +250,17 @@ fun <T> ReorderableList(
             val latestIndex = rememberUpdatedState(index)
             val isDragging = reorderState.draggingIndex == index
             val offsetPx = if (isDragging) reorderState.dragOffsetPx else 0f
+
+            val dragScale by animateFloatAsState(
+                targetValue = if (isDragging) 1.025f else 1.0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "reorderDragScale"
+            )
+            val dragElevation by animateDpAsState(
+                targetValue = if (isDragging) 8.dp else 0.dp,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "reorderDragElevation"
+            )
 
             val handleModifier = if (index >= minReorderIndex) {
                 Modifier
@@ -259,18 +283,36 @@ fun <T> ReorderableList(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(itemHeight + itemSpacing)
                     .padding(bottom = itemSpacing)
                     .then(if (isDragging) Modifier else Modifier.animateItemPlacement())
+                    .graphicsLayer {
+                        translationY = offsetPx
+                        scaleX = dragScale
+                        scaleY = dragScale
+                        shadowElevation = dragElevation.toPx()
+                    }
+                    .zIndex(if (isDragging) 2f else 0f)
+                    .semantics {
+                        val actions = mutableListOf<CustomAccessibilityAction>()
+                        if (index > minReorderIndex) {
+                            actions.add(CustomAccessibilityAction(moveUpText) {
+                                onMove(index, index - 1)
+                                true
+                            })
+                        }
+                        if (index < items.size - 1) {
+                            actions.add(CustomAccessibilityAction(moveDownText) {
+                                onMove(index, index + 1)
+                                true
+                            })
+                        }
+                        if (actions.isNotEmpty()) {
+                            customActions = actions
+                        }
+                    }
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeight)
-                        .graphicsLayer { translationY = offsetPx }
-                        .zIndex(if (isDragging) 1f else 0f)
-                ) {
-                    itemContent(item, handleModifier, isDragging)
-                }
+                itemContent(item, handleModifier, isDragging)
             }
         }
     }

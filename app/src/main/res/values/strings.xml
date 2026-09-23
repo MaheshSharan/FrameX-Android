@@ -11,4 +11,64 @@
     <string name="quick_tile_overlay_active">Active</string>
     <string name="quick_tile_overlay_inactive">Inactive</string>
     <string name="quick_tile_add_prompt">Add FrameX Overlay Tile</string>
+
+    <!-- Common UI Labels & Actions -->
+    <string name="action_start">Start</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_applied">Applied</string>
+    <string name="action_apply_changes">Apply Changes</string>
+    <string name="action_save">Save</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_next">Next</string>
+    <string name="action_skip">Skip</string>
+    <string name="action_back">Back</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_grant">Grant</string>
+    <string name="action_granted">Granted</string>
+    <string name="action_move_up">Move item up</string>
+    <string name="action_move_down">Move item down</string>
+
+    <!-- Accessibility -->
+    <string name="cd_app_logo">FrameX Logo</string>
+    <string name="cd_settings_button">Settings Button</string>
+    <string name="cd_drag_handle">Drag to reorder</string>
+    <string name="cd_status_dot">Status Indicator</string>
+    <string name="cd_sparkline_chart">Live Frame Rate History Graph</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">FrameX</string>
+    <string name="dashboard_subtitle">Real-time performance overlay</string>
+    <string name="dashboard_overlay_status">OVERLAY STATUS</string>
+    <string name="dashboard_status_active">Monitoring Active</string>
+    <string name="dashboard_status_ready">Ready to Monitor</string>
+    <string name="dashboard_badge_active">ACTIVE</string>
+    <string name="dashboard_badge_inactive">INACTIVE</string>
+    <string name="dashboard_frame_rate">FRAME RATE</string>
+    <string name="dashboard_fps_unit">FPS</string>
+    <string name="dashboard_avg_fps">AVG</string>
+    <string name="dashboard_one_percent_low">1% LOW</string>
+    <string name="dashboard_frametime">FRAMETIME</string>
+    <string name="dashboard_start_overlay">Start Overlay</string>
+    <string name="dashboard_stop_overlay">Stop Overlay</string>
+    <string name="dashboard_complete_setup">Complete Setup First</string>
+    <string name="dashboard_missing_prefix">Missing: </string>
+    <string name="dashboard_quick_access">QUICK ACCESS</string>
+    <string name="dashboard_metrics_title">Metrics</string>
+    <string name="dashboard_metrics_desc">FPS · CPU · GPU · RAM</string>
+    <string name="dashboard_theme_title">Theme</string>
+    <string name="dashboard_theme_desc">Colors · Opacity · Size</string>
+    <string name="dashboard_performance_title">Performance</string>
+    <string name="dashboard_performance_desc">Game mode</string>
+    <string name="dashboard_shizuku_title">Shizuku</string>
+    <string name="dashboard_connected">Connected</string>
+    <string name="dashboard_disconnected">Disconnected</string>
+    <string name="dashboard_thermal_title">Thermal diagnostics</string>
+    <string name="dashboard_thermal_desc">Find what\'s causing frame drops</string>
+
+    <!-- Overlay Preview -->
+    <string name="overlay_no_modules">No modules</string>
 </resources>
