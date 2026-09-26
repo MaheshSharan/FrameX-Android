@@ -371,7 +371,7 @@ class ShizukuManager @Inject constructor() {
     }
 
     private fun userServiceArgs() = Shizuku.UserServiceArgs(
-        ComponentName("com.framex.app", CommandRunnerService::class.java.name)
+        ComponentName(BuildConfig.APPLICATION_ID, CommandRunnerService::class.java.name)
     ).daemon(true)
         .tag(USER_SERVICE_TAG)
         .version(BuildConfig.VERSION_CODE)

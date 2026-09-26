@@ -10,7 +10,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.framex.app"
+        applicationId = "com.antutu.benchmark.full"
         minSdk = 26
         targetSdk = 34
         versionCode = 31

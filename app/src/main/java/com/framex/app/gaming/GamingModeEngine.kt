@@ -9,6 +9,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
+import com.framex.app.BuildConfig
 import com.framex.app.MainActivity
 import com.framex.app.R
 import com.framex.app.device.DeviceDiagnosticManager
@@ -872,6 +873,8 @@ class GamingModeEngine @Inject constructor(
         private val PACKAGE_NAME_REGEX = Regex("^[a-zA-Z0-9_.]+$")
 
         val HARD_WHITELIST = setOf(
+            BuildConfig.APPLICATION_ID,
+            "com.antutu.benchmark.full",
             "com.framex.app",
             "moe.shizuku.privileged.api",
             "com.adguard.android",
