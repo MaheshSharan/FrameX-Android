@@ -536,14 +536,15 @@ class VivoSuiteGateTest {
             deviceDiagnosticManager = vivoManager
         )
 
+        val sharedTools = VivoIqooSharedTools(shizukuManager, gate)
+
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
-        assertFalse("injectPerfGameList must return false when suite disabled", optimizer.injectPerfGameList("com.example.game"))
-        assertEquals("getPerfGameList must return emptyList when suite disabled", emptyList<String>(), optimizer.getPerfGameList())
-        assertEquals("getRawPerfGameList must return empty string when suite disabled", "", optimizer.getRawPerfGameList())
-        assertEquals("getPackageCompileFilter must return empty string when suite disabled", "", optimizer.getPackageCompileFilter("com.example.game"))
-        assertFalse("compileSpeedAot must return false when suite disabled", optimizer.compileSpeedAot("com.example.game"))
-        assertFalse("isSpeedCompiled must return false when suite disabled", optimizer.isSpeedCompiled("com.example.game"))
-        assertFalse("setMemcTargetFps(enabled=true) must return false when suite disabled", optimizer.setMemcTargetFps("com.example.game", true))
+        assertFalse("injectPerfGameList must return false when suite disabled", sharedTools.injectPerfGameList("com.example.game"))
+        assertEquals("getPerfGameList must return emptyList when suite disabled", emptyList<String>(), sharedTools.getPerfGameList())
+        assertEquals("getRawPerfGameList must return empty string when suite disabled", "", sharedTools.getRawPerfGameList())
+        assertEquals("getPackageCompileFilter must return empty string when suite disabled", "", sharedTools.getPackageCompileFilter("com.example.game"))
+        assertFalse("compileSpeedAot must return false when suite disabled", sharedTools.compileSpeedAot("com.example.game"))
+        assertFalse("isSpeedCompiled must return false when suite disabled", sharedTools.isSpeedCompiled("com.example.game"))
     }
 
     @Test
@@ -573,17 +574,16 @@ class VivoSuiteGateTest {
             vivoSuiteGate = gate,
             deviceDiagnosticManager = nonVivoManager
         )
+        val sharedTools = VivoIqooSharedTools(shizukuManager, gate)
 
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware
-        assertFalse(optimizer.injectPerfGameList("com.example.game"))
-        assertFalse("removePerfGame must return false on non-Vivo hardware", optimizer.removePerfGame("com.example.game"))
-        assertEquals(emptyList<String>(), optimizer.getPerfGameList())
-        assertEquals("", optimizer.getRawPerfGameList())
-        assertEquals("", optimizer.getPackageCompileFilter("com.example.game"))
-        assertFalse(optimizer.compileSpeedAot("com.example.game"))
-        assertFalse(optimizer.isSpeedCompiled("com.example.game"))
-        assertFalse("setMemcTargetFps(enabled=true) must return false on non-Vivo hardware", optimizer.setMemcTargetFps("com.example.game", true))
-        assertFalse("setMemcTargetFps(enabled=false) must return false on non-Vivo hardware", optimizer.setMemcTargetFps("com.example.game", false))
+        assertFalse(sharedTools.injectPerfGameList("com.example.game"))
+        assertFalse("removePerfGame must return false on non-Vivo hardware", sharedTools.removePerfGame("com.example.game"))
+        assertEquals(emptyList<String>(), sharedTools.getPerfGameList())
+        assertEquals("", sharedTools.getRawPerfGameList())
+        assertEquals("", sharedTools.getPackageCompileFilter("com.example.game"))
+        assertFalse(sharedTools.compileSpeedAot("com.example.game"))
+        assertFalse(sharedTools.isSpeedCompiled("com.example.game"))
     }
 
     private data class EngineTestRig(

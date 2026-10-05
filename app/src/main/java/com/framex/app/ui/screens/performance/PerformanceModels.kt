@@ -40,6 +40,10 @@ data class PerformanceUiState(
     val isVivoSuiteEnabled: Boolean = false,
     val rawPerfGameList: String? = null,
     val vivoPerfGameList: List<String> = emptyList(),
+    val raw144MergeList: String? = null,
+    val mergeList144: List<String> = emptyList(),
+    val isRefreshingPerfList: Boolean = false,
+    val isRefreshing144List: Boolean = false,
     val vivoAuditLogs: List<SystemAuditLog> = emptyList(),
     val auditLoggingEnabled: Boolean = false,
     val maxRefreshRate: Int = 60,
@@ -76,6 +80,12 @@ sealed interface PerformanceUiEvent {
     data class RemoveAllFromPerfList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
     data class CompileAllSpeed(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
 
+    data object Refresh144MergeList : PerformanceUiEvent
+    data class AddAllTo144MergeList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
+    data class RemoveAllFrom144MergeList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
+    data class AddTo144MergeList(val packageName: String) : PerformanceUiEvent
+    data class RemoveFrom144MergeList(val packageName: String) : PerformanceUiEvent
+
     data class ToggleAuditLogging(val enabled: Boolean) : PerformanceUiEvent
     data object ClearAuditLogs : PerformanceUiEvent
 
@@ -85,7 +95,6 @@ sealed interface PerformanceUiEvent {
     data class SetConfigGamePkg(val packageName: String?) : PerformanceUiEvent
     data class SetDeployingGamePkg(val packageName: String?) : PerformanceUiEvent
     data class SetGameConfigBoostRam(val packageName: String, val enabled: Boolean) : PerformanceUiEvent
-    data class ToggleMemc(val packageName: String, val enabled: Boolean, val onComplete: (Boolean) -> Unit) : PerformanceUiEvent
 }
 
 /**
@@ -114,7 +123,19 @@ data class VivoGroup(
     val isVivoSuiteEnabled: Boolean,
     val rawPerfGameList: String?,
     val vivoPerfGameList: List<String>,
+    val raw144MergeList: String?,
+    val mergeList144: List<String>,
+    val isRefreshingPerfList: Boolean,
+    val isRefreshing144List: Boolean,
     val vivoAuditLogs: List<SystemAuditLog>
+)
+
+data class Tuple5<A, B, C, D, E>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D,
+    val fifth: E
 )
 
 data class SystemAccessGroup(

@@ -54,8 +54,11 @@ class VivoSuiteGate @Inject constructor(
     val isIqooHardware: Boolean
         get() = deviceDiagnosticManager.isIqooOnly()
 
+    val isVivoOrIqooHardware: Boolean
+        get() = isVivoHardware || isIqooHardware
+
     val isVivoSuiteEnabled: Boolean
-        get() = (isVivoHardware || isIqooHardware) && settingsRepository.vivoOptEnabled.value
+        get() = isVivoOrIqooHardware && settingsRepository.vivoOptEnabled.value
 
     val isVivoSuiteEnabledFlow: StateFlow<Boolean> = if (deviceDiagnosticManager.isVivoOrIqoo()) {
         settingsRepository.vivoOptEnabled

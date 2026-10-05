@@ -141,10 +141,18 @@ fun PerformanceScreen(
                         launcherGames = uiState.launcherGames,
                         perfGameList = uiState.vivoPerfGameList,
                         rawPerfGameList = uiState.rawPerfGameList,
+                        isRefreshingPerfList = uiState.isRefreshingPerfList,
+                        mergeList144 = uiState.mergeList144,
+                        raw144MergeList = uiState.raw144MergeList,
+                        isRefreshing144List = uiState.isRefreshing144List,
+                        show144MergeList = uiState.maxRefreshRate >= 144,
                         onRefreshPerfList = { onEvent(PerformanceUiEvent.RefreshVivoPerfList) },
                         onAddAllToPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllToPerfList(pkgs, onComplete)) },
                         onRemoveAllFromPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFromPerfList(pkgs, onComplete)) },
-                        onCompileAll = { pkgs, onComplete -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs, onComplete)) }
+                        onCompileAll = { pkgs, onComplete -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs, onComplete)) },
+                        onRefresh144MergeList = { onEvent(PerformanceUiEvent.Refresh144MergeList) },
+                        onAddAllTo144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllTo144MergeList(pkgs, onComplete)) },
+                        onRemoveAllFrom144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFrom144MergeList(pkgs, onComplete)) }
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                 }

@@ -10,6 +10,7 @@ import com.framex.app.gaming.GamingPlatformPath
 import com.framex.app.gaming.GamingServiceController
 import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.gaming.VivoGamingOptimizer
+import com.framex.app.gaming.VivoIqooSharedTools
 import com.framex.app.gaming.VivoSuiteGate
 import com.framex.app.gaming.ledger.ExecutionLedger
 import com.framex.app.metrics.MetricsEngine
@@ -35,6 +36,7 @@ import javax.inject.Inject
 class PerformanceViewModel @Inject constructor(
     private val gamingModeEngine: GamingModeEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
+    private val vivoIqooSharedTools: VivoIqooSharedTools,
     private val shizukuManager: ShizukuManager,
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: MetricsEngine,
@@ -61,6 +63,18 @@ class PerformanceViewModel @Inject constructor(
 
     private val _vivoPerfGameList = MutableStateFlow<List<String>>(emptyList())
     val vivoPerfGameList = _vivoPerfGameList.asStateFlow()
+
+    private val _raw144MergeList = MutableStateFlow<String?>(null)
+    val raw144MergeList = _raw144MergeList.asStateFlow()
+
+    private val _mergeList144 = MutableStateFlow<List<String>>(emptyList())
+    val mergeList144 = _mergeList144.asStateFlow()
+
+    private val _isRefreshingPerfList = MutableStateFlow(false)
+    val isRefreshingPerfList = _isRefreshingPerfList.asStateFlow()
+
+    private val _isRefreshing144List = MutableStateFlow(false)
+    val isRefreshing144List = _isRefreshing144List.asStateFlow()
 
     // Banner message state
     private val _bannerMessage = MutableStateFlow<String?>(null)
@@ -124,12 +138,24 @@ class PerformanceViewModel @Inject constructor(
     }
 
     private val vivoStream = combine(
-        vivoSuiteGate.isVivoSuiteEnabledFlow,
-        _rawPerfGameList,
-        _vivoPerfGameList,
-        vivoGamingOptimizer.auditLogs
-    ) { enabled, raw, list, logs ->
-        VivoGroup(enabled, raw, list, logs)
+        combine(
+            vivoSuiteGate.isVivoSuiteEnabledFlow,
+            _rawPerfGameList,
+            _vivoPerfGameList,
+            _raw144MergeList,
+            _mergeList144
+        ) { enabled, rawPerf, perfList, raw144, list144 ->
+            Tuple5(enabled, rawPerf, perfList, raw144, list144)
+        },
+        combine(
+            _isRefreshingPerfList,
+            _isRefreshing144List,
+            vivoGamingOptimizer.auditLogs
+        ) { refPerf, ref144, logs ->
+            Triple(refPerf, ref144, logs)
+        }
+    ) { (enabled, rawPerf, perfList, raw144, list144), (refPerf, ref144, logs) ->
+        VivoGroup(enabled, rawPerf, perfList, raw144, list144, refPerf, ref144, logs)
     }
 
     private val dialogStateStream = combine(
@@ -173,6 +199,10 @@ class PerformanceViewModel @Inject constructor(
             isVivoSuiteEnabled = vivo.isVivoSuiteEnabled,
             rawPerfGameList = vivo.rawPerfGameList,
             vivoPerfGameList = vivo.vivoPerfGameList,
+            raw144MergeList = vivo.raw144MergeList,
+            mergeList144 = vivo.mergeList144,
+            isRefreshingPerfList = vivo.isRefreshingPerfList,
+            isRefreshing144List = vivo.isRefreshing144List,
             vivoAuditLogs = vivo.vivoAuditLogs,
             auditLoggingEnabled = sys.auditLoggingEnabled,
             maxRefreshRate = maxRefreshRate,
@@ -259,6 +289,11 @@ class PerformanceViewModel @Inject constructor(
             is PerformanceUiEvent.AddAllToPerfList -> addAllLauncherGamesToPerfList(event.packages, event.onComplete)
             is PerformanceUiEvent.RemoveAllFromPerfList -> removeAllLauncherGamesFromPerfList(event.packages, event.onComplete)
             is PerformanceUiEvent.CompileAllSpeed -> compileAllLauncherGamesSpeed(event.packages, event.onComplete)
+            PerformanceUiEvent.Refresh144MergeList -> refresh144MergeList()
+            is PerformanceUiEvent.AddAllTo144MergeList -> addAllLauncherGamesTo144List(event.packages, event.onComplete)
+            is PerformanceUiEvent.RemoveAllFrom144MergeList -> removeAllLauncherGamesFrom144List(event.packages, event.onComplete)
+            is PerformanceUiEvent.AddTo144MergeList -> addSingleGameTo144List(event.packageName)
+            is PerformanceUiEvent.RemoveFrom144MergeList -> removeSingleGameFrom144List(event.packageName)
             is PerformanceUiEvent.ToggleAuditLogging -> setAuditLoggingEnabled(event.enabled)
             PerformanceUiEvent.ClearAuditLogs -> clearVivoAuditLogs()
             PerformanceUiEvent.RefreshInstalledApps -> loadUserApps()
@@ -270,7 +305,6 @@ class PerformanceViewModel @Inject constructor(
             is PerformanceUiEvent.SetConfigGamePkg -> _configGamePkg.value = event.packageName
             is PerformanceUiEvent.SetDeployingGamePkg -> _activeDeployingGamePkg.value = event.packageName
             is PerformanceUiEvent.SetGameConfigBoostRam -> settingsRepository.setGameConfigBoostRam(event.packageName, event.enabled)
-            is PerformanceUiEvent.ToggleMemc -> toggleMemc(event.packageName, event.enabled, event.onComplete)
         }
     }
 
@@ -366,9 +400,14 @@ class PerformanceViewModel @Inject constructor(
     fun refreshVivoPerfGameList() {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return
         viewModelScope.launch {
-            val raw = vivoGamingOptimizer.getRawPerfGameList()
-            _rawPerfGameList.value = raw
-            _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
+            _isRefreshingPerfList.value = true
+            try {
+                val raw = vivoIqooSharedTools.getRawPerfGameList()
+                _rawPerfGameList.value = raw
+                _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
+            } finally {
+                _isRefreshingPerfList.value = false
+            }
         }
     }
 
@@ -382,10 +421,10 @@ class PerformanceViewModel @Inject constructor(
             var allSuccess = true
             try {
                 for (pkg in packages) {
-                    val ok = vivoGamingOptimizer.injectPerfGameList(pkg)
+                    val ok = vivoIqooSharedTools.injectPerfGameList(pkg)
                     if (!ok) allSuccess = false
                 }
-                val raw = vivoGamingOptimizer.getRawPerfGameList()
+                val raw = vivoIqooSharedTools.getRawPerfGameList()
                 _rawPerfGameList.value = raw
                 _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
                 val msg = if (allSuccess) "Added ${packages.size} game(s) to Perf List ✓" else "Some games could not be added to Perf List"
@@ -409,10 +448,10 @@ class PerformanceViewModel @Inject constructor(
             var allSuccess = true
             try {
                 for (pkg in packages) {
-                    val ok = vivoGamingOptimizer.removePerfGame(pkg)
+                    val ok = vivoIqooSharedTools.removePerfGame(pkg)
                     if (!ok) allSuccess = false
                 }
-                val raw = vivoGamingOptimizer.getRawPerfGameList()
+                val raw = vivoIqooSharedTools.getRawPerfGameList()
                 _rawPerfGameList.value = raw
                 _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
                 val msg = if (allSuccess) "Removed ${packages.size} game(s) from Perf List ✓" else "Some games could not be removed from Perf List"
@@ -426,6 +465,96 @@ class PerformanceViewModel @Inject constructor(
         }
     }
 
+    fun refresh144MergeList() {
+        if (!vivoSuiteGate.isVivoSuiteEnabled) return
+        viewModelScope.launch {
+            _isRefreshing144List.value = true
+            try {
+                val raw = vivoIqooSharedTools.getRaw144MergeList()
+                _raw144MergeList.value = raw
+                _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            } finally {
+                _isRefreshing144List.value = false
+            }
+        }
+    }
+
+    fun addAllLauncherGamesTo144List(packages: Set<String>, onComplete: (Boolean) -> Unit) {
+        if (packages.isEmpty()) {
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            onComplete(false)
+            return
+        }
+        viewModelScope.launch {
+            var allSuccess = true
+            try {
+                for (pkg in packages) {
+                    val ok = vivoIqooSharedTools.addTo144MergeList(pkg)
+                    if (!ok) allSuccess = false
+                }
+                val raw = vivoIqooSharedTools.getRaw144MergeList()
+                _raw144MergeList.value = raw
+                _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                val msg = if (allSuccess) "Added ${packages.size} game(s) to 144Hz Merge List ✓" else "Some games could not be added to 144Hz Merge List"
+                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+            } catch (t: Throwable) {
+                FrameXLog.e("addAllLauncherGamesTo144List failed", t)
+                allSuccess = false
+            } finally {
+                onComplete(allSuccess)
+            }
+        }
+    }
+
+    fun removeAllLauncherGamesFrom144List(packages: Set<String>, onComplete: (Boolean) -> Unit) {
+        if (packages.isEmpty()) {
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            onComplete(false)
+            return
+        }
+        viewModelScope.launch {
+            var allSuccess = true
+            try {
+                for (pkg in packages) {
+                    val ok = vivoIqooSharedTools.removeFrom144MergeList(pkg)
+                    if (!ok) allSuccess = false
+                }
+                val raw = vivoIqooSharedTools.getRaw144MergeList()
+                _raw144MergeList.value = raw
+                _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                val msg = if (allSuccess) "Removed ${packages.size} game(s) from 144Hz Merge List ✓" else "Some games could not be removed from 144Hz Merge List"
+                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+            } catch (t: Throwable) {
+                FrameXLog.e("removeAllLauncherGamesFrom144List failed", t)
+                allSuccess = false
+            } finally {
+                onComplete(allSuccess)
+            }
+        }
+    }
+
+    fun addSingleGameTo144List(packageName: String) {
+        viewModelScope.launch {
+            val ok = vivoIqooSharedTools.addTo144MergeList(packageName)
+            val raw = vivoIqooSharedTools.getRaw144MergeList()
+            _raw144MergeList.value = raw
+            _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val msg = if (ok) "Added to 144Hz Merge List ✓" else "Failed to add to 144Hz Merge List"
+            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+        }
+    }
+
+    fun removeSingleGameFrom144List(packageName: String) {
+        viewModelScope.launch {
+            val ok = vivoIqooSharedTools.removeFrom144MergeList(packageName)
+            val raw = vivoIqooSharedTools.getRaw144MergeList()
+            _raw144MergeList.value = raw
+            _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val msg = if (ok) "Removed from 144Hz Merge List ✓" else "Failed to remove from 144Hz Merge List"
+            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+        }
+    }
+
     fun compileAllLauncherGamesSpeed(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
             _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
@@ -436,7 +565,7 @@ class PerformanceViewModel @Inject constructor(
             var allSuccess = true
             try {
                 for (pkg in packages) {
-                    val ok = vivoGamingOptimizer.compileSpeedAot(pkg)
+                    val ok = vivoIqooSharedTools.compileSpeedAot(pkg)
                     if (!ok) allSuccess = false
                 }
                 val msg = if (allSuccess) "AOT compiled ${packages.size} app(s) to speed filter ✓" else "AOT compilation failed for one or more apps"
@@ -463,15 +592,4 @@ class PerformanceViewModel @Inject constructor(
 
     fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)
     fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigBoostRam(pkg, enabled)
-    fun getGameConfigMemc(pkg: String): Boolean = settingsRepository.getGameConfigMemc(pkg)
-
-    fun toggleMemc(packageName: String, enabled: Boolean, onComplete: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val result = vivoGamingOptimizer.setMemcTargetFps(packageName, enabled)
-            if (result) {
-                settingsRepository.setGameConfigMemc(packageName, enabled)
-            }
-            onComplete(result)
-        }
-    }
 }
