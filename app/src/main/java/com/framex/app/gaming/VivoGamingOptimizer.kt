@@ -68,6 +68,7 @@ open class VivoGamingOptimizer @Inject constructor(
     private var baselineMemcTouchRate: String? = null
     private var baselineGameCubeVipThread: String? = null
     private var baselineMonitorPhantomProcs: String? = null
+    private var baselineGameCubeFrameInterpolation: String? = null
 
     // =========================================================================
     // Activation Sequence
@@ -159,6 +160,7 @@ open class VivoGamingOptimizer @Inject constructor(
         baselineMemcTouchRate = querySetting("global", "game_memc_request_touch_rate")
         baselineGameCubeVipThread = querySetting("global", "game_cube_vip_thread")
         baselineMonitorPhantomProcs = querySetting("global", "settings_enable_monitor_phantom_procs")
+        baselineGameCubeFrameInterpolation = querySetting("system", "gamecube_frame_interpolation_for_sr")
     }
 
     private suspend fun executePowerAndThermalPayload() {
@@ -187,7 +189,7 @@ open class VivoGamingOptimizer @Inject constructor(
             specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
         }
         if (settingsRepository.vivo144FpsUnlock.value) {
-            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1:1:72:144\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
+            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1::72:144\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
         }
         ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.DISPLAY, specs)
     }
@@ -362,6 +364,7 @@ open class VivoGamingOptimizer @Inject constructor(
         revertCmds.add("content insert --uri content://settings/system --bind name:s:com.vivo.vivoconsole.icon.status --bind value:s:${baselineVivoConsoleStatus ?: "0"}")
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:${baselineGameOptimizeBrightness ?: "1"}")
         revertCmds.add("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:${baselineGameCubeTemperControl ?: "1"}")
+        revertCmds.add("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"${baselineGameCubeFrameInterpolation ?: "0:-1:0:0:0"}\"")
 
         // 3. Touch Digitizer & Delays
         baselineVtsGameParaAdjust?.let {
@@ -388,7 +391,7 @@ open class VivoGamingOptimizer @Inject constructor(
         }
 
         // 8. O(1) Batched Deletes across System, Secure, and Global tables (replaces 10 individual JVM spawns with 3)
-        revertCmds.add("content delete --uri content://settings/system --where \"name IN ('gamecube_frame_interpolation_for_sr','vivo_game_click_delay_promotion','vivo_game_touch_delay_promotion','vivo_game_gyro_promotion','vivo_game_gyro_dealy_promotion','vivo_game_gyro_anti_shake_promotion','sdk_game_target_fps','sdk_game_scene')\"")
+        revertCmds.add("content delete --uri content://settings/system --where \"name IN ('vivo_game_click_delay_promotion','vivo_game_touch_delay_promotion','vivo_game_gyro_promotion','vivo_game_gyro_dealy_promotion','vivo_game_gyro_anti_shake_promotion','sdk_game_target_fps','sdk_game_scene')\"")
         revertCmds.add("content delete --uri content://settings/secure --where \"name = 'sdk_game_scene'\"")
         revertCmds.add("content delete --uri content://settings/global --where \"name = 'speed_mode_apps'\"")
 
