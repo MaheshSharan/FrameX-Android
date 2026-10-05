@@ -12,6 +12,7 @@ import javax.inject.Singleton
  */
 enum class GamingPlatformPath {
     VIVO,
+    IQOO,
     GENERIC,
     NONE
 }
@@ -20,15 +21,21 @@ enum class GamingPlatformPath {
  * Pure function mapping hardware identity and user toggle state to a platform routing path.
  *
  * Truth table:
+ * - iQOO hardware + toggle ON  -> IQOO
  * - Vivo hardware + toggle ON  -> VIVO
- * - Vivo hardware + toggle OFF -> NONE
- * - Non-Vivo hardware (any)    -> GENERIC
+ * - Either hardware + toggle OFF -> NONE
+ * - Non-Vivo/iQOO hardware (any) -> GENERIC
  */
-fun resolvePlatformPath(isVivoHardware: Boolean, toggleOn: Boolean): GamingPlatformPath {
+fun resolvePlatformPath(
+    isVivoHardware: Boolean,
+    isIqooHardware: Boolean,
+    toggleOn: Boolean
+): GamingPlatformPath {
     return when {
-        !isVivoHardware -> GamingPlatformPath.GENERIC
-        toggleOn -> GamingPlatformPath.VIVO
-        else -> GamingPlatformPath.NONE
+        isIqooHardware && toggleOn -> GamingPlatformPath.IQOO
+        isVivoHardware && toggleOn -> GamingPlatformPath.VIVO
+        (isVivoHardware || isIqooHardware) && !toggleOn -> GamingPlatformPath.NONE
+        else -> GamingPlatformPath.GENERIC
     }
 }
 
@@ -42,10 +49,13 @@ class VivoSuiteGate @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) {
     val isVivoHardware: Boolean
-        get() = deviceDiagnosticManager.isVivoOrIqoo()
+        get() = deviceDiagnosticManager.isVivoOnly()
+
+    val isIqooHardware: Boolean
+        get() = deviceDiagnosticManager.isIqooOnly()
 
     val isVivoSuiteEnabled: Boolean
-        get() = isVivoHardware && settingsRepository.vivoOptEnabled.value
+        get() = (isVivoHardware || isIqooHardware) && settingsRepository.vivoOptEnabled.value
 
     val isVivoSuiteEnabledFlow: StateFlow<Boolean> = if (deviceDiagnosticManager.isVivoOrIqoo()) {
         settingsRepository.vivoOptEnabled
@@ -54,5 +64,5 @@ class VivoSuiteGate @Inject constructor(
     }
 
     fun resolveCurrentPlatformPath(): GamingPlatformPath =
-        resolvePlatformPath(isVivoHardware, settingsRepository.vivoOptEnabled.value)
+        resolvePlatformPath(isVivoHardware, isIqooHardware, settingsRepository.vivoOptEnabled.value)
 }

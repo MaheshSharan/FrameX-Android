@@ -68,7 +68,6 @@ open class VivoGamingOptimizer @Inject constructor(
     private var baselineMemcTouchRate: String? = null
     private var baselineGameCubeVipThread: String? = null
     private var baselineMonitorPhantomProcs: String? = null
-    private var baselineGameCubeFrameInterpolation: String? = null
 
     // =========================================================================
     // Activation Sequence
@@ -94,7 +93,6 @@ open class VivoGamingOptimizer @Inject constructor(
 
         val hasAnySpecificOptimization = settingsRepository.vivoMonsterMode.value ||
             settingsRepository.disableThermalThrottling.value ||
-            settingsRepository.vivo144FpsUnlock.value ||
             (settingsRepository.vivoGameHandshake.value && packageName != null && pid > 0) ||
             settingsRepository.vivoGyroPromotion.value ||
             settingsRepository.vivoTouchOptimization.value ||
@@ -109,13 +107,13 @@ open class VivoGamingOptimizer @Inject constructor(
         }
         executePowerAndThermalPayload()
 
-        if (settingsRepository.disableThermalThrottling.value || settingsRepository.vivo144FpsUnlock.value) {
+        if (settingsRepository.disableThermalThrottling.value) {
             onProgress?.invoke(0.68f, "Configuring Display & Thermals…")
         }
         executeDisplayAndGameSpacePayload()
 
         if (settingsRepository.vivoGameHandshake.value && packageName != null && pid > 0) {
-            val targetFps = if (settingsRepository.vivo144FpsUnlock.value) 144 else maxHardwareRefreshRate
+            val targetFps = maxHardwareRefreshRate
             onProgress?.invoke(0.76f, "Initializing Game Handshake (${targetFps} FPS)…")
         }
         executeLiveHandshakePayload(packageName, pid)
@@ -160,7 +158,6 @@ open class VivoGamingOptimizer @Inject constructor(
         baselineMemcTouchRate = querySetting("global", "game_memc_request_touch_rate")
         baselineGameCubeVipThread = querySetting("global", "game_cube_vip_thread")
         baselineMonitorPhantomProcs = querySetting("global", "settings_enable_monitor_phantom_procs")
-        baselineGameCubeFrameInterpolation = querySetting("system", "gamecube_frame_interpolation_for_sr")
     }
 
     private suspend fun executePowerAndThermalPayload() {
@@ -188,18 +185,14 @@ open class VivoGamingOptimizer @Inject constructor(
         if (settingsRepository.disableThermalThrottling.value) {
             specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
         }
-        if (settingsRepository.vivo144FpsUnlock.value) {
-            specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1::72:144\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
-        }
         ledgerExecutor.executeBatch(com.framex.app.gaming.ledger.Stage.DISPLAY, specs)
     }
 
     private suspend fun executeLiveHandshakePayload(packageName: String?, pid: Int) {
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
         val targetPkg = safePkg ?: "com.vivo.game"
-        val targetFps = if (settingsRepository.vivo144FpsUnlock.value) 144 else maxHardwareRefreshRate
         val specs = listOf(
-            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_$targetFps\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
+            com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:\"${targetPkg}_${pid}_$maxHardwareRefreshRate\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
             com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/system --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.PRIMARY),
             com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/secure --bind name:s:sdk_game_scene --bind value:s:\"${targetPkg}_${pid}_0\"", com.framex.app.gaming.ledger.OpPriority.DETAIL)
         )
@@ -364,7 +357,6 @@ open class VivoGamingOptimizer @Inject constructor(
         revertCmds.add("content insert --uri content://settings/system --bind name:s:com.vivo.vivoconsole.icon.status --bind value:s:${baselineVivoConsoleStatus ?: "0"}")
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:${baselineGameOptimizeBrightness ?: "1"}")
         revertCmds.add("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:${baselineGameCubeTemperControl ?: "1"}")
-        revertCmds.add("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"${baselineGameCubeFrameInterpolation ?: "0:-1:0:0:0"}\"")
 
         // 3. Touch Digitizer & Delays
         baselineVtsGameParaAdjust?.let {

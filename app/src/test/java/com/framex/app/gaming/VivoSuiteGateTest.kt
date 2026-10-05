@@ -107,39 +107,54 @@ class VivoSuiteGateTest {
 
     private class TestDeviceDiagnosticManager(
         context: Context,
-        private val isVivo: Boolean
+        private val isVivo: Boolean = false,
+        private val isIqoo: Boolean = false
     ) : DeviceDiagnosticManager(context) {
-        override fun isVivoOrIqoo(): Boolean = isVivo
+        override fun isVivoOnly(): Boolean = isVivo
+        override fun isIqooOnly(): Boolean = isIqoo
+        override fun isVivoOrIqoo(): Boolean = isVivo || isIqoo
     }
 
     // =========================================================================
-    // 1. Truth Table of resolvePlatformPath (All 4 Combinations)
+    // 1. Truth Table of resolvePlatformPath (Combinations across Vivo, iQOO, Generic)
     // =========================================================================
 
     @Test
-    fun resolvePlatformPath_truthTable_allFourCombinations() {
+    fun resolvePlatformPath_truthTable_allCombinations() {
         // Combination 1: Vivo hardware + toggle ON -> VIVO
         assertEquals(
             GamingPlatformPath.VIVO,
-            resolvePlatformPath(isVivoHardware = true, toggleOn = true)
+            resolvePlatformPath(isVivoHardware = true, isIqooHardware = false, toggleOn = true)
         )
 
-        // Combination 2: Vivo hardware + toggle OFF -> NONE
+        // Combination 2: iQOO hardware + toggle ON -> IQOO
+        assertEquals(
+            GamingPlatformPath.IQOO,
+            resolvePlatformPath(isVivoHardware = false, isIqooHardware = true, toggleOn = true)
+        )
+
+        // Combination 3: Vivo hardware + toggle OFF -> NONE
         assertEquals(
             GamingPlatformPath.NONE,
-            resolvePlatformPath(isVivoHardware = true, toggleOn = false)
+            resolvePlatformPath(isVivoHardware = true, isIqooHardware = false, toggleOn = false)
         )
 
-        // Combination 3: Non-Vivo hardware + toggle ON -> GENERIC
+        // Combination 4: iQOO hardware + toggle OFF -> NONE
         assertEquals(
-            GamingPlatformPath.GENERIC,
-            resolvePlatformPath(isVivoHardware = false, toggleOn = true)
+            GamingPlatformPath.NONE,
+            resolvePlatformPath(isVivoHardware = false, isIqooHardware = true, toggleOn = false)
         )
 
-        // Combination 4: Non-Vivo hardware + toggle OFF -> GENERIC
+        // Combination 5: Non-Vivo/iQOO hardware + toggle ON -> GENERIC
         assertEquals(
             GamingPlatformPath.GENERIC,
-            resolvePlatformPath(isVivoHardware = false, toggleOn = false)
+            resolvePlatformPath(isVivoHardware = false, isIqooHardware = false, toggleOn = true)
+        )
+
+        // Combination 6: Non-Vivo/iQOO hardware + toggle OFF -> GENERIC
+        assertEquals(
+            GamingPlatformPath.GENERIC,
+            resolvePlatformPath(isVivoHardware = false, isIqooHardware = false, toggleOn = false)
         )
     }
 
@@ -163,6 +178,19 @@ class VivoSuiteGateTest {
         }
     }
 
+    private class TestIqooGamingOptimizer(
+        context: Context,
+        shizukuManager: ShizukuManager,
+        settingsRepo: SettingsRepository,
+        ledgerExecutor: LedgerExecutor,
+        auditRepo: SystemAuditLogRepository
+    ) : IqooGamingOptimizer(context, shizukuManager, settingsRepo, ledgerExecutor, auditRepo) {
+        var revertCalled = false
+        override suspend fun revertOptimizations(): Boolean {
+            revertCalled = true
+            return true
+        }
+    }
     // =========================================================================
     // 2. Persisted Session Path Behavior Across Toggle Flips & Mid-Session
     // =========================================================================
@@ -188,6 +216,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -244,6 +273,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -300,6 +330,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -354,6 +385,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -392,6 +424,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -428,6 +461,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -580,6 +614,7 @@ class VivoSuiteGateTest {
             shizukuManager = shizukuManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
