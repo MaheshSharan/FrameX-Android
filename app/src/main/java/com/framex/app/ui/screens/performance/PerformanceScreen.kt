@@ -171,6 +171,21 @@ fun PerformanceScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
+            // Optimization sliders
+            item(key = "optimization_sliders_section") {
+                com.framex.app.ui.screens.performance.sections.OptimizationSlidersSection(
+                    isBoostingRam = uiState.isBoostingRam,
+                    showRamResult = uiState.showRamResult,
+                    isOptimizingNet = uiState.isOptimizingNet,
+                    showPingResult = uiState.showPingResult,
+                    isResettingDefaults = uiState.isResettingDefaults,
+                    showResetResult = uiState.showResetResult,
+                    onBoostRam = { onEvent(PerformanceUiEvent.BoostRam) },
+                    onCheckPing = { onEvent(PerformanceUiEvent.CheckPing) },
+                    onResetDefaults = { onEvent(PerformanceUiEvent.ResetDefaults) }
+                )
+            }
+
             // Game Launcher
             item(key = "game_launcher_section") {
                 GameLauncherSection(

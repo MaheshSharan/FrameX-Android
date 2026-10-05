@@ -56,6 +56,15 @@ data class PerformanceUiState(
     // Banner message
     val bannerMessage: String? = null,
 
+    // Optimization Sliders state
+    val isBoostingRam: Boolean = false,
+    val showRamResult: Boolean = false,
+    val isOptimizingNet: Boolean = false,
+    val showPingResult: Boolean = false,
+    val isResettingDefaults: Boolean = false,
+    val showResetResult: Boolean = false,
+    val activeLatencyDiagnostic: Int? = null,
+
     // Dialog & Modal visibility states
     val showAddGameSheet: Boolean = false,
     val configGamePkg: String? = null,
@@ -74,6 +83,10 @@ sealed interface PerformanceUiEvent {
     data object EnableGamingMode : PerformanceUiEvent
     data object DisableGamingMode : PerformanceUiEvent
     data class LaunchGame(val packageName: String) : PerformanceUiEvent
+
+    data object BoostRam : PerformanceUiEvent
+    data object CheckPing : PerformanceUiEvent
+    data object ResetDefaults : PerformanceUiEvent
 
     data object RefreshVivoPerfList : PerformanceUiEvent
     data class AddAllToPerfList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
@@ -130,6 +143,13 @@ data class VivoGroup(
     val vivoAuditLogs: List<SystemAuditLog>
 )
 
+data class Tuple4<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+)
+
 data class Tuple5<A, B, C, D, E>(
     val first: A,
     val second: B,
@@ -150,11 +170,22 @@ data class DialogStateGroup(
     val activeDeployingGamePkg: String?
 )
 
+data class ActionStateGroup(
+    val isBoostingRam: Boolean,
+    val showRamResult: Boolean,
+    val isOptimizingNet: Boolean,
+    val showPingResult: Boolean,
+    val isResettingDefaults: Boolean,
+    val showResetResult: Boolean,
+    val activeLatencyDiagnostic: Int?
+)
+
 data class IntermediateUiState(
     val userApps: List<AppInfo>,
     val googleApps: List<AppInfo>,
     val activeSession: ActiveGamingSession?,
     val bannerMessage: String?,
+    val actions: ActionStateGroup,
     val dialogs: DialogStateGroup,
     val systemAccess: SystemAccessGroup
 )

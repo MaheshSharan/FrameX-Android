@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.AppInfo
+import com.framex.app.gaming.EsportsOptimizationEngine
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.GamingPlatformPath
@@ -43,7 +44,8 @@ class PerformanceViewModel @Inject constructor(
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
     private val executionLedger: ExecutionLedger,
     private val vivoSuiteGate: VivoSuiteGate,
-    private val gamingServiceController: GamingServiceController
+    private val gamingServiceController: GamingServiceController,
+    private val esportsOptimizationEngine: EsportsOptimizationEngine
 ) : ViewModel() {
 
     private val _effectChannel = Channel<PerformanceUiEffect>(Channel.BUFFERED)
@@ -78,6 +80,15 @@ class PerformanceViewModel @Inject constructor(
 
     // Banner message state
     private val _bannerMessage = MutableStateFlow<String?>(null)
+
+    // Optimization Sliders state
+    private val _isBoostingRam = MutableStateFlow(false)
+    private val _showRamResult = MutableStateFlow(false)
+    private val _isOptimizingNet = MutableStateFlow(false)
+    private val _showPingResult = MutableStateFlow(false)
+    private val _isResettingDefaults = MutableStateFlow(false)
+    private val _showResetResult = MutableStateFlow(false)
+    private val _activeLatencyDiagnostic = MutableStateFlow<Int?>(null)
 
     // Dialog & Modal visibility states
     private val _showAddGameSheet = MutableStateFlow(false)
@@ -158,6 +169,15 @@ class PerformanceViewModel @Inject constructor(
         VivoGroup(enabled, rawPerf, perfList, raw144, list144, refPerf, ref144, logs)
     }
 
+    private val actionStateStream = combine(
+        combine(_isBoostingRam, _showRamResult, _isOptimizingNet) { bRam, sRam, oNet -> Triple(bRam, sRam, oNet) },
+        combine(_showPingResult, _isResettingDefaults, _showResetResult, _activeLatencyDiagnostic) { sPing, rDef, sReset, lat ->
+            Tuple4(sPing, rDef, sReset, lat)
+        }
+    ) { (bRam, sRam, oNet), (sPing, rDef, sReset, lat) ->
+        ActionStateGroup(bRam, sRam, oNet, sPing, rDef, sReset, lat)
+    }
+
     private val dialogStateStream = combine(
         _showAddGameSheet,
         _configGamePkg,
@@ -176,11 +196,11 @@ class PerformanceViewModel @Inject constructor(
             _googleApps,
             activeGamingSession,
             _bannerMessage,
-            combine(dialogStateStream, systemAccessStream) { dialogs, access ->
-                Pair(dialogs, access)
+            combine(dialogStateStream, systemAccessStream, actionStateStream) { dialogs, access, actions ->
+                Triple(dialogs, access, actions)
             }
-        ) { user, google, session, banner, (dialogs, access) ->
-            IntermediateUiState(user, google, session, banner, dialogs, access)
+        ) { user, google, session, banner, (dialogs, access, actions) ->
+            IntermediateUiState(user, google, session, banner, actions, dialogs, access)
         }
     ) { sg, sys, vivo, metrics, inter ->
         PerformanceUiState(
@@ -210,6 +230,13 @@ class PerformanceViewModel @Inject constructor(
             hasNotifListenerAccess = inter.systemAccess.hasNotifListenerAccess,
             hasWriteSettingsAccess = inter.systemAccess.hasWriteSettingsAccess,
             bannerMessage = inter.bannerMessage,
+            isBoostingRam = inter.actions.isBoostingRam,
+            showRamResult = inter.actions.showRamResult,
+            isOptimizingNet = inter.actions.isOptimizingNet,
+            showPingResult = inter.actions.showPingResult,
+            isResettingDefaults = inter.actions.isResettingDefaults,
+            showResetResult = inter.actions.showResetResult,
+            activeLatencyDiagnostic = inter.actions.activeLatencyDiagnostic,
             showAddGameSheet = inter.dialogs.showAddGameSheet,
             configGamePkg = inter.dialogs.configGamePkg,
             activeDeployingGamePkg = inter.dialogs.activeDeployingGamePkg
@@ -285,6 +312,9 @@ class PerformanceViewModel @Inject constructor(
             PerformanceUiEvent.EnableGamingMode -> enableGamingMode()
             PerformanceUiEvent.DisableGamingMode -> disableGamingMode()
             is PerformanceUiEvent.LaunchGame -> launchGameWithOptimizations(event.packageName)
+            PerformanceUiEvent.BoostRam -> boostRamAction()
+            PerformanceUiEvent.CheckPing -> checkPingAction()
+            PerformanceUiEvent.ResetDefaults -> resetDefaultsAction()
             PerformanceUiEvent.RefreshVivoPerfList -> refreshVivoPerfGameList()
             is PerformanceUiEvent.AddAllToPerfList -> addAllLauncherGamesToPerfList(event.packages, event.onComplete)
             is PerformanceUiEvent.RemoveAllFromPerfList -> removeAllLauncherGamesFromPerfList(event.packages, event.onComplete)
@@ -592,4 +622,53 @@ class PerformanceViewModel @Inject constructor(
 
     fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)
     fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = settingsRepository.setGameConfigBoostRam(pkg, enabled)
+
+    private fun boostRamAction() {
+        viewModelScope.launch {
+            _isBoostingRam.value = true
+            val (freed, stopped) = manualBoostRam(settingsRepository.gamingModeWhitelist.value)
+            _isBoostingRam.value = false
+            _showRamResult.value = true
+            _bannerMessage.value = "Boosted! Freed $freed MB, stopped $stopped apps"
+            delay(2500)
+            _showRamResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    private fun checkPingAction() {
+        viewModelScope.launch {
+            _isOptimizingNet.value = true
+            val pingRes = measureNetworkLatency()
+            _isOptimizingNet.value = false
+            _showPingResult.value = true
+            _activeLatencyDiagnostic.value = pingRes ?: 0
+            _bannerMessage.value = if (pingRes != null) "Latency check complete: $pingRes ms" else "Latency check failed: network unreachable"
+            delay(2500)
+            _showPingResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    private fun resetDefaultsAction() {
+        viewModelScope.launch {
+            _isResettingDefaults.value = true
+            val resetOk = resetToDeviceDefaults()
+            _isResettingDefaults.value = false
+            _showResetResult.value = true
+            _bannerMessage.value = if (resetOk) "Device settings reset to OS defaults" else "Device reset partially completed"
+            delay(2500)
+            _showResetResult.value = false
+            delay(300)
+            _bannerMessage.value = null
+        }
+    }
+
+    suspend fun measureNetworkLatency(): Int? =
+        PerformanceUtils.measureNetworkLatency(shizukuManager)
+
+    suspend fun resetToDeviceDefaults(): Boolean =
+        esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)
 }
