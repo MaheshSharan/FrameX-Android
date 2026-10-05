@@ -95,6 +95,7 @@ fun AboutScreen(
 
                 HardwareOptimizationCard(
                     isVivoDevice = state.isVivoDevice,
+                    isIqooDevice = state.isIqooDevice,
                     isVivoOptActive = state.isVivoOptActive,
                     onToggleVivoOpt = { enabled ->
                         if (enabled) {

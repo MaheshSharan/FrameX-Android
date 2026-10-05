@@ -72,12 +72,14 @@ fun ExecutionCenterSection(
         label = "chevron_rotation"
     )
 
-    val availableTabs = remember(state.isVivoDevice, state.isVivoOptActive) {
-        if (state.isVivoDevice || state.isVivoOptActive) {
-            listOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC, ExecutionCenterTab.VIVO)
-        } else {
-            listOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC)
+    val availableTabs = remember(state.isVivoDevice, state.isIqooDevice, state.isVivoOptActive) {
+        val tabs = mutableListOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC)
+        if (state.isIqooDevice) {
+            tabs.add(ExecutionCenterTab.IQOO)
+        } else if (state.isVivoDevice || state.isVivoOptActive) {
+            tabs.add(ExecutionCenterTab.VIVO)
         }
+        tabs
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -142,6 +144,7 @@ fun ExecutionCenterSection(
                                 ExecutionCenterTab.COMMON -> CommonCommandsTab(state, onEvent)
                                 ExecutionCenterTab.GENERIC -> GenericCommandsTab(state, onEvent)
                                 ExecutionCenterTab.VIVO -> VivoCommandsTab(state, onEvent)
+                                ExecutionCenterTab.IQOO -> IqooCommandsTab(state, onEvent)
                             }
                         }
                     }
@@ -461,5 +464,26 @@ private fun VivoCommandsTab(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun IqooCommandsTab(
+    state: AboutUiState,
+    onEvent: (AboutUiEvent) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        CommandToggleCard(
+            title = "144 FPS Frame Interpolation",
+            commandSummary = "system:gamecube_frame_interpolation_for_sr = 1:1::72:144",
+            statusText = if (state.vivo144FpsUnlock) "144 FPS Forced" else "Native Panel Profile",
+            statusColor = if (state.vivo144FpsUnlock) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivo144FpsUnlock,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
+            icon = Icons.Default.Speed
+        )
     }
 }

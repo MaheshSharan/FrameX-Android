@@ -43,10 +43,17 @@ private val CardBackground = Color(0xFF0F1015)
 @Composable
 fun HardwareOptimizationCard(
     isVivoDevice: Boolean,
+    isIqooDevice: Boolean = false,
     isVivoOptActive: Boolean,
     onToggleVivoOpt: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isSupportedDevice = isVivoDevice || isIqooDevice
+    val suiteTitle = when {
+        isIqooDevice -> "iQOO Hardware Suite"
+        isVivoDevice -> "Vivo Hardware Suite"
+        else -> "Hardware Suite"
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         // Section Header: Dashboard style with 16dp pure white gear icon and titleSmall text
         Row(
@@ -100,7 +107,7 @@ fun HardwareOptimizationCard(
                             Icon(
                                 imageVector = Icons.Default.Memory,
                                 contentDescription = null,
-                                tint = if (isVivoDevice) Color.White else Color.Gray,
+                                tint = if (isSupportedDevice) Color.White else Color.Gray,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -109,14 +116,14 @@ fun HardwareOptimizationCard(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Vivo / iQOO Hardware Suite",
-                                color = if (isVivoDevice) Color.White else Color.White.copy(alpha = 0.5f),
+                                text = suiteTitle,
+                                color = if (isSupportedDevice) Color.White else Color.White.copy(alpha = 0.5f),
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 15.sp
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (isVivoDevice) {
+                                text = if (isSupportedDevice) {
                                     "Applies power, touch, gyro and scheduler overrides during Gaming Mode. Off = only app suspension, RAM purge and DND."
                                 } else {
                                     "Not applicable on this device."
@@ -129,8 +136,8 @@ fun HardwareOptimizationCard(
                     }
 
                     Switch(
-                        checked = isVivoDevice && isVivoOptActive,
-                        enabled = isVivoDevice,
+                        checked = isSupportedDevice && isVivoOptActive,
+                        enabled = isSupportedDevice,
                         onCheckedChange = onToggleVivoOpt,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,

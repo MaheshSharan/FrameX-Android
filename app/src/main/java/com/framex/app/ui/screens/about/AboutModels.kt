@@ -8,7 +8,8 @@ import java.io.File
 enum class ExecutionCenterTab(val label: String) {
     COMMON("Common"),
     GENERIC("Generic"),
-    VIVO("Vivo / iQOO")
+    VIVO("Vivo"),
+    IQOO("iQOO")
 }
 
 @Immutable
@@ -22,6 +23,7 @@ data class AboutUiState(
     val signatureErrorMessage: String? = null,
     val downloadState: DownloadState = DownloadState.Idle,
     val isVivoDevice: Boolean = false,
+    val isIqooDevice: Boolean = false,
     val isVivoOptActive: Boolean = false,
     val showVivoDiagModal: Boolean = false,
     val selectedExecutionTab: ExecutionCenterTab = ExecutionCenterTab.COMMON,

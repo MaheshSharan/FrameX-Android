@@ -106,7 +106,8 @@ class AboutViewModel @Inject constructor(
     private val _effectChannel = Channel<AboutUiEffect>(Channel.BUFFERED)
     val effect = _effectChannel.receiveAsFlow()
 
-    val isVivoHardware: Boolean get() = vivoSuiteGate.isVivoHardware
+    val isVivoHardware: Boolean get() = deviceDiagnosticManager.isVivoOnly()
+    val isIqooHardware: Boolean get() = deviceDiagnosticManager.isIqooOnly()
     val deviceModelInfo: String get() = deviceDiagnosticManager.getDeviceModelInfo()
 
     fun canInstallPackages(): Boolean = updateInstaller.canInstallPackages()
@@ -240,6 +241,7 @@ class AboutViewModel @Inject constructor(
             signatureErrorMessage = actions.signatureError,
             downloadState = downloadState,
             isVivoDevice = isVivoHardware,
+            isIqooDevice = isIqooHardware,
             isVivoOptActive = settings.vivoOpt,
             showVivoDiagModal = actions.showVivoModal,
             selectedExecutionTab = exec.selectedTab,
