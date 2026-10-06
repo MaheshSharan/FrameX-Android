@@ -74,9 +74,9 @@ fun ExecutionCenterSection(
 
     val availableTabs = remember(state.isVivoDevice, state.isIqooDevice, state.isVivoOptActive) {
         val tabs = mutableListOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC)
-        if (state.isIqooDevice) {
+        if (state.isVivoOptActive && state.isIqooDevice) {
             tabs.add(ExecutionCenterTab.IQOO)
-        } else if (state.isVivoDevice || state.isVivoOptActive) {
+        } else if (state.isVivoOptActive && state.isVivoDevice) {
             tabs.add(ExecutionCenterTab.VIVO)
         }
         tabs

@@ -316,8 +316,15 @@ class AboutViewModel @Inject constructor(
             is AboutUiEvent.SetVivoOptEnabled -> {
                 val wasEnabled = settingsRepository.vivoOptEnabled.value
                 settingsRepository.setVivoOptEnabled(event.enabled)
-                if (!event.enabled && wasEnabled) {
-                    gamingModeEngine.onVivoOptToggledOffMidSession()
+                if (!event.enabled) {
+                    if (_selectedExecutionTab.value == ExecutionCenterTab.VIVO ||
+                        _selectedExecutionTab.value == ExecutionCenterTab.IQOO
+                    ) {
+                        _selectedExecutionTab.value = ExecutionCenterTab.COMMON
+                    }
+                    if (wasEnabled) {
+                        gamingModeEngine.onVivoOptToggledOffMidSession()
+                    }
                 }
             }
             is AboutUiEvent.SetShowVivoDiagModal -> _showVivoDiagModal.value = event.show
