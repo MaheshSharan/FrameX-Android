@@ -162,7 +162,7 @@ open class IqooGamingOptimizer @Inject constructor(
         )
     }
 
-    suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
+    open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
         if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
             auditLogRepository.addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
