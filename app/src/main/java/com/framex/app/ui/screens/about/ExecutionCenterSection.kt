@@ -422,7 +422,7 @@ private fun VivoCommandsTab(
         if (state.maxRefreshRate >= 144) {
             CommandToggleCard(
                 title = "144Hz Frame Interpolation Unlock",
-                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1::72:144\n• OriginOS 6 144Hz MEMC override (replaces 90 FPS cap)",
+                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1:1:72:144\n• OriginOS 6 144Hz MEMC override (replaces 90 FPS cap)",
                 statusText = if (state.vivo144FpsUnlock) "144Hz MEMC Override Active" else "Default Refresh Arbitration",
                 statusColor = if (state.vivo144FpsUnlock) Color(0xFF4FDCB8) else Color.Gray,
                 isChecked = state.vivo144FpsUnlock,
@@ -531,7 +531,7 @@ private fun IqooCommandsTab(
         if (state.maxRefreshRate >= 144) {
             CommandToggleCard(
                 title = "144 FPS Frame Interpolation",
-                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1::72:144\n• OriginOS 144Hz MEMC override",
+                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1:1:72:144\n• OriginOS 144Hz MEMC override",
                 statusText = if (state.vivo144FpsUnlock) "144 FPS Forced" else "Native Panel Profile",
                 statusColor = if (state.vivo144FpsUnlock) Color(0xFF10B981) else Color.Gray,
                 isChecked = state.vivo144FpsUnlock,

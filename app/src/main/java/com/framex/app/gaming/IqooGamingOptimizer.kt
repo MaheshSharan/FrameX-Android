@@ -68,7 +68,7 @@ open class IqooGamingOptimizer @Inject constructor(
             displaySpecs.add(CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", OpPriority.PRIMARY))
         }
         if (settingsRepository.vivo144FpsUnlock.value) {
-            displaySpecs.add(CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1::72:144\"", OpPriority.PRIMARY))
+            displaySpecs.add(CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1:1:72:144\"", OpPriority.PRIMARY))
         }
         if (displaySpecs.isNotEmpty()) {
             ledgerExecutor.executeBatch(Stage.DISPLAY, displaySpecs)
