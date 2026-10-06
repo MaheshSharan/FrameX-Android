@@ -87,7 +87,6 @@
     <string name="session_logs_title">Session Logs</string>
     <string name="session_logs_recording_active">RECORDING ACTIVE</string>
     <string name="session_logs_recording_paused">RECORDING PAUSED</string>
-    <string name="session_logs_toggle_title">Privileged Audit Recording</string>
     <string name="session_logs_toggle_desc">Capture system state transitions, Shizuku shell operations, and hardware optimization events in real time.</string>
     <string name="session_logs_stat_total">Total Events</string>
     <string name="session_logs_stat_success">Success Rate</string>

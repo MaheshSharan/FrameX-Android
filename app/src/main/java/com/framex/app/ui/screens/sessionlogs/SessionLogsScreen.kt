@@ -39,53 +39,12 @@ fun SessionLogsScreen(
             onNavigateBack = onNavigateBack
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // 1. Header & Live Recorder Status Card
-            item(key = "header_status_card") {
-                SessionLogsHeaderCard(
-                    isLoggingEnabled = uiState.isLoggingEnabled,
-                    totalCount = uiState.totalCount,
-                    successRate = uiState.successRate,
-                    failedCount = uiState.failedCount,
-                    onToggleLogging = { onEvent(SessionLogsUiEvent.ToggleLogging(it)) }
-                )
-            }
-
-            // 2. Filter & Actions Bar
-            item(key = "filter_actions_bar") {
-                SessionLogsFilterBar(
-                    selectedFilter = uiState.filter,
-                    totalCount = uiState.totalCount,
-                    successCount = uiState.successCount,
-                    failedCount = uiState.failedCount,
-                    infoCount = uiState.infoCount,
-                    onSelectFilter = { onEvent(SessionLogsUiEvent.SelectFilter(it)) },
-                    onCopyAll = { onEvent(SessionLogsUiEvent.CopyAllLogs) },
-                    onClearClick = { showClearConfirmDialog = true }
-                )
-            }
-
-            // 3. Log Items or Empty View
-            if (uiState.filteredLogs.isEmpty()) {
-                item(key = "empty_logs_view") {
-                    SessionLogsEmptyView(isLoggingEnabled = uiState.isLoggingEnabled)
-                }
-            } else {
-                items(
-                    items = uiState.filteredLogs,
-                    key = { "${it.timestamp}_${it.action.hashCode()}_${it.status.name}" }
-                ) { log ->
-                    SessionLogEntryCard(
-                        log = log,
-                        onCopy = { onEvent(SessionLogsUiEvent.CopySingleLog(log)) }
-                    )
-                }
-            }
-        }
+        SessionLogsListContent(
+            uiState = uiState,
+            onEvent = onEvent,
+            onOpenClearDialog = { showClearConfirmDialog = true },
+            modifier = Modifier.weight(1f)
+        )
     }
 
     if (showClearConfirmDialog) {
@@ -98,5 +57,58 @@ fun SessionLogsScreen(
                 showClearConfirmDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun SessionLogsListContent(
+    uiState: SessionLogsUiState,
+    onEvent: (SessionLogsUiEvent) -> Unit,
+    onOpenClearDialog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item(key = "header_status_card") {
+            SessionLogsHeaderCard(
+                isLoggingEnabled = uiState.isLoggingEnabled,
+                totalCount = uiState.totalCount,
+                successRate = uiState.successRate,
+                failedCount = uiState.failedCount,
+                onToggleLogging = { onEvent(SessionLogsUiEvent.ToggleLogging(it)) }
+            )
+        }
+
+        item(key = "filter_actions_bar") {
+            SessionLogsFilterBar(
+                selectedFilter = uiState.filter,
+                totalCount = uiState.totalCount,
+                successCount = uiState.successCount,
+                failedCount = uiState.failedCount,
+                infoCount = uiState.infoCount,
+                onSelectFilter = { onEvent(SessionLogsUiEvent.SelectFilter(it)) },
+                onCopyAll = { onEvent(SessionLogsUiEvent.CopyAllLogs) },
+                onClearClick = onOpenClearDialog
+            )
+        }
+
+        if (uiState.filteredLogs.isEmpty()) {
+            item(key = "empty_logs_view") {
+                SessionLogsEmptyView(isLoggingEnabled = uiState.isLoggingEnabled)
+            }
+        } else {
+            items(
+                items = uiState.filteredLogs,
+                key = { "${it.timestamp}_${it.action.hashCode()}_${it.details.hashCode()}_${it.status.name}" }
+            ) { log ->
+                SessionLogEntryCard(
+                    log = log,
+                    onCopy = { onEvent(SessionLogsUiEvent.CopySingleLog(log)) }
+                )
+            }
+        }
     }
 }

@@ -10,16 +10,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.framex.app.R
 
+import androidx.compose.ui.Modifier
+
 /**
  * Confirmation dialog before wiping recorded session logs.
  */
 @Composable
 fun ClearLogsConfirmDialog(
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Text(
                 text = stringResource(R.string.session_logs_clear_confirm_title),

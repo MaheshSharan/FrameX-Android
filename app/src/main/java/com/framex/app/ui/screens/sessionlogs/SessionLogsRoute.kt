@@ -1,15 +1,13 @@
 package com.framex.app.ui.screens.sessionlogs
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.framex.app.R
@@ -26,9 +24,7 @@ fun SessionLogsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val clipboardManager = remember(context) {
-        context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    }
+    val clipboardManager = LocalClipboardManager.current
 
     LaunchedEffect(viewModel) {
         viewModel.uiEffect.collect { effect ->
@@ -37,8 +33,7 @@ fun SessionLogsRoute(
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 }
                 is SessionLogsUiEffect.CopyToClipboard -> {
-                    val clip = ClipData.newPlainText(effect.label, effect.text)
-                    clipboardManager?.setPrimaryClip(clip)
+                    clipboardManager.setText(AnnotatedString(effect.text))
                     val toastMsg = if (effect.label == "Session Logs") {
                         context.getString(R.string.session_logs_copied_toast)
                     } else {

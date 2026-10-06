@@ -49,69 +49,97 @@ fun SessionLogsFilterBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Scrollable filter chips
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SessionLogFilter.values().forEach { filter ->
-                val isSelected = filter == selectedFilter
-                val count = when (filter) {
-                    SessionLogFilter.ALL -> totalCount
-                    SessionLogFilter.SUCCESS -> successCount
-                    SessionLogFilter.FAILED -> failedCount
-                    SessionLogFilter.INFO -> infoCount
-                }
-
-                val filterLabel = when (filter) {
-                    SessionLogFilter.ALL -> stringResource(R.string.session_logs_filter_all)
-                    SessionLogFilter.SUCCESS -> stringResource(R.string.session_logs_filter_success)
-                    SessionLogFilter.FAILED -> stringResource(R.string.session_logs_filter_failed)
-                    SessionLogFilter.INFO -> stringResource(R.string.session_logs_filter_info)
-                }
-
-                FilterPillChip(
-                    label = filterLabel,
-                    count = count,
-                    isSelected = isSelected,
-                    onClick = { onSelectFilter(filter) }
-                )
-            }
-        }
+        FilterChipsRow(
+            selectedFilter = selectedFilter,
+            totalCount = totalCount,
+            successCount = successCount,
+            failedCount = failedCount,
+            infoCount = infoCount,
+            onSelectFilter = onSelectFilter,
+            modifier = Modifier.weight(1f)
+        )
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Action buttons: Export and Clear
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            IconButton(
-                onClick = onCopyAll,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
-                    contentDescription = stringResource(R.string.session_logs_copy_all),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
+        FilterActionButtons(
+            onCopyAll = onCopyAll,
+            onClearClick = onClearClick
+        )
+    }
+}
+
+@Composable
+private fun FilterChipsRow(
+    selectedFilter: SessionLogFilter,
+    totalCount: Int,
+    successCount: Int,
+    failedCount: Int,
+    infoCount: Int,
+    onSelectFilter: (SessionLogFilter) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SessionLogFilter.entries.forEach { filter ->
+            val isSelected = filter == selectedFilter
+            val count = when (filter) {
+                SessionLogFilter.ALL -> totalCount
+                SessionLogFilter.SUCCESS -> successCount
+                SessionLogFilter.FAILED -> failedCount
+                SessionLogFilter.INFO -> infoCount
             }
 
-            IconButton(
-                onClick = onClearClick,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = stringResource(R.string.session_logs_clear_logs),
-                    tint = Color(0xFFF87171),
-                    modifier = Modifier.size(18.dp)
-                )
+            val filterLabel = when (filter) {
+                SessionLogFilter.ALL -> stringResource(R.string.session_logs_filter_all)
+                SessionLogFilter.SUCCESS -> stringResource(R.string.session_logs_filter_success)
+                SessionLogFilter.FAILED -> stringResource(R.string.session_logs_filter_failed)
+                SessionLogFilter.INFO -> stringResource(R.string.session_logs_filter_info)
             }
+
+            FilterPillChip(
+                label = filterLabel,
+                count = count,
+                isSelected = isSelected,
+                onClick = { onSelectFilter(filter) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterActionButtons(
+    onCopyAll: () -> Unit,
+    onClearClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        IconButton(
+            onClick = onCopyAll,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ContentCopy,
+                contentDescription = stringResource(R.string.session_logs_copy_all),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        IconButton(
+            onClick = onClearClick,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DeleteOutline,
+                contentDescription = stringResource(R.string.session_logs_clear_logs),
+                tint = Color(0xFFF87171),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

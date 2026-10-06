@@ -6,11 +6,11 @@ import com.framex.app.gaming.SystemAuditLog
 /**
  * Filter categories for session audit log records.
  */
-enum class SessionLogFilter(val label: String) {
-    ALL("All"),
-    SUCCESS("Succeeded"),
-    FAILED("Failed"),
-    INFO("Info")
+enum class SessionLogFilter {
+    ALL,
+    SUCCESS,
+    FAILED,
+    INFO
 }
 
 /**

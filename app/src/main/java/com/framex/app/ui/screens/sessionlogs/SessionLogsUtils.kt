@@ -2,9 +2,27 @@ package com.framex.app.ui.screens.sessionlogs
 
 import com.framex.app.gaming.LogStatus
 import com.framex.app.gaming.SystemAuditLog
+import androidx.compose.ui.graphics.Color
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+val LogStatus.tag: String
+    get() = when (this) {
+        LogStatus.SUCCESS -> "OK"
+        LogStatus.FAILED -> "ERR"
+        LogStatus.INFO -> "INFO"
+    }
+
+val LogStatus.color: Color
+    get() = when (this) {
+        LogStatus.SUCCESS -> Color(0xFF10B981)
+        LogStatus.FAILED -> Color(0xFFEF4444)
+        LogStatus.INFO -> Color(0xFF06B6D4)
+    }
+
+val LogStatus.containerColor: Color
+    get() = color.copy(alpha = 0.12f)
 
 /**
  * Pure calculation and string formatting utilities for Session Logs.
@@ -29,12 +47,7 @@ object SessionLogsUtils {
      */
     fun formatSingleLog(log: SystemAuditLog): String {
         val timeStr = formatTimestamp(log.timestamp)
-        val statusTag = when (log.status) {
-            LogStatus.SUCCESS -> "OK"
-            LogStatus.FAILED -> "ERR"
-            LogStatus.INFO -> "INFO"
-        }
-        return "[$timeStr] [$statusTag] ${log.action} - ${log.details}"
+        return "[$timeStr] [${log.status.tag}] ${log.action} - ${log.details}"
     }
 
     /**
@@ -48,12 +61,7 @@ object SessionLogsUtils {
             appendLine("----------------------------------------")
             logs.forEach { log ->
                 val timeStr = formatTimestamp(log.timestamp)
-                val statusTag = when (log.status) {
-                    LogStatus.SUCCESS -> "OK"
-                    LogStatus.FAILED -> "ERR"
-                    LogStatus.INFO -> "INFO"
-                }
-                appendLine("[$timeStr] [$statusTag] ${log.action}")
+                appendLine("[$timeStr] [${log.status.tag}] ${log.action}")
                 if (log.details.isNotBlank()) {
                     appendLine("  Details: ${log.details}")
                 }

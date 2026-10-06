@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -42,17 +43,6 @@ fun SessionLogsHeaderCard(
     onToggleLogging: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "recordingPulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -65,57 +55,11 @@ fun SessionLogsHeaderCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Row 1: Pulsing status indicator + Switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Pulsing LED dot
-                    val dotColor = if (isLoggingEnabled) {
-                        Color(0xFF10B981).copy(alpha = pulseAlpha)
-                    } else {
-                        Color(0xFF64748B)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(dotColor)
-                    )
+            RecordingStatusIndicatorRow(
+                isLoggingEnabled = isLoggingEnabled,
+                onToggleLogging = onToggleLogging
+            )
 
-                    val statusText = if (isLoggingEnabled) {
-                        stringResource(R.string.session_logs_recording_active)
-                    } else {
-                        stringResource(R.string.session_logs_recording_paused)
-                    }
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isLoggingEnabled) Color(0xFF34D399) else Color(0xFF94A3B8),
-                        letterSpacing = 0.6.sp
-                    )
-                }
-
-                Switch(
-                    checked = isLoggingEnabled,
-                    onCheckedChange = onToggleLogging,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        uncheckedThumbColor = Color(0xFF94A3B8),
-                        uncheckedTrackColor = Color(0xFF1E2028)
-                    ),
-                    modifier = Modifier.height(24.dp)
-                )
-            }
-
-            // Row 2: Description
             Text(
                 text = stringResource(R.string.session_logs_toggle_desc),
                 style = MaterialTheme.typography.bodySmall,
@@ -123,39 +67,127 @@ fun SessionLogsHeaderCard(
                 lineHeight = 17.sp
             )
 
-            // Row 3: Telemetry Stat Tiles
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatTile(
-                    label = stringResource(R.string.session_logs_stat_total),
-                    value = totalCount.toString(),
-                    valueColor = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-
-                val rateColor = when {
-                    successRate >= 90 -> Color(0xFF10B981)
-                    successRate >= 70 -> Color(0xFFFBBF24)
-                    else -> Color(0xFFEF4444)
-                }
-                StatTile(
-                    label = stringResource(R.string.session_logs_stat_success),
-                    value = "$successRate%",
-                    valueColor = rateColor,
-                    modifier = Modifier.weight(1f)
-                )
-
-                val errColor = if (failedCount > 0) Color(0xFFEF4444) else Color(0xFF64748B)
-                StatTile(
-                    label = stringResource(R.string.session_logs_stat_errors),
-                    value = failedCount.toString(),
-                    valueColor = errColor,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            SessionLogsTelemetryStatsRow(
+                totalCount = totalCount,
+                successRate = successRate,
+                failedCount = failedCount
+            )
         }
+    }
+}
+
+@Composable
+private fun RecordingStatusIndicatorRow(
+    isLoggingEnabled: Boolean,
+    onToggleLogging: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PulsingLedDot(isLoggingEnabled = isLoggingEnabled)
+
+            val statusText = if (isLoggingEnabled) {
+                stringResource(R.string.session_logs_recording_active)
+            } else {
+                stringResource(R.string.session_logs_recording_paused)
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isLoggingEnabled) Color(0xFF34D399) else Color(0xFF94A3B8),
+                letterSpacing = 0.6.sp
+            )
+        }
+
+        Switch(
+            checked = isLoggingEnabled,
+            onCheckedChange = onToggleLogging,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = Color(0xFF94A3B8),
+                uncheckedTrackColor = Color(0xFF1E2028)
+            ),
+            modifier = Modifier.height(24.dp)
+        )
+    }
+}
+
+@Composable
+private fun PulsingLedDot(isLoggingEnabled: Boolean) {
+    if (!isLoggingEnabled) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF64748B))
+        )
+        return
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "recordingPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .graphicsLayer { alpha = pulseAlpha }
+            .background(Color(0xFF10B981))
+    )
+}
+
+@Composable
+private fun SessionLogsTelemetryStatsRow(
+    totalCount: Int,
+    successRate: Int,
+    failedCount: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatTile(
+            label = stringResource(R.string.session_logs_stat_total),
+            value = totalCount.toString(),
+            valueColor = Color.White,
+            modifier = Modifier.weight(1f)
+        )
+
+        val rateColor = when {
+            successRate >= 90 -> Color(0xFF10B981)
+            successRate >= 70 -> Color(0xFFFBBF24)
+            else -> Color(0xFFEF4444)
+        }
+        StatTile(
+            label = stringResource(R.string.session_logs_stat_success),
+            value = "$successRate%",
+            valueColor = rateColor,
+            modifier = Modifier.weight(1f)
+        )
+
+        val errColor = if (failedCount > 0) Color(0xFFEF4444) else Color(0xFF64748B)
+        StatTile(
+            label = stringResource(R.string.session_logs_stat_errors),
+            value = failedCount.toString(),
+            valueColor = errColor,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
