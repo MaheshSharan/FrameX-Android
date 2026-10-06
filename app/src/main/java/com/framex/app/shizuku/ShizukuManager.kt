@@ -16,11 +16,15 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.SystemClock
+import com.framex.app.gaming.LogStatus
+import com.framex.app.gaming.SystemAuditLogRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ShizukuManager @Inject constructor() {
+class ShizukuManager @Inject constructor(
+    private val auditLogRepository: SystemAuditLogRepository
+) {
 
     private val _isShizukuAvailable = MutableStateFlow(false)
     val isShizukuAvailable: StateFlow<Boolean> = _isShizukuAvailable.asStateFlow()
@@ -40,18 +44,26 @@ class ShizukuManager @Inject constructor() {
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         _isShizukuAvailable.value = true
+        auditLogRepository.addLog("Shizuku: Binder Connected", "Version ${Shizuku.getVersion()}", LogStatus.SUCCESS)
         checkPermission()
     }
 
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         _isShizukuAvailable.value = false
         _hasPermission.value = false
+        auditLogRepository.addLog("Shizuku: Binder Died", "Remote process lost or killed", LogStatus.FAILED)
         disconnectUserService()
     }
 
     private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == REQUEST_CODE_PERMISSION) {
-            _hasPermission.value = grantResult == PackageManager.PERMISSION_GRANTED
+            val granted = grantResult == PackageManager.PERMISSION_GRANTED
+            _hasPermission.value = granted
+            auditLogRepository.addLog(
+                "Shizuku: Permission",
+                if (granted) "Granted by user" else "Denied by user",
+                if (granted) LogStatus.SUCCESS else LogStatus.FAILED
+            )
         }
     }
 

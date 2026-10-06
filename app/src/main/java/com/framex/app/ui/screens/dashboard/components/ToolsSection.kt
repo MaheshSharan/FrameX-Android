@@ -1,6 +1,5 @@
 package com.framex.app.ui.screens.dashboard.components
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,11 +32,9 @@ import com.framex.app.R
 @Composable
 fun ToolsSection(
     onNavigateToThermalDiagnostics: () -> Unit,
+    onNavigateToSessionLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val comingSoonMessage = stringResource(R.string.coming_soon)
-
     Column(modifier = modifier.fillMaxWidth()) {
         // Section Header: Pure white icon and typography
         Row(
@@ -93,9 +89,7 @@ fun ToolsSection(
                 subtitle = stringResource(R.string.dashboard_session_logs_desc),
                 iconContainerColor = Color(0xFF64748B).copy(alpha = 0.16f),
                 iconContentColor = Color(0xFF94A3B8),
-                onClick = {
-                    Toast.makeText(context, comingSoonMessage, Toast.LENGTH_SHORT).show()
-                },
+                onClick = onNavigateToSessionLogs,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),

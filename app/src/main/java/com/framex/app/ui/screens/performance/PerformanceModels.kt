@@ -3,7 +3,6 @@ package com.framex.app.ui.screens.performance
 import androidx.compose.runtime.Immutable
 import com.framex.app.gaming.AppInfo
 import com.framex.app.gaming.GamingModeState
-import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.gaming.ledger.LedgerSummary
 import com.framex.app.metrics.MetricsState
 
@@ -44,8 +43,6 @@ data class PerformanceUiState(
     val mergeList144: List<String> = emptyList(),
     val isRefreshingPerfList: Boolean = false,
     val isRefreshing144List: Boolean = false,
-    val vivoAuditLogs: List<SystemAuditLog> = emptyList(),
-    val auditLoggingEnabled: Boolean = false,
     val maxRefreshRate: Int = 60,
 
     // System Access
@@ -99,9 +96,6 @@ sealed interface PerformanceUiEvent {
     data class AddTo144MergeList(val packageName: String) : PerformanceUiEvent
     data class RemoveFrom144MergeList(val packageName: String) : PerformanceUiEvent
 
-    data class ToggleAuditLogging(val enabled: Boolean) : PerformanceUiEvent
-    data object ClearAuditLogs : PerformanceUiEvent
-
     data object RefreshInstalledApps : PerformanceUiEvent
     data object RefreshSystemState : PerformanceUiEvent
     data class SetAddGameSheetVisible(val visible: Boolean) : PerformanceUiEvent
@@ -120,8 +114,7 @@ sealed interface PerformanceUiEffect {
 data class SystemSettingsGroup(
     val fixedPerformanceMode: Boolean,
     val deepFreezeEnabled: Boolean,
-    val hasSeenDeepFreezeNotice: Boolean,
-    val auditLoggingEnabled: Boolean
+    val hasSeenDeepFreezeNotice: Boolean
 )
 
 data class ShizukuAndGamingGroup(
@@ -139,8 +132,7 @@ data class VivoGroup(
     val raw144MergeList: String?,
     val mergeList144: List<String>,
     val isRefreshingPerfList: Boolean,
-    val isRefreshing144List: Boolean,
-    val vivoAuditLogs: List<SystemAuditLog>
+    val isRefreshing144List: Boolean
 )
 
 data class Tuple4<A, B, C, D>(

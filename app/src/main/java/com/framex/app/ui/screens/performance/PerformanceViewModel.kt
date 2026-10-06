@@ -9,7 +9,6 @@ import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.GamingPlatformPath
 import com.framex.app.gaming.GamingServiceController
-import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.gaming.VivoGamingOptimizer
 import com.framex.app.gaming.VivoIqooSharedTools
 import com.framex.app.gaming.VivoSuiteGate
@@ -142,10 +141,9 @@ class PerformanceViewModel @Inject constructor(
     private val systemSettingsStream = combine(
         settingsRepository.fixedPerformanceMode,
         settingsRepository.deepFreezeEnabled,
-        settingsRepository.hasSeenDeepFreezeNotice,
-        settingsRepository.auditLoggingEnabled
-    ) { fixedPerf, deepFreeze, hasSeenNotice, auditEnabled ->
-        SystemSettingsGroup(fixedPerf, deepFreeze, hasSeenNotice, auditEnabled)
+        settingsRepository.hasSeenDeepFreezeNotice
+    ) { fixedPerf, deepFreeze, hasSeenNotice ->
+        SystemSettingsGroup(fixedPerf, deepFreeze, hasSeenNotice)
     }
 
     private val vivoStream = combine(
@@ -160,13 +158,12 @@ class PerformanceViewModel @Inject constructor(
         },
         combine(
             _isRefreshingPerfList,
-            _isRefreshing144List,
-            vivoGamingOptimizer.auditLogs
-        ) { refPerf, ref144, logs ->
-            Triple(refPerf, ref144, logs)
+            _isRefreshing144List
+        ) { refPerf, ref144 ->
+            Pair(refPerf, ref144)
         }
-    ) { (enabled, rawPerf, perfList, raw144, list144), (refPerf, ref144, logs) ->
-        VivoGroup(enabled, rawPerf, perfList, raw144, list144, refPerf, ref144, logs)
+    ) { (enabled, rawPerf, perfList, raw144, list144), (refPerf, ref144) ->
+        VivoGroup(enabled, rawPerf, perfList, raw144, list144, refPerf, ref144)
     }
 
     private val actionStateStream = combine(
@@ -223,8 +220,6 @@ class PerformanceViewModel @Inject constructor(
             mergeList144 = vivo.mergeList144,
             isRefreshingPerfList = vivo.isRefreshingPerfList,
             isRefreshing144List = vivo.isRefreshing144List,
-            vivoAuditLogs = vivo.vivoAuditLogs,
-            auditLoggingEnabled = sys.auditLoggingEnabled,
             maxRefreshRate = maxRefreshRate,
             hasDndAccess = inter.systemAccess.hasDndAccess,
             hasNotifListenerAccess = inter.systemAccess.hasNotifListenerAccess,
@@ -271,8 +266,6 @@ class PerformanceViewModel @Inject constructor(
             isVivoSuiteEnabled = vivoEnabled,
             rawPerfGameList = null,
             vivoPerfGameList = emptyList(),
-            vivoAuditLogs = emptyList(),
-            auditLoggingEnabled = settingsRepository.auditLoggingEnabled.value,
             maxRefreshRate = maxRefreshRate,
             hasDndAccess = _hasDndAccess.value,
             hasNotifListenerAccess = _hasNotifListenerAccess.value,
@@ -324,8 +317,6 @@ class PerformanceViewModel @Inject constructor(
             is PerformanceUiEvent.RemoveAllFrom144MergeList -> removeAllLauncherGamesFrom144List(event.packages, event.onComplete)
             is PerformanceUiEvent.AddTo144MergeList -> addSingleGameTo144List(event.packageName)
             is PerformanceUiEvent.RemoveFrom144MergeList -> removeSingleGameFrom144List(event.packageName)
-            is PerformanceUiEvent.ToggleAuditLogging -> setAuditLoggingEnabled(event.enabled)
-            PerformanceUiEvent.ClearAuditLogs -> clearVivoAuditLogs()
             PerformanceUiEvent.RefreshInstalledApps -> loadUserApps()
             PerformanceUiEvent.RefreshSystemState -> {
                 loadUserApps()
@@ -607,17 +598,6 @@ class PerformanceViewModel @Inject constructor(
                 onComplete(allSuccess)
             }
         }
-    }
-
-    fun setAuditLoggingEnabled(enabled: Boolean) {
-        settingsRepository.setAuditLoggingEnabled(enabled)
-        if (!enabled) {
-            vivoGamingOptimizer.clearAuditLogs()
-        }
-    }
-
-    fun clearVivoAuditLogs() {
-        vivoGamingOptimizer.clearAuditLogs()
     }
 
     fun getGameConfigBoostRam(pkg: String): Boolean = settingsRepository.getGameConfigBoostRam(pkg)

@@ -45,6 +45,7 @@ data class AboutUiState(
     val vivoPulseGamePlusMode: Boolean = false,
     val vivoPulseStandardPromotion: Boolean = false,
     val vivoPulseSceneMoreFps: Boolean = false,
+    val maxRefreshRate: Int = 60,
     val hasCrashLog: Boolean = false,
     val pendingInstallApk: File? = null,
     val waitingForInstallPermission: Boolean = false

@@ -263,6 +263,7 @@ class AboutViewModel @Inject constructor(
             vivoPulseGamePlusMode = exec.vivoPulseGamePlus,
             vivoPulseStandardPromotion = exec.vivoPulseStdPromo,
             vivoPulseSceneMoreFps = exec.vivoPulseSceneFps,
+            maxRefreshRate = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60),
             hasCrashLog = actions.hasCrashLog,
             pendingInstallApk = actions.pendingApk,
             waitingForInstallPermission = actions.waitingForInstall

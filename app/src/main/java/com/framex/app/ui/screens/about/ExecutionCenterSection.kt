@@ -419,15 +419,17 @@ private fun VivoCommandsTab(
             description = "Advanced display arbitration and periodic maintenance loop controls."
         )
 
-        CommandToggleCard(
-            title = "144Hz Frame Interpolation Unlock",
-            commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1:1:72:144\n• OriginOS 6 144Hz MEMC override (replaces 90 FPS cap)",
-            statusText = if (state.vivo144FpsUnlock) "144Hz MEMC Override Active" else "Default Refresh Arbitration",
-            statusColor = if (state.vivo144FpsUnlock) Color(0xFF4FDCB8) else Color.Gray,
-            isChecked = state.vivo144FpsUnlock,
-            onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
-            icon = Icons.Default.Refresh
-        )
+        if (state.maxRefreshRate >= 144) {
+            CommandToggleCard(
+                title = "144Hz Frame Interpolation Unlock",
+                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1::72:144\n• OriginOS 6 144Hz MEMC override (replaces 90 FPS cap)",
+                statusText = if (state.vivo144FpsUnlock) "144Hz MEMC Override Active" else "Default Refresh Arbitration",
+                statusColor = if (state.vivo144FpsUnlock) Color(0xFF4FDCB8) else Color.Gray,
+                isChecked = state.vivo144FpsUnlock,
+                onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
+                icon = Icons.Default.Refresh
+            )
+        }
 
         CommandToggleCard(
             title = "2-Minute Maintenance Pulse",
@@ -476,14 +478,16 @@ private fun IqooCommandsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        CommandToggleCard(
-            title = "144 FPS Frame Interpolation",
-            commandSummary = "system:gamecube_frame_interpolation_for_sr = 1:1::72:144",
-            statusText = if (state.vivo144FpsUnlock) "144 FPS Forced" else "Native Panel Profile",
-            statusColor = if (state.vivo144FpsUnlock) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.vivo144FpsUnlock,
-            onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
-            icon = Icons.Default.Speed
-        )
+        if (state.maxRefreshRate >= 144) {
+            CommandToggleCard(
+                title = "144 FPS Frame Interpolation",
+                commandSummary = "system:gamecube_frame_interpolation_for_sr = 1:1::72:144",
+                statusText = if (state.vivo144FpsUnlock) "144 FPS Forced" else "Native Panel Profile",
+                statusColor = if (state.vivo144FpsUnlock) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.vivo144FpsUnlock,
+                onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
+                icon = Icons.Default.Speed
+            )
+        }
     }
 }

@@ -40,7 +40,6 @@ import com.framex.app.ui.screens.performance.sections.GameLauncherSection
 import com.framex.app.ui.screens.performance.sections.GoogleAppsSection
 import com.framex.app.ui.screens.performance.sections.HeroGamingCard
 import com.framex.app.ui.screens.performance.sections.RequirementsSection
-import com.framex.app.ui.screens.performance.sections.SystemAuditLogSection
 import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
 import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
 
@@ -213,16 +212,6 @@ fun PerformanceScreen(
                 deepFreezeEnabled = uiState.deepFreezeEnabled,
                 onToggleDeepFreeze = { enabled -> onEvent(PerformanceUiEvent.ToggleDeepFreeze(enabled)) }
             )
-
-            // System Optimization Audit Console
-            item(key = "system_audit_log_section") {
-                SystemAuditLogSection(
-                    isLoggingEnabled = uiState.auditLoggingEnabled,
-                    onToggleLogging = { onEvent(PerformanceUiEvent.ToggleAuditLogging(it)) },
-                    auditLogs = uiState.vivoAuditLogs,
-                    onClearLogs = { onEvent(PerformanceUiEvent.ClearAuditLogs) }
-                )
-            }
         }
 
         // Deep Freeze Safeguard Notice Dialog
