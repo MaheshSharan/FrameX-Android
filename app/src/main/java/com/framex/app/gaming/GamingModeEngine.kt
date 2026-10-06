@@ -550,7 +550,8 @@ class GamingModeEngine @Inject constructor(
             }
             GamingPlatformPath.IQOO -> {
                 FrameXLog.i("iQOO device detected: Applying iQOO gaming suite (144Hz)", tag = TAG)
-                val iqooSuccess = iqooGamingOptimizer.applyOptimizations(activeGamePkg) { progress, statusText ->
+                val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
+                val iqooSuccess = iqooGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
                     _state.value = GamingModeState.Enabling(progress, statusText)
                 }
                 val uid = activeGamePkg?.let {
@@ -755,11 +756,13 @@ class GamingModeEngine @Inject constructor(
             GamingPlatformPath.VIVO -> {
                 vivoGamingOptimizer.promoteGamePid(packageName, pid)
             }
+            GamingPlatformPath.IQOO -> {
+                iqooGamingOptimizer.promoteGamePid(packageName, pid)
+            }
             GamingPlatformPath.GENERIC -> {
                 val uid = runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()
                 esportsOptimizationEngine.attachGame(packageName, uid)
             }
-            GamingPlatformPath.IQOO,
             GamingPlatformPath.NONE, null -> {
                 FrameXLog.i("promoteGamePid: platform path is $path, skipping platform PID attachment", tag = TAG)
             }

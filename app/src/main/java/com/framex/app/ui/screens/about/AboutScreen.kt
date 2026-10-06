@@ -45,7 +45,6 @@ fun AboutScreen(
     onEvent: (AboutUiEvent) -> Unit,
     onNavigateBack: () -> Unit,
     onOpenUrl: (String) -> Unit,
-    canInstallPackages: () -> Boolean,
     deviceModelInfo: String,
     modifier: Modifier = Modifier
 ) {
@@ -139,7 +138,6 @@ fun AboutScreen(
         AboutScreenDialogs(
             state = state,
             onEvent = onEvent,
-            canInstallPackages = canInstallPackages,
             deviceModelInfo = deviceModelInfo
         )
 
@@ -157,7 +155,6 @@ fun AboutScreen(
 private fun AboutScreenDialogs(
     state: AboutUiState,
     onEvent: (AboutUiEvent) -> Unit,
-    canInstallPackages: () -> Boolean,
     deviceModelInfo: String
 ) {
     if (state.showVivoDiagModal) {

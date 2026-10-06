@@ -272,10 +272,16 @@ open class VivoGamingOptimizer @Inject constructor(
 
     suspend fun promoteGamePid(packageName: String, pid: Int) = withContext(Dispatchers.IO) {
         if (pid <= 0) return@withContext
+        val isNewPkg = activeGamePackage != packageName
         activeGamePackage = packageName
         activeGamePid = pid
         FrameXLog.i("Promoting live PID for Vivo game handshake: $packageName (PID=$pid)", tag = TAG)
         executeLiveHandshakePayload(packageName, pid)
+        if (isNewPkg) {
+            executeHardwareGyroPayload(packageName)
+            executeTouchDigitizerPayload(packageName)
+            executeKernelSchedulerPayload(packageName)
+        }
     }
 
     suspend fun runPeriodicMaintenance() = withContext(Dispatchers.IO) {

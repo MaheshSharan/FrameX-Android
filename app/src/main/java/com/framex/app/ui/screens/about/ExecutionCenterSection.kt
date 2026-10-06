@@ -475,19 +475,93 @@ private fun IqooCommandsTab(
     onEvent: (AboutUiEvent) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+        CommandToggleCard(
+            title = "GameCube VIP Thread Scheduler",
+            commandSummary = "• Settings Global: game_cube_vip_thread = 1\n• Prioritizes the main render thread to prime CPU cores",
+            statusText = if (state.vivoVipThread) "VIP Scheduling Active" else "Standard Scheduler",
+            statusColor = if (state.vivoVipThread) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivoVipThread,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivoVipThread(it)) },
+            icon = Icons.Default.Speed
+        )
+
+        CommandToggleCard(
+            title = "Live Target FPS Handshake",
+            commandSummary = "• Settings System: sdk_game_target_fps & sdk_game_scene\n• Real-time match PID handshake with GameWatch arbiter",
+            statusText = if (state.vivoGameHandshake) "Target FPS Handshake Active" else "Handshake Inactive",
+            statusColor = if (state.vivoGameHandshake) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivoGameHandshake,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivoGameHandshake(it)) },
+            icon = Icons.Default.SportsEsports
+        )
+
+        CommandToggleCard(
+            title = "Touch Digitizer & 180Hz Polling",
+            commandSummary = "• Settings System: vts_game_para_adjust = 1,5,5,5\n• Settings Global: game_memc_request_touch_rate = 180",
+            statusText = if (state.vivoTouchOptimization) "Touch Acceleration Active" else "Standard Touch Polling",
+            statusColor = if (state.vivoTouchOptimization) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivoTouchOptimization,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivoTouchOptimization(it)) },
+            icon = Icons.Default.TouchApp
+        )
+
+        CommandToggleCard(
+            title = "Hardware Gyroscope Prediction",
+            commandSummary = "• Settings System: vivo_game_gyro_data_prediction = 1\n• Low-latency sensor prediction filtering",
+            statusText = if (state.vivoGyroPromotion) "Gyro Prediction Active" else "Standard Gyroscope",
+            statusColor = if (state.vivoGyroPromotion) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivoGyroPromotion,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivoGyroPromotion(it)) },
+            icon = Icons.Default.ScreenRotation
+        )
+
+        CommandToggleCard(
+            title = "Display Thermals & Brightness Guard",
+            commandSummary = "• Settings System: game_optimize_brightness = 0\n• Settings Secure: game_cube_temper_control = 0",
+            statusText = if (state.disableThermalThrottling) "Thermal Guard Active" else "Standard Thermal Throttling",
+            statusColor = if (state.disableThermalThrottling) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.disableThermalThrottling,
+            onCheckedChange = { onEvent(AboutUiEvent.SetDisableThermalThrottling(it)) },
+            icon = Icons.Default.Thermostat
+        )
+
         if (state.maxRefreshRate >= 144) {
             CommandToggleCard(
                 title = "144 FPS Frame Interpolation",
-                commandSummary = "system:gamecube_frame_interpolation_for_sr = 1:1::72:144",
+                commandSummary = "• Settings System: gamecube_frame_interpolation_for_sr = 1:1::72:144\n• OriginOS 144Hz MEMC override",
                 statusText = if (state.vivo144FpsUnlock) "144 FPS Forced" else "Native Panel Profile",
                 statusColor = if (state.vivo144FpsUnlock) Color(0xFF10B981) else Color.Gray,
                 isChecked = state.vivo144FpsUnlock,
                 onCheckedChange = { onEvent(AboutUiEvent.SetVivo144FpsUnlock(it)) },
-                icon = Icons.Default.Speed
+                icon = Icons.Default.Refresh
             )
+        }
+
+        ExperimentalSectionDivider(
+            description = "Advanced periodic maintenance loop controls."
+        )
+
+        CommandToggleCard(
+            title = "2-Minute Maintenance Pulse",
+            commandSummary = "2-minute periodic maintenance pulses 3D scene frame unlock flag during gameplay.",
+            statusText = if (state.vivoMaintenancePulse) "2-Min Pulse Active" else "Pulse Disabled (Single Shot)",
+            statusColor = if (state.vivoMaintenancePulse) Color(0xFF10B981) else Color.Gray,
+            isChecked = state.vivoMaintenancePulse,
+            onCheckedChange = { onEvent(AboutUiEvent.SetVivoMaintenancePulse(it)) },
+            icon = Icons.Default.Timer
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChildCommandToggleRow(
+                    title = "game_scene_more_fps",
+                    commandSummary = "• 3D Match Scene Frame Unlock",
+                    isChecked = state.vivoPulseSceneMoreFps,
+                    enabled = state.vivoMaintenancePulse,
+                    onCheckedChange = { onEvent(AboutUiEvent.SetVivoPulseSceneMoreFps(it)) }
+                )
+            }
         }
     }
 }

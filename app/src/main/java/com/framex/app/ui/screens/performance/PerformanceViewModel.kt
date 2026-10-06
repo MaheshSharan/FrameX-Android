@@ -392,7 +392,7 @@ class PerformanceViewModel @Inject constructor(
             if (launched) {
                 if (isGamingModeActive) {
                     val sessionPath = settingsRepository.getGamingPlatformPath()
-                    if (sessionPath == GamingPlatformPath.VIVO) {
+                    if (sessionPath == GamingPlatformPath.VIVO || sessionPath == GamingPlatformPath.IQOO) {
                         viewModelScope.launch(Dispatchers.IO) {
                             for (i in 1..10) {
                                 delay(500L)
