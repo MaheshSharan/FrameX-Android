@@ -1,6 +1,8 @@
 package com.framex.app.metrics
 
 import android.os.SystemClock
+import com.framex.app.gaming.LogStatus
+import com.framex.app.gaming.SystemAuditLogRepository
 import com.framex.app.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +68,8 @@ class MetricsEngine @Inject constructor(
     private val thermalMonitor: ThermalMonitor,
     private val pingMonitor: PingMonitor,
     private val topProcessMonitor: TopProcessMonitor,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val auditLogRepository: SystemAuditLogRepository
 ) {
     private val _metricsState = MutableStateFlow(MetricsState())
     val metricsState: StateFlow<MetricsState> = _metricsState.asStateFlow()
@@ -126,6 +129,7 @@ class MetricsEngine @Inject constructor(
         // FPS always runs — it is the core metric and has near-zero overhead.
         // currentTime and monotonic sessionElapsedSec are refreshed on each ~1s frame tick.
         engineScope.launch {
+            var loggedFirstFps = false
             fpsMonitor.fpsState.collect { state ->
                 val elapsed = (SystemClock.elapsedRealtime() - sessionStartTimeMs) / 1000L
                 val timeStr = getCurrentFormattedTime()
@@ -135,6 +139,10 @@ class MetricsEngine @Inject constructor(
                     currentTime = timeStr,
                     sessionElapsedSec = elapsed.coerceAtLeast(0L)
                 )
+                if (!loggedFirstFps && state.fps > 0) {
+                    loggedFirstFps = true
+                    auditLogRepository.addLog("Telemetry: FPS Polling Active", "SurfaceFlinger stream initialized (first reading: ${state.fps} FPS)", LogStatus.SUCCESS)
+                }
                 // Append to rolling history, capped at MAX_FPS_HISTORY_SIZE entries.
                 val next = ArrayDeque(_fpsHistory.value).also { d ->
                     d.addLast(state.fps)
@@ -216,6 +224,7 @@ class MetricsEngine @Inject constructor(
                     }
                 }
                 toggleModule("thermal", enabled) {
+                    var lastThermalStatus = -1
                     thermalMonitor.thermalState.collect { t ->
                         _metricsState.value = _metricsState.value.copy(
                             thermalCpuC = t.cpuC,
@@ -231,6 +240,22 @@ class MetricsEngine @Inject constructor(
                             hasThermalBattery = t.hasBattery,
                             isThrottling = t.isThrottling
                         )
+                        if (t.status != lastThermalStatus) {
+                            lastThermalStatus = t.status
+                            if (t.status >= 1) { // 1: Light, 2: Moderate, 3: Severe, 4: Critical
+                                auditLogRepository.addLog(
+                                    "Thermal Alert",
+                                    "${t.statusLabel} (CPU: ${t.cpuC}°C, GPU: ${t.gpuC}°C, Skin: ${t.skinC}°C)",
+                                    LogStatus.FAILED
+                                )
+                            } else if (lastThermalStatus != -1) {
+                                auditLogRepository.addLog(
+                                    "Thermal Status",
+                                    "Normal operating temperature restored",
+                                    LogStatus.SUCCESS
+                                )
+                            }
+                        }
                     }
                 }
                 toggleModule("ping", enabled) {

@@ -22,6 +22,7 @@ fun DashboardRoute(
     onNavigateToAbout: () -> Unit,
     onNavigateToPerformance: () -> Unit,
     onNavigateToThermalDiagnostics: () -> Unit,
+    onNavigateToSessionLogs: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
@@ -48,6 +49,7 @@ fun DashboardRoute(
         onNavigateToAbout = onNavigateToAbout,
         onNavigateToPerformance = onNavigateToPerformance,
         onNavigateToThermalDiagnostics = onNavigateToThermalDiagnostics,
+        onNavigateToSessionLogs = onNavigateToSessionLogs,
         modifier = modifier
     )
 }

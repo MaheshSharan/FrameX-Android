@@ -62,7 +62,6 @@ fun SplashRoute(
     SplashScreen(
         state = state,
         onEvent = viewModel::onEvent,
-        canInstallPackages = { viewModel.updateInstaller.canInstallPackages() },
         modifier = modifier
     )
 }

@@ -106,7 +106,8 @@ class AboutViewModel @Inject constructor(
     private val _effectChannel = Channel<AboutUiEffect>(Channel.BUFFERED)
     val effect = _effectChannel.receiveAsFlow()
 
-    val isVivoHardware: Boolean get() = vivoSuiteGate.isVivoHardware
+    val isVivoHardware: Boolean get() = deviceDiagnosticManager.isVivoOnly()
+    val isIqooHardware: Boolean get() = deviceDiagnosticManager.isIqooOnly()
     val deviceModelInfo: String get() = deviceDiagnosticManager.getDeviceModelInfo()
 
     fun canInstallPackages(): Boolean = updateInstaller.canInstallPackages()
@@ -240,6 +241,7 @@ class AboutViewModel @Inject constructor(
             signatureErrorMessage = actions.signatureError,
             downloadState = downloadState,
             isVivoDevice = isVivoHardware,
+            isIqooDevice = isIqooHardware,
             isVivoOptActive = settings.vivoOpt,
             showVivoDiagModal = actions.showVivoModal,
             selectedExecutionTab = exec.selectedTab,
@@ -261,6 +263,7 @@ class AboutViewModel @Inject constructor(
             vivoPulseGamePlusMode = exec.vivoPulseGamePlus,
             vivoPulseStandardPromotion = exec.vivoPulseStdPromo,
             vivoPulseSceneMoreFps = exec.vivoPulseSceneFps,
+            maxRefreshRate = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60),
             hasCrashLog = actions.hasCrashLog,
             pendingInstallApk = actions.pendingApk,
             waitingForInstallPermission = actions.waitingForInstall
@@ -313,8 +316,15 @@ class AboutViewModel @Inject constructor(
             is AboutUiEvent.SetVivoOptEnabled -> {
                 val wasEnabled = settingsRepository.vivoOptEnabled.value
                 settingsRepository.setVivoOptEnabled(event.enabled)
-                if (!event.enabled && wasEnabled) {
-                    gamingModeEngine.onVivoOptToggledOffMidSession()
+                if (!event.enabled) {
+                    if (_selectedExecutionTab.value == ExecutionCenterTab.VIVO ||
+                        _selectedExecutionTab.value == ExecutionCenterTab.IQOO
+                    ) {
+                        _selectedExecutionTab.value = ExecutionCenterTab.COMMON
+                    }
+                    if (wasEnabled) {
+                        gamingModeEngine.onVivoOptToggledOffMidSession()
+                    }
                 }
             }
             is AboutUiEvent.SetShowVivoDiagModal -> _showVivoDiagModal.value = event.show

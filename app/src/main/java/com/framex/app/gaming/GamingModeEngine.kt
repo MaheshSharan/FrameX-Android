@@ -71,6 +71,7 @@ class GamingModeEngine @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
+    private val iqooGamingOptimizer: IqooGamingOptimizer,
     private val oemPackageResolver: OemPackageResolver,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
     private val executionLedger: ExecutionLedger,
@@ -88,11 +89,11 @@ class GamingModeEngine @Inject constructor(
         isActive,
         _pulseEnabled
     ) { path, active, enabled ->
-        active && path == GamingPlatformPath.VIVO && enabled
+        active && (path == GamingPlatformPath.VIVO || path == GamingPlatformPath.IQOO) && enabled
     }.distinctUntilChanged()
 
     val isPulseActive: Boolean
-        get() = _isActive.value && settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO && _pulseEnabled.value
+        get() = _isActive.value && (settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO || settingsRepository.getGamingPlatformPath() == GamingPlatformPath.IQOO) && _pulseEnabled.value
 
     fun stopPulse() {
         _pulseEnabled.value = false
@@ -108,21 +109,25 @@ class GamingModeEngine @Inject constructor(
 
     fun onVivoOptToggledOffMidSession(): Job? {
         val currentPath = settingsRepository.getGamingPlatformPath()
-        if (currentPath == GamingPlatformPath.VIVO) {
-            FrameXLog.i("Vivo toggle disabled mid-session: stopping pulse, reverting optimizations", tag = TAG)
+        if (currentPath == GamingPlatformPath.VIVO || currentPath == GamingPlatformPath.IQOO) {
+            FrameXLog.i("Hardware suite disabled mid-session: stopping pulse, reverting optimizations", tag = TAG)
             stopPulse()
             return recoveryScope.launch {
                 val success = runCatching {
-                    vivoGamingOptimizer.revertOptimizations()
+                    if (currentPath == GamingPlatformPath.VIVO) {
+                        vivoGamingOptimizer.revertOptimizations()
+                    } else {
+                        iqooGamingOptimizer.revertOptimizations()
+                    }
                 }.getOrDefault(false)
 
                 if (success) {
                     settingsRepository.setGamingPlatformPath(GamingPlatformPath.NONE)
                     executionLedger.removeStages(VIVO_PLATFORM_STAGES)
-                    _toastEvents.tryEmit("Vivo gaming optimizations rolled back")
-                    FrameXLog.i("Vivo mid-session revert succeeded: path set to NONE", tag = TAG)
+                    _toastEvents.tryEmit("Hardware optimizations rolled back")
+                    FrameXLog.i("Hardware suite mid-session revert succeeded: path set to NONE", tag = TAG)
                 } else {
-                    FrameXLog.w("Vivo mid-session revert failed: keeping VIVO path for deactivation retry", tag = TAG)
+                    FrameXLog.w("Hardware suite mid-session revert failed", tag = TAG)
                 }
             }
         }
@@ -531,7 +536,7 @@ class GamingModeEngine @Inject constructor(
     private suspend fun applyPlatformOptimizations(path: GamingPlatformPath, activeGamePkg: String?): Boolean {
         return when (path) {
             GamingPlatformPath.VIVO -> {
-                FrameXLog.i("Vivo/iQOO device detected: Applying hardware-verified Vivo gaming suite", tag = TAG)
+                FrameXLog.i("Vivo device detected: Applying hardware-verified Vivo gaming suite", tag = TAG)
                 val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
                 val vivoSuccess = vivoGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
                     _state.value = GamingModeState.Enabling(progress, statusText)
@@ -542,6 +547,18 @@ class GamingModeEngine @Inject constructor(
                 // Also apply any selected generic optimizations if configured by the user
                 esportsOptimizationEngine.applySelectedGenericOptimizations(activeGamePkg, uid)
                 vivoSuccess
+            }
+            GamingPlatformPath.IQOO -> {
+                FrameXLog.i("iQOO device detected: Applying iQOO gaming suite (144Hz)", tag = TAG)
+                val pid = activeGamePkg?.let { resolveProcessPid(it) } ?: 0
+                val iqooSuccess = iqooGamingOptimizer.applyOptimizations(activeGamePkg, pid) { progress, statusText ->
+                    _state.value = GamingModeState.Enabling(progress, statusText)
+                }
+                val uid = activeGamePkg?.let {
+                    runCatching { context.packageManager.getPackageUid(it, 0) }.getOrNull()
+                }
+                esportsOptimizationEngine.applySelectedGenericOptimizations(activeGamePkg, uid)
+                iqooSuccess
             }
             GamingPlatformPath.GENERIC -> {
                 try {
@@ -565,6 +582,10 @@ class GamingModeEngine @Inject constructor(
         when (path) {
             GamingPlatformPath.VIVO -> {
                 runCatching { vivoGamingOptimizer.revertOptimizations() }
+                settingsRepository.clearGamingOptimizationSnapshot()
+            }
+            GamingPlatformPath.IQOO -> {
+                runCatching { iqooGamingOptimizer.revertOptimizations() }
                 settingsRepository.clearGamingOptimizationSnapshot()
             }
             GamingPlatformPath.GENERIC -> {
@@ -689,6 +710,15 @@ class GamingModeEngine @Inject constructor(
                 }
                 settingsRepository.clearGamingOptimizationSnapshot()
             }
+            GamingPlatformPath.IQOO -> {
+                FrameXLog.i("Reverting iQOO gaming suite (persistedPath=$persistedPath)...", tag = TAG)
+                val iqooSuccess = runCatching { iqooGamingOptimizer.revertOptimizations() }.getOrDefault(false)
+                val genericSuccess = runCatching { esportsOptimizationEngine.revertOptimizations() }.getOrDefault(false)
+                if (iqooSuccess && genericSuccess) {
+                    FrameXLog.i("iQOO gaming suite and generic overrides reverted successfully", tag = TAG)
+                }
+                settingsRepository.clearGamingOptimizationSnapshot()
+            }
             GamingPlatformPath.GENERIC -> {
                 FrameXLog.i("Reverting esports optimizations (persistedPath=$persistedPath)...", tag = TAG)
                 val revertSuccess = runCatching { esportsOptimizationEngine.revertOptimizations() }.getOrDefault(false)
@@ -706,9 +736,10 @@ class GamingModeEngine @Inject constructor(
 
     suspend fun runPeriodicMaintenance() {
         if (!isPulseActive) return
-        val path = settingsRepository.getGamingPlatformPath()
-        if (path == GamingPlatformPath.VIVO) {
-            vivoGamingOptimizer.runPeriodicMaintenance()
+        when (settingsRepository.getGamingPlatformPath()) {
+            GamingPlatformPath.VIVO -> vivoGamingOptimizer.runPeriodicMaintenance()
+            GamingPlatformPath.IQOO -> iqooGamingOptimizer.runPeriodicMaintenance()
+            else -> Unit
         }
     }
 
@@ -724,6 +755,9 @@ class GamingModeEngine @Inject constructor(
         when (path) {
             GamingPlatformPath.VIVO -> {
                 vivoGamingOptimizer.promoteGamePid(packageName, pid)
+            }
+            GamingPlatformPath.IQOO -> {
+                iqooGamingOptimizer.promoteGamePid(packageName, pid)
             }
             GamingPlatformPath.GENERIC -> {
                 val uid = runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()

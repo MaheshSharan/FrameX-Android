@@ -50,7 +50,6 @@ private val SplashBackgroundColor = Color(0xFF0A0A0A)
 fun SplashScreen(
     state: SplashUiState,
     onEvent: (SplashUiEvent) -> Unit,
-    canInstallPackages: () -> Boolean,
     modifier: Modifier = Modifier
 ) {
     var isLogoComplete by remember { mutableStateOf(false) }
