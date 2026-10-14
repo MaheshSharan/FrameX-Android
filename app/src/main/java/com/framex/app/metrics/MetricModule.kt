@@ -229,8 +229,10 @@ fun thermalStatusShortLabel(
     skinTempC: Float = 0f,
     isThrottling: Boolean = false
 ): String {
-    // 1. Android system thermal status is authoritative when non-zero
-    if (status > 0) {
+    // 1. Android system thermal status is authoritative when non-zero,
+    // guarded against buggy custom ROMs/SoCs reporting status >= 3 on a cold SoC (< 45°C).
+    val isErroneousHighStatus = status >= 3 && cpuTempC > 0f && cpuTempC < 45f && skinTempC < 38f
+    if (status > 0 && !isErroneousHighStatus) {
         return when (status) {
             1 -> "LGT"
             2 -> "WARM"
