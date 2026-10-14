@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,14 +43,20 @@ import kotlinx.coroutines.delay
 @Composable
 fun SplashProgressSection(
     isCheckingUpdates: Boolean,
+    hasUpdateAvailable: Boolean = false,
     onSequenceComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var phase by remember { mutableStateOf(SplashLoaderPhase.CHECKING) }
+    val currentIsChecking by rememberUpdatedState(isCheckingUpdates)
+    val currentHasUpdate by rememberUpdatedState(hasUpdateAvailable)
+    val currentOnComplete by rememberUpdatedState(onSequenceComplete)
 
+    // Observes live update check progress and ensures a smooth minimum
+    // display window before transitioning to completion or yielding to dialog.
     LaunchedEffect(Unit) {
         val startTime = System.currentTimeMillis()
-        while (isCheckingUpdates) {
+        while (currentIsChecking) {
             delay(100)
         }
         val elapsed = System.currentTimeMillis() - startTime
@@ -58,9 +65,11 @@ fun SplashProgressSection(
             delay(minDisplayDuration - elapsed)
         }
 
-        phase = SplashLoaderPhase.COMPLETE
-        delay(650)
-        onSequenceComplete()
+        if (!currentHasUpdate) {
+            phase = SplashLoaderPhase.COMPLETE
+            delay(650)
+            currentOnComplete()
+        }
     }
 
     SplashStatusIndicator(

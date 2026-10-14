@@ -42,6 +42,7 @@ class SplashViewModel @Inject constructor(
     private val _waitingForInstallPermission = MutableStateFlow(false)
 
     private var hasInitialized = false
+    private var hasNavigated = false
 
     val uiState: StateFlow<SplashUiState> = combine(
         settingsRepository.isOnboardingCompleted,
@@ -134,24 +135,30 @@ class SplashViewModel @Inject constructor(
                 val checkJob = withTimeoutOrNull(3000L) {
                     runCatching { updateRepository.checkForUpdates() }.getOrNull()
                 }
-                _isCheckingUpdates.value = false
 
                 if (checkJob != null && checkJob.isSuccess) {
                     val info = checkJob.getOrNull()
                     if (info != null && info.isUpdateAvailable) {
                         _updateInfoState.value = info
+                        _isCheckingUpdates.value = false
                         return@launch
                     }
                 }
+                _isCheckingUpdates.value = false
             }
 
-            // Safety timeout ensures navigation even if UI animation callback stalls
+            // Safety timeout ensures navigation even if UI animation callback stalls.
             delay(5000L)
-            proceedToNextScreen()
+            if (_updateInfoState.value == null && _signatureErrorMessage.value == null) {
+                proceedToNextScreen()
+            }
         }
     }
 
     private fun proceedToNextScreen() {
+        if (hasNavigated) return
+        hasNavigated = true
+
         viewModelScope.launch {
             val completed = settingsRepository.isOnboardingCompleted.first()
             if (completed) {

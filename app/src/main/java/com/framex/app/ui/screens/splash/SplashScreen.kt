@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,12 +55,20 @@ fun SplashScreen(
 ) {
     var isLogoComplete by remember { mutableStateOf(false) }
     var showProgressSection by remember { mutableStateOf(false) }
+    val currentAutoUpdateEnabled by rememberUpdatedState(state.autoUpdateEnabled)
+    val currentOnEvent by rememberUpdatedState(onEvent)
 
+    // Coordinates transition after logo drawing finishes: skips update loader
+    // when startup update checks are disabled by user preference.
     LaunchedEffect(isLogoComplete) {
         if (isLogoComplete) {
-            // 400ms delay between logo pulse finish and loader start
+            // 400ms delay between logo pulse finish and next stage.
             delay(400)
-            showProgressSection = true
+            if (currentAutoUpdateEnabled) {
+                showProgressSection = true
+            } else {
+                currentOnEvent(SplashUiEvent.ProceedToNextScreen)
+            }
         }
     }
 
@@ -87,6 +96,7 @@ fun SplashScreen(
             ) {
                 SplashProgressSection(
                     isCheckingUpdates = state.isCheckingUpdates,
+                    hasUpdateAvailable = state.updateInfoState != null,
                     onSequenceComplete = {
                         onEvent(SplashUiEvent.ProceedToNextScreen)
                     }
