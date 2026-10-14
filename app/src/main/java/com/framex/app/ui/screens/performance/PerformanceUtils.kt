@@ -55,4 +55,39 @@ object PerformanceUtils {
         val freed = ((availAfter - availBefore) / BYTES_TO_MB).coerceAtLeast(0L)
         return Pair(freed, stoppedCount)
     }
+
+    const val SOCKET_TIMEOUT_MS = 1000
+    const val RETRY_DELAY_MS = 150L
+
+    suspend fun measureNetworkLatency(shizukuManager: ShizukuManager): Int? {
+        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            try {
+                val output = shizukuManager.executeCommand("ping -c 1 8.8.8.8")
+                if (output.contains("time=")) {
+                    val pingMs = output.split("time=").getOrNull(1)
+                        ?.split(" ")?.getOrNull(0)
+                        ?.toFloatOrNull()
+                        ?.toInt()
+                    if (pingMs != null && pingMs > 0) return pingMs
+                }
+            } catch (e: Exception) {
+                FrameXLog.w("Shizuku ping check failed, falling back to socket probe", e)
+            }
+        }
+        var minPing: Int? = null
+        for (i in 1..3) {
+            try {
+                val start = System.currentTimeMillis()
+                val socket = java.net.Socket()
+                socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), SOCKET_TIMEOUT_MS)
+                val latency = (System.currentTimeMillis() - start).toInt()
+                socket.close()
+                minPing = minOf(minPing ?: latency, latency)
+            } catch (e: Exception) {
+                FrameXLog.w("Socket ping probe iteration $i failed", e)
+            }
+            kotlinx.coroutines.delay(RETRY_DELAY_MS)
+        }
+        return minPing
+    }
 }

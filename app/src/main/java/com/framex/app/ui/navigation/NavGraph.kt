@@ -12,6 +12,7 @@ import com.framex.app.ui.screens.onboarding.OnboardingRoute
 import com.framex.app.ui.screens.overlay.OverlayCustomizationRoute
 import com.framex.app.ui.screens.permissions.PermissionsRoute
 import com.framex.app.ui.screens.splash.SplashRoute
+import com.framex.app.ui.screens.sessionlogs.SessionLogsRoute
 import com.framex.app.ui.screens.thermal.ThermalDiagnosticsRoute
 import com.framex.app.ui.screens.performance.PerformanceRoute
 
@@ -25,6 +26,7 @@ sealed class Screen(val route: String) {
     object About : Screen("about")
     object Performance : Screen("performance")
     object ThermalDiagnostics : Screen("thermal_diagnostics")
+    object SessionLogs : Screen("session_logs")
 }
 
 @Composable
@@ -54,7 +56,8 @@ fun FrameXNavGraph(
                 onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) },
                 onNavigateToAbout = { navController.navigate(Screen.About.route) },
                 onNavigateToPerformance = { navController.navigate(Screen.Performance.route) },
-                onNavigateToThermalDiagnostics = { navController.navigate(Screen.ThermalDiagnostics.route) }
+                onNavigateToThermalDiagnostics = { navController.navigate(Screen.ThermalDiagnostics.route) },
+                onNavigateToSessionLogs = { navController.navigate(Screen.SessionLogs.route) }
             )
         }
         composable(Screen.Appearance.route) {
@@ -74,6 +77,9 @@ fun FrameXNavGraph(
         }
         composable(Screen.ThermalDiagnostics.route) {
             ThermalDiagnosticsRoute(onNavigateBack = { navController.safePopBackStack() })
+        }
+        composable(Screen.SessionLogs.route) {
+            SessionLogsRoute(onNavigateBack = { navController.safePopBackStack() })
         }
     }
 }

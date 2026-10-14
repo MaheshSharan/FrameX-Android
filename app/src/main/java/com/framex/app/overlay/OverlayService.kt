@@ -26,6 +26,9 @@ class OverlayService : Service() {
     @Inject
     lateinit var settingsRepository: com.framex.app.repository.SettingsRepository
 
+    @Inject
+    lateinit var auditLogRepository: com.framex.app.gaming.SystemAuditLogRepository
+
     private var wakeLock: PowerManager.WakeLock? = null
 
     // Only hold the wake lock while the screen is actually on. Holding it for the entire
@@ -87,6 +90,11 @@ class OverlayService : Service() {
         )
 
         overlayManager.showOverlay()
+        auditLogRepository.addLog(
+            "Overlay: Service Started",
+            "Foreground service started, wake lock acquired",
+            com.framex.app.gaming.LogStatus.SUCCESS
+        )
         com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 
@@ -108,6 +116,11 @@ class OverlayService : Service() {
         overlayManager.hideOverlay()
         runCatching { unregisterReceiver(screenStateReceiver) }
         releaseWakeLock()
+        auditLogRepository.addLog(
+            "Overlay: Service Stopped",
+            "Foreground service stopped, wake lock released",
+            com.framex.app.gaming.LogStatus.INFO
+        )
         com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 

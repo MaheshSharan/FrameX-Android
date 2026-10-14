@@ -1,0 +1,19 @@
+# List of system property keys to sample from device for hardware & OEM diagnostics
+ro.product.brand
+ro.product.manufacturer
+ro.product.model
+ro.product.board
+ro.product.device
+ro.product.name
+ro.build.version.release
+ro.build.version.sdk
+ro.vivo.os.build.display.id
+ro.vivo.os.version
+ro.vivo.rom.version
+ro.vivo.product.model
+ro.vivo.os.name
+ro.hardware
+ro.soc.model
+ro.board.platform
+ro.vendor.qti.soc_model
+ro.vendor.qti.soc_id

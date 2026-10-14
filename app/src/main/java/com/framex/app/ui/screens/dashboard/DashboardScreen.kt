@@ -33,6 +33,7 @@ fun DashboardScreen(
     onNavigateToAbout: () -> Unit,
     onNavigateToPerformance: () -> Unit,
     onNavigateToThermalDiagnostics: () -> Unit,
+    onNavigateToSessionLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Documented reason: Triggers entrance fade and slide animation after first composition pass.
@@ -97,7 +98,8 @@ fun DashboardScreen(
                 // 4. Tools Section (Thermal diagnostics, Session logs)
                 item(key = "tools_section") {
                     ToolsSection(
-                        onNavigateToThermalDiagnostics = onNavigateToThermalDiagnostics
+                        onNavigateToThermalDiagnostics = onNavigateToThermalDiagnostics,
+                        onNavigateToSessionLogs = onNavigateToSessionLogs
                     )
                 }
 

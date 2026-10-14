@@ -42,6 +42,8 @@ import com.framex.app.metrics.METRIC_MODULE_REGISTRY
 import com.framex.app.metrics.metricValueFor
 import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.ui.theme.FrameXTheme
+import com.framex.app.gaming.LogStatus
+import com.framex.app.gaming.SystemAuditLogRepository
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,7 +56,8 @@ import javax.inject.Singleton
 class OverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: com.framex.app.repository.SettingsRepository,
-    private val metricsEngine: com.framex.app.metrics.MetricsEngine
+    private val metricsEngine: com.framex.app.metrics.MetricsEngine,
+    private val auditLogRepository: SystemAuditLogRepository
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
@@ -145,6 +148,7 @@ class OverlayManager @Inject constructor(
                                 val currentOrientation = context.resources.configuration.orientation
                                 val isCurrentLandscape = currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                                 settingsRepository.setOverlayPosition(isCurrentLandscape, p.x, p.y)
+                                auditLogRepository.addLog("Overlay: Position Updated", "x=${p.x}, y=${p.y} (landscape=$isCurrentLandscape)", LogStatus.INFO)
                             }
                         },
                         onModeToggle = {
@@ -154,6 +158,7 @@ class OverlayManager @Inject constructor(
                             val current = settingsRepository.overlayMode.value
                             val next = modes[(modes.indexOf(current) + 1) % modes.size]
                             settingsRepository.setOverlayMode(next)
+                            auditLogRepository.addLog("Overlay: Mode Cycled", "$current -> $next", LogStatus.INFO)
                         }
                     )
                 }
@@ -226,8 +231,10 @@ class OverlayManager @Inject constructor(
         try {
             windowManager.addView(composeView, windowParams)
             _isOverlayVisible.value = true
+            auditLogRepository.addLog("Overlay: Visible", "Mode: ${settingsRepository.overlayMode.value}, modules=${settingsRepository.enabledModules.value.size}", LogStatus.SUCCESS)
             FrameXLog.d("Overlay successfully added to WindowManager.")
         } catch (e: Exception) {
+            auditLogRepository.addLog("Overlay: Error", e.message ?: "Failed to add overlay", LogStatus.FAILED)
             FrameXLog.e("Failed to add overlay to WindowManager: ${e.message}", e)
         }
     }
@@ -243,6 +250,7 @@ class OverlayManager @Inject constructor(
         dragAccumulatorX = 0f
         dragAccumulatorY = 0f
         _isOverlayVisible.value = false
+        auditLogRepository.addLog("Overlay: Hidden", "Overlay removed from WindowManager", LogStatus.INFO)
         metricsEngine.resetSessionTimer()
     }
 

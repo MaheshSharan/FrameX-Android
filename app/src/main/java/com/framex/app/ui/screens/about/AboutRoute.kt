@@ -81,7 +81,6 @@ fun AboutRoute(
                 context.startActivity(intent)
             }
         },
-        canInstallPackages = { viewModel.canInstallPackages() },
         deviceModelInfo = viewModel.deviceModelInfo,
         modifier = modifier
     )

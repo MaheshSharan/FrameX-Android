@@ -83,6 +83,30 @@
     <string name="dashboard_no_recent_sessions_desc">Recorded gameplay sessions and performance metrics will appear here</string>
     <string name="coming_soon">Coming soon</string>
 
+    <!-- Session Logs Screen -->
+    <string name="session_logs_title">Session Logs</string>
+    <string name="session_logs_recording_active">RECORDING ACTIVE</string>
+    <string name="session_logs_recording_paused">RECORDING PAUSED</string>
+    <string name="session_logs_toggle_desc">Capture system state transitions, Shizuku shell operations, and hardware optimization events in real time.</string>
+    <string name="session_logs_stat_total">Total Events</string>
+    <string name="session_logs_stat_success">Success Rate</string>
+    <string name="session_logs_stat_errors">Errors</string>
+    <string name="session_logs_clear_logs">Clear</string>
+    <string name="session_logs_clear_confirm_title">Clear Session Logs</string>
+    <string name="session_logs_clear_confirm_desc">Clear all recorded system audit events for this session?</string>
+    <string name="session_logs_clear_action">Clear All</string>
+    <string name="session_logs_cancel_action">Cancel</string>
+    <string name="session_logs_copy_all">Export</string>
+    <string name="session_logs_copied_toast">Session audit logs copied to clipboard</string>
+    <string name="session_logs_entry_copied_toast">Log entry copied to clipboard</string>
+    <string name="session_logs_filter_all">All</string>
+    <string name="session_logs_filter_success">Succeeded</string>
+    <string name="session_logs_filter_failed">Failed</string>
+    <string name="session_logs_filter_info">Info</string>
+    <string name="session_logs_empty_title">No Logs Recorded</string>
+    <string name="session_logs_empty_desc">System optimization actions, monster mode assertions, memory boosts, and hardware commands will appear here once triggered.</string>
+    <string name="session_logs_disabled_empty_desc">Session audit recording is paused. Turn on the switch above to start capturing privileged execution logs.</string>
+
     <!-- Splash Screen -->
     <string name="splash_performance_suite">PERFORMANCE SUITE</string>
     <string name="splash_checking_updates">Checking for updates…</string>

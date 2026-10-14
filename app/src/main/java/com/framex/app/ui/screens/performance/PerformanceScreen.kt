@@ -40,7 +40,6 @@ import com.framex.app.ui.screens.performance.sections.GameLauncherSection
 import com.framex.app.ui.screens.performance.sections.GoogleAppsSection
 import com.framex.app.ui.screens.performance.sections.HeroGamingCard
 import com.framex.app.ui.screens.performance.sections.RequirementsSection
-import com.framex.app.ui.screens.performance.sections.SystemAuditLogSection
 import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
 import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
 
@@ -141,10 +140,18 @@ fun PerformanceScreen(
                         launcherGames = uiState.launcherGames,
                         perfGameList = uiState.vivoPerfGameList,
                         rawPerfGameList = uiState.rawPerfGameList,
+                        isRefreshingPerfList = uiState.isRefreshingPerfList,
+                        mergeList144 = uiState.mergeList144,
+                        raw144MergeList = uiState.raw144MergeList,
+                        isRefreshing144List = uiState.isRefreshing144List,
+                        show144MergeList = uiState.maxRefreshRate >= 144,
                         onRefreshPerfList = { onEvent(PerformanceUiEvent.RefreshVivoPerfList) },
                         onAddAllToPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllToPerfList(pkgs, onComplete)) },
                         onRemoveAllFromPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFromPerfList(pkgs, onComplete)) },
-                        onCompileAll = { pkgs, onComplete -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs, onComplete)) }
+                        onCompileAll = { pkgs, onComplete -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs, onComplete)) },
+                        onRefresh144MergeList = { onEvent(PerformanceUiEvent.Refresh144MergeList) },
+                        onAddAllTo144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllTo144MergeList(pkgs, onComplete)) },
+                        onRemoveAllFrom144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFrom144MergeList(pkgs, onComplete)) }
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                 }
@@ -161,6 +168,21 @@ fun PerformanceScreen(
                     maxRefreshRate = uiState.maxRefreshRate
                 )
                 Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Optimization sliders
+            item(key = "optimization_sliders_section") {
+                com.framex.app.ui.screens.performance.sections.OptimizationSlidersSection(
+                    isBoostingRam = uiState.isBoostingRam,
+                    showRamResult = uiState.showRamResult,
+                    isOptimizingNet = uiState.isOptimizingNet,
+                    showPingResult = uiState.showPingResult,
+                    isResettingDefaults = uiState.isResettingDefaults,
+                    showResetResult = uiState.showResetResult,
+                    onBoostRam = { onEvent(PerformanceUiEvent.BoostRam) },
+                    onCheckPing = { onEvent(PerformanceUiEvent.CheckPing) },
+                    onResetDefaults = { onEvent(PerformanceUiEvent.ResetDefaults) }
+                )
             }
 
             // Game Launcher
@@ -190,16 +212,6 @@ fun PerformanceScreen(
                 deepFreezeEnabled = uiState.deepFreezeEnabled,
                 onToggleDeepFreeze = { enabled -> onEvent(PerformanceUiEvent.ToggleDeepFreeze(enabled)) }
             )
-
-            // System Optimization Audit Console
-            item(key = "system_audit_log_section") {
-                SystemAuditLogSection(
-                    isLoggingEnabled = uiState.auditLoggingEnabled,
-                    onToggleLogging = { onEvent(PerformanceUiEvent.ToggleAuditLogging(it)) },
-                    auditLogs = uiState.vivoAuditLogs,
-                    onClearLogs = { onEvent(PerformanceUiEvent.ClearAuditLogs) }
-                )
-            }
         }
 
         // Deep Freeze Safeguard Notice Dialog
