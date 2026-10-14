@@ -68,7 +68,7 @@ open class IqooGamingOptimizer @Inject constructor(
             displaySpecs.add(CommandSpec("content insert --uri content://settings/secure --bind name:s:game_cube_temper_control --bind value:s:0", OpPriority.PRIMARY))
         }
         if (settingsRepository.vivo144FpsUnlock.value) {
-            displaySpecs.add(CommandSpec("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"1:1:1:72:144\"", OpPriority.PRIMARY))
+            displaySpecs.add(CommandSpec("settings put system gamecube_frame_interpolation_for_sr \"1:1::72:144\"", OpPriority.PRIMARY))
         }
         if (displaySpecs.isNotEmpty()) {
             ledgerExecutor.executeBatch(Stage.DISPLAY, displaySpecs)
@@ -171,8 +171,8 @@ open class IqooGamingOptimizer @Inject constructor(
         val commands = mutableListOf<String>()
 
         baselineGameCubeFrameInterpolation?.let {
-            commands.add("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"$it\"")
-        } ?: commands.add("content insert --uri content://settings/system --bind name:s:gamecube_frame_interpolation_for_sr --bind value:s:\"0:-1:0:0:0\"")
+            commands.add("settings put system gamecube_frame_interpolation_for_sr \"$it\"")
+        } ?: commands.add("settings put system gamecube_frame_interpolation_for_sr \"0:-1:0:0:0\"")
 
         baselineGameOptimizeBrightness?.let {
             commands.add("content insert --uri content://settings/system --bind name:s:game_optimize_brightness --bind value:s:\"$it\"")
