@@ -55,7 +55,7 @@ class ThermalDiagnosticsViewModel @Inject constructor(
 
     init {
         metricsEngine.setScreenOverrideModules(
-            setOf("thermal", "temp", "top_process"),
+            setOf("fps", "thermal", "temp", "top_process"),
             requesterKey = "thermal_diagnostics_screen"
         )
     }

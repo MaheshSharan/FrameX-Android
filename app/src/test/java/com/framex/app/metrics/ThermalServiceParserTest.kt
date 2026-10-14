@@ -166,8 +166,8 @@ class ThermalServiceParserTest {
         val hotspotCandidate = result.cpuCandidates.first { it.sensor.name == "cpu_hotspot_junction" }
         assertEquals(ThermalServiceParser.CpuCandidateRank.HOTSPOT_FALLBACK, hotspotCandidate.rank)
 
-        // 3. Representative CPU temperature is the core average (44.25°C), hotspot outlier is safely excluded
-        assertEquals(44.25f, result.cpuC!!, 0.001f)
+        // 3. Representative CPU temperature is the peak active core (46.0°C), hotspot outlier is safely excluded
+        assertEquals(46.0f, result.cpuC!!, 0.001f)
         assertEquals(5, result.entryCount)
         assertFalse(result.isCpuThrottling)
     }
@@ -244,7 +244,7 @@ class ThermalServiceParserTest {
         """.trimIndent()
 
         val result = ThermalServiceParser.parse(dump)!!
-        assertEquals(43.0f, result.cpuC!!, 0.001f) // Average of cpu-1-0 (42) and cpu-1-1 (44)
+        assertEquals(44.0f, result.cpuC!!, 0.001f) // Peak of cpu-1-0 (42) and cpu-1-1 (44)
         assertEquals(48.0f, result.gpuC!!, 0.001f)
         assertEquals(36.0f, result.skinC!!, 0.001f)
         assertEquals(32.0f, result.batteryC!!, 0.001f)

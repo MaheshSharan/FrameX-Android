@@ -95,6 +95,92 @@ class CommandRunnerService private constructor(
         }
     }
 
+    /**
+     * Single-IPC combined CPU telemetry collector.
+     * Reads /proc/stat (total + per-core lines) and /sys/devices/system/cpu/cpufreq/policy*
+     * (related_cpus, cpuinfo_max_freq, scaling_cur_freq) directly in-process via JVM File IO
+     * inside the Shizuku shell UID (2000) runner without forking any shell processes.
+     */
+    override fun readCpuTelemetry(): String {
+        val sb = StringBuilder(1024)
+        try {
+            val statFile = java.io.File("/proc/stat")
+            if (statFile.exists() && statFile.canRead()) {
+                BufferedReader(java.io.FileReader(statFile), 1024).use { reader ->
+                    var line: String? = reader.readLine()
+                    while (line != null) {
+                        if (line.startsWith("cpu")) {
+                            sb.append("STAT:").append(line.trim()).append('\n')
+                        } else if (sb.isNotEmpty()) {
+                            break
+                        }
+                        line = reader.readLine()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("readCpuTelemetry /proc/stat read failed", e)
+        }
+
+        try {
+            val cpufreqDir = java.io.File("/sys/devices/system/cpu/cpufreq")
+            val policyDirs = cpufreqDir.listFiles { file ->
+                file.isDirectory && file.name.startsWith("policy")
+            }
+            if (!policyDirs.isNullOrEmpty()) {
+                for (policyDir in policyDirs) {
+                    val policyId = policyDir.name.removePrefix("policy")
+                    val related = readFirstLineFast(java.io.File(policyDir, "related_cpus"))
+                        .ifEmpty { readFirstLineFast(java.io.File(policyDir, "affected_cpus")) }
+                        .ifEmpty { policyId }
+                    val maxFreq = readFirstLineFast(java.io.File(policyDir, "cpuinfo_max_freq"))
+                        .ifEmpty { readFirstLineFast(java.io.File(policyDir, "scaling_max_freq")) }
+                    val curFreq = readFirstLineFast(java.io.File(policyDir, "scaling_cur_freq"))
+                        .ifEmpty { readFirstLineFast(java.io.File(policyDir, "cpuinfo_cur_freq")) }
+
+                    if (maxFreq.isNotEmpty() || curFreq.isNotEmpty()) {
+                        sb.append("POLICY:")
+                            .append(policyId).append(':')
+                            .append(related).append(':')
+                            .append(maxFreq.ifEmpty { "0" }).append(':')
+                            .append(curFreq.ifEmpty { "0" }).append('\n')
+                    }
+                }
+            } else {
+                val cpuRoot = java.io.File("/sys/devices/system/cpu")
+                for (i in 0..15) {
+                    val freqDir = java.io.File(cpuRoot, "cpu$i/cpufreq")
+                    if (!freqDir.exists()) continue
+                    val maxFreq = readFirstLineFast(java.io.File(freqDir, "cpuinfo_max_freq"))
+                        .ifEmpty { readFirstLineFast(java.io.File(freqDir, "scaling_max_freq")) }
+                    val curFreq = readFirstLineFast(java.io.File(freqDir, "scaling_cur_freq"))
+                    if (maxFreq.isNotEmpty() || curFreq.isNotEmpty()) {
+                        sb.append("CORE:")
+                            .append(i).append(':')
+                            .append(maxFreq.ifEmpty { "0" }).append(':')
+                            .append(curFreq.ifEmpty { "0" }).append('\n')
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            com.framex.app.utils.FrameXLog.w("readCpuTelemetry cpufreq read failed", e)
+        }
+
+        return sb.toString()
+    }
+
+    private fun readFirstLineFast(file: java.io.File): String {
+        return try {
+            if (file.exists() && file.canRead()) {
+                BufferedReader(java.io.FileReader(file), 64).use { it.readLine()?.trim().orEmpty() }
+            } else {
+                ""
+            }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     override fun getThermalTemperatures(): String {
         resolvedThermalStrategy?.let { cached ->
             val cachedResult = readUsingStrategy(cached)
@@ -123,8 +209,23 @@ class CommandRunnerService private constructor(
         return appendThermalStatusProperty(readViaDumpsys(requireValid = false).orEmpty())
     }
 
+    @Volatile
+    private var cachedSystemPropertiesGet: java.lang.reflect.Method? = null
+
+    private fun readSystemPropertyFast(key: String): String {
+        return try {
+            val method = cachedSystemPropertiesGet ?: Class.forName("android.os.SystemProperties")
+                .getMethod("get", String::class.java)
+                .also { cachedSystemPropertiesGet = it }
+            (method.invoke(null, key) as? String)?.trim().orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     private fun appendThermalStatusProperty(payload: String): String {
-        val prop = executeCommand("getprop sys.thermal.status").trim()
+        val prop = readSystemPropertyFast("sys.thermal.status")
+            .ifEmpty { readSystemPropertyFast("vendor.sys.thermal.status") }
         return if (prop.isNotEmpty() && prop.all { it.isDigit() }) {
             "$payload\nsys.thermal.status: $prop\n"
         } else {
@@ -308,6 +409,45 @@ class CommandRunnerService private constructor(
             cachedThermalPaths = null
         }
 
+        // Fast-path discovery: probe /sys/class/thermal directly via JVM File inside shell UID
+        // before spawning a subshell loop.
+        val thermalDir = java.io.File("/sys/class/thermal")
+        val zoneDirs = thermalDir.listFiles { dir, name ->
+            dir.isDirectory && name.startsWith("thermal_zone")
+        }
+        if (!zoneDirs.isNullOrEmpty()) {
+            val discoveredPaths = mutableListOf<CachedThermalPath>()
+            val directSb = StringBuilder()
+            for (dir in zoneDirs) {
+                val typeFile = java.io.File(dir, "type")
+                val tempFile = java.io.File(dir, "temp")
+                if (typeFile.exists() && tempFile.exists()) {
+                    discoveredPaths.add(CachedThermalPath(typeFile, tempFile))
+                    val type = readFirstLineFast(typeFile)
+                    val temp = readFirstLineFast(tempFile)
+                    if (type.isNotEmpty() && temp.isNotEmpty()) {
+                        directSb.append(type).append(':').append(temp).append('\n')
+                    }
+                }
+            }
+            val coolingDirs = thermalDir.listFiles { dir, name ->
+                dir.isDirectory && name.startsWith("cooling_device")
+            }.orEmpty()
+            for (cDir in coolingDirs) {
+                val cType = readFirstLineFast(java.io.File(cDir, "type"))
+                val cState = readFirstLineFast(java.io.File(cDir, "cur_state"))
+                if (cType.isNotEmpty() && cState.isNotEmpty()) {
+                    directSb.append("cooling: ").append(cType).append(' ').append(cState).append('\n')
+                }
+            }
+            if (discoveredPaths.isNotEmpty()) {
+                cachedThermalPaths = discoveredPaths
+            }
+            if (directSb.isNotEmpty()) {
+                return directSb.toString()
+            }
+        }
+
         val sysfsDump = executeCommand(
             "sh -c 'for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done; for d in /sys/class/thermal/cooling_device*; do echo \"cooling: \$(cat \$d/type 2>/dev/null) \$(cat \$d/cur_state 2>/dev/null)\"; done'"
         )
@@ -316,19 +456,6 @@ class CommandRunnerService private constructor(
         }
 
         if (sysfsDump.isNotBlank() && validLines.isNotEmpty()) {
-            val discoveredPaths = mutableListOf<CachedThermalPath>()
-            val thermalDir = java.io.File("/sys/class/thermal")
-            val zoneDirs = thermalDir.listFiles { dir, name -> dir.isDirectory && name.startsWith("thermal_zone") } ?: emptyArray()
-            for (dir in zoneDirs) {
-                val typeFile = java.io.File(dir, "type")
-                val tempFile = java.io.File(dir, "temp")
-                if (typeFile.exists() && tempFile.exists()) {
-                    discoveredPaths.add(CachedThermalPath(typeFile, tempFile))
-                }
-            }
-            if (discoveredPaths.isNotEmpty()) {
-                cachedThermalPaths = discoveredPaths
-            }
             return sysfsDump
         }
         return null

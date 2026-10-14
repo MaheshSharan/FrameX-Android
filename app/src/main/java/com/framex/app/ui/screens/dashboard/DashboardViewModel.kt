@@ -30,6 +30,12 @@ class DashboardViewModel @Inject constructor(
 
     init {
         checkWhatsNew()
+        metricsEngine.setScreenOverrideModules(setOf("fps"), requesterKey = "dashboard_screen")
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "dashboard_screen")
     }
 
     private fun checkWhatsNew() {

@@ -47,7 +47,17 @@ class SessionLogger @Inject constructor(
     // user happened to enable on their overlay — so it force-enables the full set via
     // MetricsEngine's screen-override mechanism (additive, never touches the user's
     // saved overlay toggles) for the duration of the recording only.
-    private val recordingModules = setOf("thermal", "temp", "cpu", "cpu_cluster", "ram", "top_process")
+    private val recordingModules = setOf(
+        "fps",
+        "thermal",
+        "temp",
+        "battery_level",
+        "power",
+        "cpu",
+        "cpu_cluster",
+        "ram",
+        "top_process"
+    )
 
     fun startRecording() {
         _recordingStartTimestampMs = System.currentTimeMillis()
