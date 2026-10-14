@@ -166,7 +166,7 @@ class SessionLogger @Inject constructor(
                             recordedBuffer.removeAt(0)
                         }
                         recordedBuffer.add(latest)
-                        ArrayList(recordedBuffer)
+                        recordedBuffer.toList()
                     }
                     _recordedSnapshots.value = snapshotCopy
                 }
@@ -202,7 +202,7 @@ class SessionLogger @Inject constructor(
                 writeCrashSafeHeader(writer, metadata)
                 writer.flush()
 
-                while (isActive) {
+                while (kotlin.coroutines.coroutineContext.isActive) {
                     delay(CHUNK_FLUSH_INTERVAL_MS)
                     chunkBuffer.clear()
                     while (true) {
@@ -315,7 +315,7 @@ class SessionLogger @Inject constructor(
      */
     suspend fun exportToFile(): File? = withContext(Dispatchers.IO) {
         val existingFile = activeSessionFile
-        val snapshots = synchronized(bufferLock) { ArrayList(recordedBuffer) }
+        val snapshots = synchronized(bufferLock) { recordedBuffer.toList() }
             .ifEmpty {
                 if (_recordingStartTimestampMs == 0L) emptyList()
                 else metricsEngine.snapshotHistory.value.filter { it.timestampMs >= _recordingStartTimestampMs }
