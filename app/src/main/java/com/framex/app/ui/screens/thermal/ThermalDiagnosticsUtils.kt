@@ -11,69 +11,264 @@ import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.framex.app.metrics.MetricCapability
 import com.framex.app.metrics.MetricReadStatus
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.MetricsState
-import com.framex.app.ui.theme.Amber
-import com.framex.app.ui.theme.MutedBlue
-import com.framex.app.ui.theme.MutedGreen
-import com.framex.app.ui.theme.PrimaryRed
-import com.framex.app.ui.theme.Teal
+import com.framex.app.metrics.toCapability
 import java.util.Locale
+import kotlin.math.abs
 
 /** Single source of truth for human-readable thermal status text across UI and ViewModels. */
-fun getThermalStatusLabel(status: Int): String {
-    return when (status) {
-        0 -> "Normal"
-        1 -> "Light Throttling"
-        2 -> "Moderate Throttling"
-        3 -> "Severe Throttling"
-        4 -> "Critical Throttling"
-        5 -> "Emergency Mitigation"
-        6 -> "System Shutdown"
-        else -> "Level $status"
-    }
+fun getThermalStatusLabel(status: Int): String = when (status) {
+    0 -> "Normal"
+    1 -> "Light Throttling"
+    2 -> "Moderate Throttling"
+    3 -> "Severe Throttling"
+    4 -> "Critical Throttling"
+    5 -> "Emergency Mitigation"
+    6 -> "System Shutdown"
+    else -> "Level $status"
 }
 
 /** Pure helper to evaluate thermal pressure level based on status code and delta thresholds. */
-fun computeThermalPressure(status: Int, cpuDelta: Float, skinDelta: Float): String {
-    return when (status) {
-        0 -> if (cpuDelta > 1.5f || skinDelta > 1.0f) "Rising" else "Stable"
-        1, 2 -> "Elevated"
-        else -> "Critical"
+fun computeThermalPressure(status: Int, cpuDelta: Float, skinDelta: Float): String = when (status) {
+    0 -> if (cpuDelta > 1.5f || skinDelta > 1.0f) "Rising" else "Stable"
+    1, 2 -> "Elevated"
+    else -> "Critical"
+}
+
+fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricReadStatus): String = when (readStatus) {
+    MetricReadStatus.NoShizuku -> "Needs Shizuku"
+    MetricReadStatus.PermissionDenied -> "Restricted"
+    MetricReadStatus.HardwareUnsupported,
+    MetricReadStatus.EmptyOutput -> "Not Supported"
+    MetricReadStatus.ParseFailed -> "Parse Failed"
+    MetricReadStatus.Loading -> "Waiting..."
+    else -> if (present && value > 0f) String.format(Locale.US, "%.1f°C", value) else "Not Supported"
+}
+
+fun getBatteryDisplayValue(tempC: Float): String =
+    if (tempC <= 0f) "Unavailable" else String.format(Locale.US, "%.1f°C", tempC)
+
+fun getTopProcessDisplayValue(name: String?, percent: Float, readStatus: MetricReadStatus): String = when (readStatus) {
+    MetricReadStatus.NoShizuku -> "Needs Shizuku"
+    MetricReadStatus.PermissionDenied -> "Restricted"
+    MetricReadStatus.HardwareUnsupported,
+    MetricReadStatus.EmptyOutput -> "Unavailable"
+    MetricReadStatus.ParseFailed -> "Parse Failed"
+    MetricReadStatus.Loading -> "Waiting..."
+    MetricReadStatus.NoData -> "No process data"
+    MetricReadStatus.Ok -> if (name != null) "$name (${String.format(Locale.US, "%.0f", percent)}%)" else "—"
+    else -> "—"
+}
+
+/**
+ * Resolves the capability and live/historical stats for each standardized OEM thermal channel.
+ */
+fun buildStandardizedThermalChannels(
+    state: MetricsState,
+    cpuPeak: Float,
+    cpuAvg: Float,
+    cpuDelta: Float,
+    gpuPeak: Float,
+    gpuAvg: Float,
+    skinPeak: Float,
+    skinAvg: Float,
+    skinDelta: Float,
+    batteryPeak: Float,
+    batteryAvg: Float,
+    batteryDelta: Float
+): List<ThermalChannelState> {
+    fun sensorCapability(hasSensor: Boolean, tempC: Float): MetricCapability {
+        if (state.thermalReadStatus == MetricReadStatus.NoShizuku) {
+            return MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
+        }
+        if (state.thermalReadStatus == MetricReadStatus.Loading) {
+            return MetricReadStatus.Loading.toCapability(requiresShizuku = true)
+        }
+        return if (hasSensor && tempC > 0f) {
+            MetricReadStatus.Ok.toCapability(requiresShizuku = true)
+        } else {
+            MetricReadStatus.HardwareUnsupported.toCapability(requiresShizuku = false)
+        }
     }
-}
 
-fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricReadStatus): String {
-    return when (readStatus) {
-        MetricReadStatus.NoShizuku -> "Needs Shizuku"
-        MetricReadStatus.EmptyOutput -> "Not Supported"
-        MetricReadStatus.ParseFailed -> "Parse Failed"
-        MetricReadStatus.Loading -> "Waiting..."
-        else -> if (present) String.format(Locale.US, "%.1f°C", value) else "Not Supported"
+    val batteryCap = if (state.batteryTempC > 0f) {
+        MetricReadStatus.Ok.toCapability(requiresShizuku = false)
+    } else {
+        MetricReadStatus.NoData.toCapability(requiresShizuku = false)
     }
+
+    return listOf(
+        ThermalChannelState(
+            channel = StandardizedThermalChannel.SOC_COMPLEX,
+            currentTempC = state.thermalCpuC,
+            peakTempC = cpuPeak,
+            avgTempC = cpuAvg,
+            delta30sC = cpuDelta,
+            capability = sensorCapability(state.hasThermalCpu, state.thermalCpuC)
+        ),
+        ThermalChannelState(
+            channel = StandardizedThermalChannel.GPU,
+            currentTempC = state.thermalGpuC,
+            peakTempC = gpuPeak,
+            avgTempC = gpuAvg,
+            delta30sC = 0f,
+            capability = sensorCapability(state.hasThermalGpu, state.thermalGpuC)
+        ),
+        ThermalChannelState(
+            channel = StandardizedThermalChannel.CHASSIS_SKIN,
+            currentTempC = state.thermalSkinC,
+            peakTempC = skinPeak,
+            avgTempC = skinAvg,
+            delta30sC = skinDelta,
+            capability = sensorCapability(state.hasThermalSkin, state.thermalSkinC)
+        ),
+        ThermalChannelState(
+            channel = StandardizedThermalChannel.BATTERY,
+            currentTempC = state.batteryTempC,
+            peakTempC = batteryPeak,
+            avgTempC = batteryAvg,
+            delta30sC = batteryDelta,
+            capability = batteryCap
+        ),
+        ThermalChannelState(
+            channel = StandardizedThermalChannel.NPU,
+            currentTempC = state.thermalNpuC,
+            peakTempC = state.thermalNpuC,
+            avgTempC = state.thermalNpuC,
+            delta30sC = 0f,
+            capability = sensorCapability(state.hasThermalNpu, state.thermalNpuC)
+        )
+    )
 }
 
-fun getBatteryDisplayValue(tempC: Float): String {
-    return if (tempC <= 0f) "Unavailable" else String.format(Locale.US, "%.1f°C", tempC)
-}
+/**
+ * Pure single-pass O(N) KPI calculator for per-app session profiling:
+ * Computes MAX/MIN/AVG FPS, Jitter %, 1% Low FPS, SoC Temp stats, High-Temp Duration,
+ * Battery Temp Max, Power (W) Max/Min/Avg, and worst Frame Time (ms).
+ */
+fun computeSessionKpiSummary(
+    snapshots: List<MetricsEngine.MetricsSnapshot>,
+    highTempThresholdC: Float = SessionKpiSummary.HIGH_SOC_TEMP_THRESHOLD_C
+): SessionKpiSummary {
+    if (snapshots.isEmpty()) return SessionKpiSummary()
 
-fun getTopProcessDisplayValue(name: String?, percent: Float, readStatus: MetricReadStatus): String {
-    return when (readStatus) {
-        MetricReadStatus.NoShizuku -> "Needs Shizuku"
-        MetricReadStatus.EmptyOutput -> "Unavailable"
-        MetricReadStatus.ParseFailed -> "Parse Failed"
-        MetricReadStatus.Loading -> "Waiting..."
-        MetricReadStatus.NoData -> "No process data"
-        MetricReadStatus.Ok -> {
-            if (name != null) {
-                "$name (${String.format(Locale.US, "%.0f", percent)}%)"
-            } else {
-                "—"
+    val n = snapshots.size
+    val validFps = ArrayList<Int>(n)
+
+    var fpsSum = 0L
+    var maxFps = 0
+    var minFps = Int.MAX_VALUE
+    var frameDeltaSum = 0f
+    var frameDeltaCount = 0
+    var prevFps = -1
+
+    var socSum = 0f
+    var socCount = 0
+    var maxSoc = 0f
+    var minSoc = Float.MAX_VALUE
+    var highTempSec = 0
+
+    var maxBat = 0f
+    var powerSum = 0f
+    var powerCount = 0
+    var maxPower = 0f
+    var minPower = Float.MAX_VALUE
+    var maxFrameTime = 0
+
+    for (i in 0 until n) {
+        val s = snapshots[i].state
+        val fps = s.fps
+        if (fps > 0) {
+            validFps.add(fps)
+            fpsSum += fps
+            if (fps > maxFps) maxFps = fps
+            if (fps < minFps) minFps = fps
+            if (prevFps > 0) {
+                frameDeltaSum += abs(fps - prevFps).toFloat()
+                frameDeltaCount++
+            }
+            prevFps = fps
+        }
+
+        if (s.frameTimeMs > maxFrameTime) {
+            maxFrameTime = s.frameTimeMs
+        }
+
+        val socC = if (s.thermalCpuC > 0f) s.thermalCpuC else s.batteryTempC
+        if (socC > 0f) {
+            socSum += socC
+            socCount++
+            if (socC > maxSoc) maxSoc = socC
+            if (socC < minSoc) minSoc = socC
+            if (socC >= highTempThresholdC) {
+                highTempSec++
             }
         }
-        else -> "—"
+
+        if (s.batteryTempC > maxBat) {
+            maxBat = s.batteryTempC
+        }
+
+        if (s.powerWatts > 0f) {
+            powerSum += s.powerWatts
+            powerCount++
+            if (s.powerWatts > maxPower) maxPower = s.powerWatts
+            if (s.powerWatts < minPower) minPower = s.powerWatts
+        }
     }
+
+    val fpsCount = validFps.size
+    val avgFps = if (fpsCount > 0) fpsSum.toFloat() / fpsCount else 0f
+    val resolvedMinFps = if (minFps == Int.MAX_VALUE) 0f else minFps.toFloat()
+
+    // 1% Low FPS: average of the lowest 1% of non-zero FPS samples (at least 1 sample)
+    val onePercentLow = if (fpsCount > 0) {
+        validFps.sort()
+        val tailCount = (fpsCount / 100).coerceAtLeast(1)
+        var tailSum = 0L
+        for (idx in 0 until tailCount) {
+            tailSum += validFps[idx]
+        }
+        tailSum.toFloat() / tailCount
+    } else {
+        0f
+    }
+
+    // Jitter %: normalized frame-to-frame variance + janky frame ratio
+    val jitterPct = if (avgFps > 0f && frameDeltaCount > 0) {
+        val meanDelta = frameDeltaSum / frameDeltaCount
+        ((meanDelta / avgFps) * 100f).coerceIn(0f, 100f)
+    } else {
+        0f
+    }
+
+    val durationSec = if (n >= 2) {
+        ((snapshots.last().timestampMs - snapshots.first().timestampMs) / 1000L).toInt().coerceAtLeast(n)
+    } else {
+        n
+    }
+
+    return SessionKpiSummary(
+        sampleCount = n,
+        durationSec = durationSec,
+        maxFps = maxFps.toFloat(),
+        minFps = resolvedMinFps,
+        avgFps = avgFps,
+        jitterPercent = jitterPct,
+        onePercentLowFps = onePercentLow,
+        avgSocTempC = if (socCount > 0) socSum / socCount else 0f,
+        maxSocTempC = maxSoc,
+        minSocTempC = if (minSoc == Float.MAX_VALUE) 0f else minSoc,
+        highTempDurationSec = highTempSec,
+        maxBatteryTempC = maxBat,
+        avgPowerWatts = if (powerCount > 0) powerSum / powerCount else 0f,
+        maxPowerWatts = maxPower,
+        minPowerWatts = if (minPower == Float.MAX_VALUE) 0f else minPower,
+        maxFrameTimeMs = maxFrameTime
+    )
 }
 
 fun evaluateLikelyCause(
@@ -166,6 +361,13 @@ fun formatSecondsAgo(secondsAgo: Int): String {
     }
 }
 
+fun formatDurationMinSec(totalSec: Int): String {
+    if (totalSec <= 0) return "0s"
+    val mins = totalSec / 60
+    val secs = totalSec % 60
+    return if (mins > 0) "${mins}m${String.format(Locale.US, "%02ds", secs)}" else "${secs}s"
+}
+
 fun plateBgForLabel(label: String): Color = when (label) {
     "CPU" -> Color(0xFFEF4444).copy(alpha = 0.14f)
     "GPU" -> Color(0xFF3B82F6).copy(alpha = 0.14f)
@@ -214,24 +416,20 @@ fun buildDiagnosticSummaryText(
     state: MetricsState,
     snapshots: List<MetricsEngine.MetricsSnapshot>
 ): String {
-    val recent = snapshots.takeLast(60)
-    val maxCpu = recent.maxOfOrNull { it.state.thermalCpuC } ?: state.thermalCpuC
-    val maxSkin = recent.maxOfOrNull { it.state.thermalSkinC } ?: state.thermalSkinC
-    val avgFps = if (recent.isNotEmpty()) recent.map { it.state.fps }.average().toInt() else state.fps
-    val minFps = recent.minOfOrNull { it.state.fps } ?: state.fps
-    val maxJank = recent.maxOfOrNull { it.state.jankyFrames } ?: state.jankyFrames
+    val kpi = computeSessionKpiSummary(snapshots.ifEmpty {
+        listOf(MetricsEngine.MetricsSnapshot(System.currentTimeMillis(), state))
+    })
     val topProcess = state.topProcessName ?: "None"
-
     val statusText = getThermalStatusLabel(state.thermalStatus)
 
     return """
-### FrameX Thermal Diagnostic Summary
+### FrameX Performance & Thermal Diagnostic Report
 - **Device**: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android ${android.os.Build.VERSION.RELEASE}, API ${android.os.Build.VERSION.SDK_INT})
 - **System Thermal State**: $statusText
-- **CPU Peak (60s)**: ${String.format(Locale.US, "%.1f°C", maxCpu)}
-- **Skin Peak (60s)**: ${String.format(Locale.US, "%.1f°C", maxSkin)}
-- **FPS Avg / Min**: $avgFps / $minFps FPS
-- **Jank Peak**: $maxJank frames
+- **FPS (Max / Avg / Min / 1% Low)**: ${String.format(Locale.US, "%.0f / %.1f / %.0f / %.1f FPS", kpi.maxFps, kpi.avgFps, kpi.minFps, kpi.onePercentLowFps)}
+- **Frame Jitter**: ${String.format(Locale.US, "%.1f%%", kpi.jitterPercent)} (Max Frame Time: ${kpi.maxFrameTimeMs} ms)
+- **SoC Temp (Max / Avg)**: ${String.format(Locale.US, "%.1f°C / %.1f°C", kpi.maxSocTempC, kpi.avgSocTempC)}
+- **Battery Peak / Avg Power**: ${String.format(Locale.US, "%.1f°C / %.2f W", kpi.maxBatteryTempC, kpi.avgPowerWatts)}
 - **Top Process**: $topProcess (${String.format(Locale.US, "%.0f%%", state.topProcessCpuPercent)})
 """.trimIndent()
 }

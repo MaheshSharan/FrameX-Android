@@ -2,7 +2,10 @@ package com.framex.app.ui.screens.overlay
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.dp
+import com.framex.app.metrics.MetricCapability
 import com.framex.app.metrics.MetricModuleId
+import com.framex.app.metrics.MetricReadStatus
+import com.framex.app.metrics.toCapability
 
 /** Exact rendered height every module row must occupy — see ReorderableList contract. */
 val MODULE_ROW_HEIGHT = 84.dp
@@ -16,7 +19,8 @@ val OVERLAY_MODES = listOf("Minimal", "Compact", "Expanded")
 data class ModuleRowState(
     val id: MetricModuleId,
     val enabled: Boolean,
-    val showIcon: Boolean = true
+    val showIcon: Boolean = true,
+    val capability: MetricCapability = MetricReadStatus.Ok.toCapability()
 )
 
 @Immutable

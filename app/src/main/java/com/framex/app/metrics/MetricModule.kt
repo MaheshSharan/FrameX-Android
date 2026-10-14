@@ -249,5 +249,49 @@ fun thermalStatusShortLabel(
     return advisory.shortLabel
 }
 
-private const val KBPS_PER_MBPS = 1024f
+/**
+ * Resolves the hardware & permission capability for a given overlay [MetricModuleId] in O(1) time.
+ */
+fun resolveModuleCapability(
+    id: MetricModuleId,
+    metricsState: MetricsState,
+    isShizukuReady: Boolean
+): MetricCapability = when (id) {
+    MetricModuleId.FPS -> {
+        if (!isShizukuReady) {
+            MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
+        } else {
+            metricsState.fpsReadStatus.toCapability(requiresShizuku = true)
+        }
+    }
+    MetricModuleId.CPU_FREQUENCY,
+    MetricModuleId.CPU_CLUSTERS -> {
+        if (metricsState.cpuReadStatus == MetricReadStatus.PermissionDenied ||
+            metricsState.cpuReadStatus == MetricReadStatus.NoShizuku
+        ) {
+            metricsState.cpuReadStatus.toCapability(requiresShizuku = !isShizukuReady)
+        } else {
+            MetricReadStatus.Ok.toCapability(requiresShizuku = false)
+        }
+    }
+    MetricModuleId.THERMAL_MONITOR -> {
+        if (!isShizukuReady) {
+            MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
+        } else if (metricsState.thermalReadStatus == MetricReadStatus.HardwareUnsupported ||
+            metricsState.thermalReadStatus == MetricReadStatus.EmptyOutput
+        ) {
+            MetricReadStatus.HardwareUnsupported.toCapability(requiresShizuku = true)
+        } else {
+            MetricReadStatus.Ok.toCapability(requiresShizuku = true)
+        }
+    }
+    MetricModuleId.RAM_USAGE,
+    MetricModuleId.BATTERY_TEMPERATURE,
+    MetricModuleId.BATTERY_LEVEL,
+    MetricModuleId.CLOCK,
+    MetricModuleId.SESSION_TIMER,
+    MetricModuleId.NETWORK_SPEED,
+    MetricModuleId.PING -> MetricReadStatus.Ok.toCapability(requiresShizuku = false)
+}
 
+private const val KBPS_PER_MBPS = 1024f

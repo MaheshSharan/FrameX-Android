@@ -49,7 +49,7 @@ private fun getModuleCategoryColor(id: MetricModuleId): Color = when (id) {
 
 /**
  * Interactive row item for a single metric module with category-tinted squircle,
- * title/preview values, explicit [Icon] toggle pill, enable switch, and drag handle.
+ * title/preview values, capability status badge, explicit [Icon] toggle pill, enable switch, and drag handle.
  */
 @Composable
 fun ModuleRow(
@@ -111,23 +111,53 @@ fun ModuleRow(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Title and preview sample value
+        // Title, capability badge, and preview sample value / explanation
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = info.displayName,
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = info.displayName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (!module.capability.isAvailable) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFF59E0B).copy(alpha = 0.16f))
+                            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = module.capability.shortBadge,
+                            color = Color(0xFFFBBF24),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = info.previewSampleValue,
-                color = Color(0xFF9E9E9E),
+                text = if (module.capability.isAvailable) {
+                    info.previewSampleValue
+                } else {
+                    module.capability.userExplanation
+                },
+                color = if (module.capability.isAvailable) {
+                    Color(0xFF9E9E9E)
+                } else {
+                    Color(0xFFF59E0B).copy(alpha = 0.85f)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 fontSize = 11.sp,
                 maxLines = 1,
