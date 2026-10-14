@@ -231,6 +231,7 @@ class OverlayManager @Inject constructor(
         try {
             windowManager.addView(composeView, windowParams)
             _isOverlayVisible.value = true
+            metricsEngine.setOverlayActive(true)
             auditLogRepository.addLog("Overlay: Visible", "Mode: ${settingsRepository.overlayMode.value}, modules=${settingsRepository.enabledModules.value.size}", LogStatus.SUCCESS)
             FrameXLog.d("Overlay successfully added to WindowManager.")
         } catch (e: Exception) {
@@ -250,6 +251,7 @@ class OverlayManager @Inject constructor(
         dragAccumulatorX = 0f
         dragAccumulatorY = 0f
         _isOverlayVisible.value = false
+        metricsEngine.setOverlayActive(false)
         auditLogRepository.addLog("Overlay: Hidden", "Overlay removed from WindowManager", LogStatus.INFO)
         metricsEngine.resetSessionTimer()
     }

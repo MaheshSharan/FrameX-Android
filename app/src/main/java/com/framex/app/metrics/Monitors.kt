@@ -13,45 +13,28 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import java.io.BufferedReader
+import java.io.FileReader
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal data class CpuTimes(val total: Long, val idle: Long)
 
 internal object CpuStatParser {
     fun parseTotalCpuLine(lines: List<String>): CpuTimes? {
-        val parts = lines.firstOrNull()
-            ?.trim()
-            ?.split("\\s+".toRegex())
-            ?: return null
-
-        if (parts.size < 5 || parts[0] != "cpu") return null
-
-        val values = parts.drop(1).map { it.toLongOrNull() ?: return null }
-        val user = values.getOrNull(0) ?: return null
-        val nice = values.getOrNull(1) ?: return null
-        val system = values.getOrNull(2) ?: return null
-        val idle = values.getOrNull(3) ?: return null
-        val iowait = values.getOrNull(4) ?: 0L
-        val irq = values.getOrNull(5) ?: 0L
-        val softirq = values.getOrNull(6) ?: 0L
-        val steal = values.getOrNull(7) ?: 0L
-
-        return CpuTimes(
-            total = user + nice + system + idle + iowait + irq + softirq + steal,
-            idle = idle + iowait
-        )
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("cpu ")) {
+                return CpuTopologyParser.parseCpuTimeLine(trimmed)
+            }
+        }
+        return null
     }
 
     fun calculateUsage(previous: CpuTimes, current: CpuTimes): Int? {
-        val diffTotal = current.total - previous.total
-        val diffIdle = current.idle - previous.idle
-        if (diffTotal <= 0L || diffIdle < 0L) return null
-
-        return (((diffTotal - diffIdle).toFloat() / diffTotal) * 100f)
-            .roundToInt()
-            .coerceIn(0, 100)
+        return CpuTopologyParser.calculateUsagePercent(previous, current)
     }
 }
 
@@ -60,46 +43,31 @@ class FpsMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuManager: ShizukuManager
 ) {
-    // fps: rolling averageFPS (existing behavior, unchanged).
-    // jankyFrames: frames counted as janky in the CURRENT accumulation window from
-    // the same `--timestats -dump` call — explains "FPS reads fine but feels laggy":
-    // averageFPS is a mean over the window, so irregular/stuttering frame delivery
-    // can still average out to a normal-looking number while jankyFrames stays high.
-    data class FpsState(val fps: Int, val jankyFrames: Int)
+    data class FpsState(
+        val fps: Int = 0,
+        val jankyFrames: Int = 0,
+        val totalFrames: Int = 0,
+        val maxFrameTimeMs: Int = 0,
+        val readStatus: MetricReadStatus = MetricReadStatus.Loading
+    )
 
-    // Exact approach decoded from PerfStats smali (OverlayService$FPSMonitor.smali):
-    //
-    // TIMING (from smali constants 0xbb8=3000, 0x3e8=1000):
-    //   Clear condition: System.currentTimeMillis() % 3000 < 1000
-    //   Poll interval: 1000ms  (Handler.postDelayed 1000ms)
-    //
-    // WHY wall-clock clear beats poll-counter clear:
-    //   A poll-counter "every 3 polls" clears, then the VERY NEXT poll dumps a
-    //   freshly-cleared SurfaceFlinger → averageFPS absent → emit 0 → visible dropout.
-    //   Wall-clock ensures ≥2 full seconds of frame accumulation before the next clear,
-    //   so the poll right after a clear always has real data.
-    //
-    // HOLD LAST KNOWN: if a dump returns 0 (e.g. right after clear), keep showing
-    //   the last real value instead of flashing 0. PerfStats does the same via Handler.
     val fpsState: Flow<FpsState> = flow {
         var initialized = false
         var lastKnownFps = 0
 
         while (true) {
             val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                    shizukuManager.hasPermission.value
+                shizukuManager.hasPermission.value
 
             if (shizukuReady) {
                 try {
                     if (!initialized) {
-                        // Clear any stale stats and start fresh accumulation.
-                        // Do NOT dump yet — SurfaceFlinger needs ≥1 second to collect frames.
                         shizukuManager.executeCommand(
                             "dumpsys SurfaceFlinger --timestats -clear -enable"
                         )
                         initialized = true
+                        emit(FpsState(fps = lastKnownFps, readStatus = MetricReadStatus.Loading))
                     } else {
-                        // Step 1: dump the accumulated average (same as PerfStats step 1)
                         val output = shizukuManager.executeCommand(
                             "dumpsys SurfaceFlinger --timestats -dump"
                         )
@@ -108,7 +76,7 @@ class FpsMonitor @Inject constructor(
                             .find(output)
                             ?.groupValues?.get(1)
                             ?.toFloatOrNull()
-                            ?.toInt()
+                            ?.roundToInt()
                             ?: 0
 
                         val janky = JANKY_REGEX
@@ -117,13 +85,26 @@ class FpsMonitor @Inject constructor(
                             ?.toIntOrNull()
                             ?: 0
 
-                        // Step 2: show result — hold last known if dump returned nothing
-                        if (parsed > 0) lastKnownFps = parsed
-                        emit(FpsState(lastKnownFps, janky))
+                        val total = TOTAL_FRAMES_REGEX
+                            .find(output)
+                            ?.groupValues?.get(1)
+                            ?.toIntOrNull()
+                            ?: 0
 
-                        // Step 3: PerfStats exact clear logic (smali: rem-long % 3000 < 1000).
-                        // Only clear during the first 1000ms of each 3000ms wall-clock cycle.
-                        // Guarantees ≥2 seconds of accumulation before the next clear fires.
+                        if (parsed > 0) lastKnownFps = parsed
+                        val frameTimeMs = estimateWorstFrameTimeMs(lastKnownFps, janky)
+                        val status = if (output.isBlank()) MetricReadStatus.EmptyOutput else MetricReadStatus.Ok
+
+                        emit(
+                            FpsState(
+                                fps = lastKnownFps,
+                                jankyFrames = janky,
+                                totalFrames = total,
+                                maxFrameTimeMs = frameTimeMs,
+                                readStatus = status
+                            )
+                        )
+
                         if (System.currentTimeMillis() % 3000L < 1000L) {
                             shizukuManager.executeCommand(
                                 "dumpsys SurfaceFlinger --timestats -clear -enable"
@@ -131,20 +112,31 @@ class FpsMonitor @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    emit(FpsState(lastKnownFps, 0)) // hold last known; never flash 0 on transient error
+                    emit(FpsState(fps = lastKnownFps, readStatus = MetricReadStatus.ParseFailed))
                 }
             } else {
                 initialized = false
                 lastKnownFps = 0
-                emit(FpsState(0, 0))
+                emit(FpsState(fps = 0, readStatus = MetricReadStatus.NoShizuku))
             }
             delay(1000)
+        }
+    }
+
+    private fun estimateWorstFrameTimeMs(fps: Int, jankyFrames: Int): Int {
+        if (fps <= 0) return 0
+        val baseMs = 1000f / fps.coerceAtLeast(1)
+        return if (jankyFrames > 0) {
+            (baseMs * (1f + (jankyFrames.coerceAtMost(10) * 0.35f))).roundToInt().coerceAtMost(250)
+        } else {
+            baseMs.roundToInt()
         }
     }
 
     companion object {
         private val FPS_REGEX = Regex("averageFPS\\s*=\\s*([0-9.]+)")
         private val JANKY_REGEX = Regex("missedFrames\\s*=\\s*([0-9]+)")
+        private val TOTAL_FRAMES_REGEX = Regex("totalFrames\\s*=\\s*([0-9]+)")
     }
 }
 
@@ -152,165 +144,49 @@ class FpsMonitor @Inject constructor(
 class CpuMonitor @Inject constructor(
     private val shizukuManager: ShizukuManager
 ) {
-    data class CpuClusterState(val effMhz: Int, val perfMhz: Int, val ultraMhz: Int)
-    private data class CpuPolicy(val currentMhz: Int, val maxMhz: Int)
-
-    // Expose discovered CPU frequency policy groups, mapped by max clock.
-    val cpuClusterUsage: Flow<CpuClusterState> = flow {
+    /**
+     * Unified O(1) CPU telemetry stream emitting peak MHz, total usage %,
+     * and dynamic 1..N cluster states from a single read cycle per second.
+     */
+    val cpuSnapshot: Flow<CpuTelemetrySnapshot> = flow {
+        var previousTimes: Map<Int, CpuTimes> = emptyMap()
         while (true) {
-            emit(readClusterState())
+            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
+                shizukuManager.hasPermission.value
+
+            val raw = if (shizukuReady) {
+                runCatching { shizukuManager.readCpuTelemetry() }.getOrDefault("")
+            } else {
+                ""
+            }
+
+            val parsed = if (raw.isNotBlank()) {
+                CpuTopologyParser.parseTelemetryPayload(raw, previousTimes)
+            } else {
+                CpuTopologyParser.readLocalFallback(previousTimes, shizukuReady)
+            }
+
+            previousTimes = parsed.second
+            emit(parsed.first)
             delay(1000)
         }
-    }
-
-    // Probed once at startup (0..15 covers any 4, 6, 8, 10, or 16-core SoC layout)
-    private val discoveredCoreFreqFiles: List<java.io.File> = (0..15).mapNotNull { i ->
-        val file = java.io.File("/sys/devices/system/cpu/cpu$i/cpufreq/scaling_cur_freq")
-        if (file.exists() && file.canRead()) file else null
-    }
-
-    // Dynamic peak CPU frequency across all discovered active cores (zero runtime GC allocation)
-    val cpuUsage: Flow<Int> = flow {
-        while (true) {
-            var peakMhz = 0
-            for (i in 0 until discoveredCoreFreqFiles.size) {
-                val curMhz = readMhz(discoveredCoreFreqFiles[i])
-                if (curMhz > peakMhz) {
-                    peakMhz = curMhz
-                }
-            }
-            emit(if (peakMhz > 0) peakMhz else readFreq(0))
-            delay(1000)
-        }
-    }
-
-    // System-wide CPU utilization percentage (0-100%) parsed from /proc/stat
-    val cpuPercentageUsage: Flow<Int?> = flow {
-        var previousCpuTimes: CpuTimes? = null
-        while (true) {
-            try {
-                val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
-                    try {
-                        shizukuManager.readProcStat()
-                    } catch (e: Exception) {
-                        ""
-                    }
-                } else {
-                    ""
-                }
-                
-                val lines = if (output.isNotEmpty()) {
-                    output.lines()
-                } else {
-                    try {
-                        java.io.File("/proc/stat").readLines()
-                    } catch (e: Exception) {
-                        emptyList()
-                    }
-                }
-
-                val currentCpuTimes = CpuStatParser.parseTotalCpuLine(lines)
-                val previous = previousCpuTimes
-                previousCpuTimes = currentCpuTimes
-
-                if (currentCpuTimes != null && previous != null) {
-                    emit(CpuStatParser.calculateUsage(previous, currentCpuTimes))
-                } else {
-                    emit(null)
-                }
-            } catch (e: Exception) {
-                emit(null)
-            }
-            delay(1000)
-        }
-    }
-
-    private fun readClusterState(): CpuClusterState {
-        val policies = readCpuPolicies().sortedBy { it.maxMhz }
-        return when (policies.size) {
-            0 -> CpuClusterState(0, 0, 0)
-            1 -> CpuClusterState(policies[0].currentMhz, 0, 0)
-            2 -> {
-                // Issue #84: 2-cluster architecture support (e.g. Snapdragon 8 Elite / Oryon without efficiency cores).
-                // If top policy max is >= 2.8GHz, it is a Performance + Ultra configuration.
-                if (policies[1].maxMhz >= TWO_CLUSTER_ULTRA_THRESHOLD_MHZ) {
-                    CpuClusterState(
-                        effMhz = 0,
-                        perfMhz = policies[0].currentMhz,
-                        ultraMhz = policies[1].currentMhz
-                    )
-                } else {
-                    CpuClusterState(
-                        effMhz = policies[0].currentMhz,
-                        perfMhz = policies[1].currentMhz,
-                        ultraMhz = 0
-                    )
-                }
-            }
-            else -> CpuClusterState(
-                effMhz = policies.first().currentMhz,
-                perfMhz = policies[policies.lastIndex - 1].currentMhz,
-                ultraMhz = policies.last().currentMhz
-            )
-        }
-    }
-
-    private fun readCpuPolicies(): List<CpuPolicy> {
-        val policyDir = java.io.File("/sys/devices/system/cpu/cpufreq")
-        val policies = policyDir.listFiles { file -> file.isDirectory && file.name.startsWith("policy") }
-            ?.mapNotNull { policy ->
-                val current = readMhz(policy.resolve("scaling_cur_freq"))
-                val max = readMhz(policy.resolve("cpuinfo_max_freq"))
-                if (current > 0 || max > 0) CpuPolicy(current, max.coerceAtLeast(current)) else null
-            }
-            .orEmpty()
-
-        if (policies.isNotEmpty()) return policies
-
-        return java.io.File("/sys/devices/system/cpu")
-            .listFiles { file -> file.isDirectory && file.name.matches(Regex("cpu\\d+")) }
-            ?.mapNotNull { cpu ->
-                val freqDir = cpu.resolve("cpufreq")
-                val current = readMhz(freqDir.resolve("scaling_cur_freq"))
-                val max = readMhz(freqDir.resolve("cpuinfo_max_freq"))
-                if (current > 0 || max > 0) CpuPolicy(current, max.coerceAtLeast(current)) else null
-            }
-            .orEmpty()
-            .distinctBy { it.maxMhz }
-    }
-
-    private fun readFreq(coreIndex: Int): Int {
-        return readMhz(java.io.File("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_cur_freq"))
-    }
-
-    private fun readMhz(file: java.io.File): Int {
-        return try {
-            val raw = file.readText().trim()
-            (raw.toIntOrNull() ?: 0) / KHZ_TO_MHZ
-        } catch (e: Exception) {
-            0
-        }
-    }
-
-    companion object {
-        private const val KHZ_TO_MHZ = 1000
-        // Issue #84: 2-cluster CPU architecture threshold (e.g. Snapdragon 8 Elite / Oryon without efficiency cores).
-        // If the top policy max frequency is >= 2.8 GHz (2800 MHz), it is classified as Performance + Ultra.
-        private const val TWO_CLUSTER_ULTRA_THRESHOLD_MHZ = 2800
     }
 }
 
 @Singleton
 class RamMonitor @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager
+    @ApplicationContext private val context: Context
 ) {
-    data class RamState(val usedGb: Float, val totalGb: Float)
+    data class RamState(
+        val usedGb: Float,
+        val totalGb: Float,
+        val readStatus: MetricReadStatus = MetricReadStatus.Ok
+    )
 
     val ramUsage: Flow<RamState> = flow {
         while (true) {
             val state = try {
-                parseMemInfo()
+                parseMemInfoFast() ?: fallbackRam(context)
             } catch (e: Exception) {
                 fallbackRam(context)
             }
@@ -319,40 +195,63 @@ class RamMonitor @Inject constructor(
         }
     }
 
-    private fun parseMemInfo(): RamState {
+    /**
+     * O(1) early-exit reader for /proc/meminfo.
+     * MemTotal and MemAvailable reside within the first 5 lines on all Linux 3.14+ kernels.
+     */
+    private fun parseMemInfoFast(): RamState? {
         val file = java.io.File("/proc/meminfo")
-        if (file.exists()) {
-            val lines = file.readLines()
-            var totalKb = 0f
-            var availKb = -1f
-            var freeKb = 0f
-            var buffersKb = 0f
-            var cachedKb = 0f
-            for (line in lines) {
-                val parts = line.split(":")
-                if (parts.size == 2) {
-                    val key = parts[0].trim()
-                    val valStr = parts[1].trim().split(WHITESPACE_REGEX)[0].trim()
-                    val value = valStr.toFloatOrNull() ?: 0f
-                    when (key) {
-                        "MemTotal" -> totalKb = value
-                        "MemAvailable" -> availKb = value
-                        "MemFree" -> freeKb = value
-                        "Buffers" -> buffersKb = value
-                        "Cached" -> cachedKb = value
-                    }
+        if (!file.exists() || !file.canRead()) return null
+
+        var totalKb = -1L
+        var availKb = -1L
+        var freeKb = 0L
+        var buffersKb = 0L
+        var cachedKb = 0L
+
+        BufferedReader(FileReader(file), 512).use { reader ->
+            var line: String? = reader.readLine()
+            var linesRead = 0
+            while (line != null && linesRead < 12) {
+                linesRead++
+                when {
+                    line.startsWith("MemTotal:") -> totalKb = extractKbValue(line)
+                    line.startsWith("MemAvailable:") -> availKb = extractKbValue(line)
+                    line.startsWith("MemFree:") -> freeKb = extractKbValue(line)
+                    line.startsWith("Buffers:") -> buffersKb = extractKbValue(line)
+                    line.startsWith("Cached:") -> cachedKb = extractKbValue(line)
                 }
+                if (totalKb > 0L && availKb >= 0L) break
+                line = reader.readLine()
             }
-            val usedKb = if (availKb >= 0f) {
-                totalKb - availKb
-            } else {
-                totalKb - freeKb - buffersKb - cachedKb
-            }
-            // Return RAM usage in GB
-            return RamState(usedKb / (1024f * 1024f), totalKb / (1024f * 1024f))
-        } else {
-            return fallbackRam(context)
         }
+
+        if (totalKb <= 0L) return null
+        val usedKb = if (availKb >= 0L) {
+            (totalKb - availKb).coerceAtLeast(0L)
+        } else {
+            (totalKb - freeKb - buffersKb - cachedKb).coerceAtLeast(0L)
+        }
+        return RamState(
+            usedGb = usedKb.toFloat() / KB_PER_GB,
+            totalGb = totalKb.toFloat() / KB_PER_GB,
+            readStatus = MetricReadStatus.Ok
+        )
+    }
+
+    private fun extractKbValue(line: String): Long {
+        var acc = 0L
+        var foundDigit = false
+        for (i in 0 until line.length) {
+            val ch = line[i]
+            if (ch in '0'..'9') {
+                foundDigit = true
+                acc = acc * 10L + (ch - '0')
+            } else if (foundDigit) {
+                break
+            }
+        }
+        return if (foundDigit) acc else -1L
     }
 
     private fun fallbackRam(context: Context): RamState {
@@ -360,24 +259,32 @@ class RamMonitor @Inject constructor(
         val info = ActivityManager.MemoryInfo()
         am.getMemoryInfo(info)
         return RamState(
-            usedGb = (info.totalMem - info.availMem).toFloat() / (1024 * 1024 * 1024),
-            totalGb = info.totalMem.toFloat() / (1024 * 1024 * 1024)
+            usedGb = (info.totalMem - info.availMem).toFloat() / BYTES_PER_GB,
+            totalGb = info.totalMem.toFloat() / BYTES_PER_GB,
+            readStatus = MetricReadStatus.Ok
         )
     }
 
     companion object {
-        private val WHITESPACE_REGEX = Regex("\\s+")
+        private const val KB_PER_GB = 1024f * 1024f
+        private const val BYTES_PER_GB = 1024f * 1024f * 1024f
     }
 }
 
 @Singleton
 class NetworkMonitor @Inject constructor() {
-    data class NetworkState(val rxSpeedKbps: Float, val txSpeedKbps: Float)
+    data class NetworkState(
+        val rxSpeedKbps: Float,
+        val txSpeedKbps: Float,
+        val readStatus: MetricReadStatus = MetricReadStatus.Ok
+    )
 
     val networkSpeed: Flow<NetworkState> = flow {
-        // Guard: on some devices/builds TrafficStats is not supported.
         if (TrafficStats.getTotalRxBytes() == TrafficStats.UNSUPPORTED.toLong()) {
-            while (true) { emit(NetworkState(0f, 0f)); delay(2000) }
+            while (true) {
+                emit(NetworkState(0f, 0f, MetricReadStatus.HardwareUnsupported))
+                delay(2000)
+            }
         }
         var previousRx = TrafficStats.getTotalRxBytes()
         var previousTx = TrafficStats.getTotalTxBytes()
@@ -393,12 +300,15 @@ class NetworkMonitor @Inject constructor() {
             if (timeDiffSec > 0 && currentRx >= 0 && currentTx >= 0) {
                 val rxSpeedKbps = ((currentRx - previousRx) / 1024.0f) / timeDiffSec
                 val txSpeedKbps = ((currentTx - previousTx) / 1024.0f) / timeDiffSec
-                emit(NetworkState(
-                    rxSpeedKbps.coerceAtLeast(0f),
-                    txSpeedKbps.coerceAtLeast(0f)
-                ))
+                emit(
+                    NetworkState(
+                        rxSpeedKbps = rxSpeedKbps.coerceAtLeast(0f),
+                        txSpeedKbps = txSpeedKbps.coerceAtLeast(0f),
+                        readStatus = MetricReadStatus.Ok
+                    )
+                )
             } else {
-                emit(NetworkState(0f, 0f))
+                emit(NetworkState(0f, 0f, MetricReadStatus.NoData))
             }
 
             previousRx = currentRx
@@ -412,43 +322,93 @@ class NetworkMonitor @Inject constructor() {
 class BatteryMonitor @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    val batteryTemp: Flow<Float> = flow {
+    data class BatteryState(
+        val tempC: Float = 0f,
+        val level: Int = -1,
+        val voltageMv: Int = 0,
+        val currentMa: Float = 0f,
+        val powerWatts: Float = 0f,
+        val readStatus: MetricReadStatus = MetricReadStatus.Ok
+    )
+
+    val batteryState: Flow<BatteryState> = flow {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         while (true) {
-            emit(readBatteryTemp(context))
+            emit(readBatterySnapshot(context, batteryManager))
+            delay(BATTERY_POLL_INTERVAL_MS)
+        }
+    }
+
+    val batteryTemp: Flow<Float> = flow {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        while (true) {
+            emit(readBatterySnapshot(context, batteryManager).tempC)
             delay(BATTERY_POLL_INTERVAL_MS)
         }
     }
 
     val batteryLevel: Flow<Int> = flow {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         while (true) {
-            emit(readBatteryLevel(context))
+            emit(readBatterySnapshot(context, batteryManager).level)
             delay(BATTERY_POLL_INTERVAL_MS)
         }
     }
 
-    private fun readBatteryTemp(context: Context): Float {
+    private fun readBatterySnapshot(
+        context: Context,
+        batteryManager: BatteryManager?
+    ): BatteryState {
         val intent = context.registerReceiver(
-            null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            null,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         )
-        val raw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
-        return raw / 10.0f
-    }
+        val rawTemp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
+        val tempC = rawTemp / 10.0f
 
-    private fun readBatteryLevel(context: Context): Int {
-        val intent = context.registerReceiver(
-            null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        )
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        return if (level >= 0 && scale > 0) {
+        val normalizedLevel = if (level >= 0 && scale > 0) {
             ((level * 100f) / scale).toInt().coerceIn(0, 100)
         } else {
             -1
         }
+
+        val rawVoltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+        // Some OEMs report voltage in mV (e.g., 3850) and a few report in uV or V.
+        val voltageMv = when {
+            rawVoltage > 100_000 -> rawVoltage / 1000
+            rawVoltage in 1..20 -> rawVoltage * 1000
+            else -> rawVoltage
+        }
+
+        val rawCurrent = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0
+        val currentMa = if (rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
+            val absVal = abs(rawCurrent.toLong()).toFloat()
+            // Normalize uA (> 20,000) vs mA
+            if (absVal > 20_000f) absVal / 1000f else absVal
+        } else {
+            0f
+        }
+
+        val powerWatts = if (voltageMv > 0 && currentMa > 0f) {
+            ((voltageMv.toFloat() * currentMa) / 1_000_000f).coerceIn(0f, 35f)
+        } else {
+            0f
+        }
+
+        return BatteryState(
+            tempC = tempC,
+            level = normalizedLevel,
+            voltageMv = voltageMv,
+            currentMa = currentMa,
+            powerWatts = powerWatts,
+            readStatus = if (normalizedLevel >= 0 || tempC > 0f) MetricReadStatus.Ok else MetricReadStatus.NoData
+        )
     }
 
     companion object {
-        private const val BATTERY_POLL_INTERVAL_MS = 5000L
+        private const val BATTERY_POLL_INTERVAL_MS = 2500L
     }
 }
 
@@ -472,22 +432,24 @@ class ThermalMonitor @Inject constructor(
         val hasBattery: Boolean = false,
         val isThrottling: Boolean = false
     ) {
-        val statusLabel: String get() = when (status) {
-            0 -> "Normal"
-            1 -> "Light Throttling"
-            2 -> "Moderate Throttling"
-            3 -> "Severe Throttling"
-            4 -> "Critical Throttling"
-            5 -> "Emergency Mitigation"
-            6 -> "System Shutdown"
-            else -> "Unknown"
-        }
+        val statusLabel: String
+            get() = when (status) {
+                0 -> "Normal"
+                1 -> "Light Throttling"
+                2 -> "Moderate Throttling"
+                3 -> "Severe Throttling"
+                4 -> "Critical Throttling"
+                5 -> "Emergency Mitigation"
+                6 -> "System Shutdown"
+                else -> "Unknown"
+            }
 
-        val pressureLabel: String get() = when (status) {
-            0 -> if (isThrottling) "Throttled" else "Stable"
-            1, 2 -> "Rising"
-            else -> "Elevated"
-        }
+        val pressureLabel: String
+            get() = when (status) {
+                0 -> if (isThrottling) "Throttled" else "Stable"
+                1, 2 -> "Rising"
+                else -> "Elevated"
+            }
     }
 
     val thermalState: Flow<ThermalState> = flow {
@@ -497,12 +459,11 @@ class ThermalMonitor @Inject constructor(
 
         while (true) {
             val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                    shizukuManager.hasPermission.value
+                shizukuManager.hasPermission.value
 
             val state = if (shizukuReady) {
                 try {
                     val output = shizukuManager.getThermalTemperatures()
-                    com.framex.app.utils.FrameXLog.d("ThermalMonitor", "Raw output len=${output.length}, startsWith=${output.take(60).replace("\n", "\\n")}")
                     if (output.isBlank()) {
                         consecutiveFailures++
                         if (consecutiveFailures <= 3 && lastGoodState != null) {
@@ -516,7 +477,6 @@ class ThermalMonitor @Inject constructor(
                         }
                     } else {
                         val parsed = ThermalServiceParser.parse(output)
-                        com.framex.app.utils.FrameXLog.d("ThermalMonitor", "Parsed result: entryCount=${parsed?.entryCount}, cpu=${parsed?.cpuC}, gpu=${parsed?.gpuC}, skin=${parsed?.skinC}, battery=${parsed?.batteryC}, halNotReady=${parsed?.halNotReady}, isThrottling=${parsed?.isThrottling}")
                         if (parsed == null || parsed.entryCount == 0) {
                             consecutiveFailures++
                             if (consecutiveFailures <= 3 && lastGoodState != null) {
@@ -526,7 +486,11 @@ class ThermalMonitor @Inject constructor(
                                     lastGoodState = null
                                 }
                                 val status = parsed?.thermalStatus?.takeIf { it > 0 } ?: powerManager.thermalStatusOrDefault()
-                                val statusType = if (parsed?.halNotReady == true) MetricReadStatus.EmptyOutput else MetricReadStatus.ParseFailed
+                                val statusType = if (parsed?.halNotReady == true) {
+                                    MetricReadStatus.HardwareUnsupported
+                                } else {
+                                    MetricReadStatus.ParseFailed
+                                }
                                 ThermalState(status = status, readStatus = statusType, isThrottling = parsed?.isThrottling == true)
                             }
                         } else {
@@ -575,7 +539,7 @@ class ThermalMonitor @Inject constructor(
     }
 }
 
-private fun android.os.PowerManager.thermalStatusOrDefault(): Int =
+private fun PowerManager.thermalStatusOrDefault(): Int =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) currentThermalStatus else 0
 
 data class PingResult(
@@ -588,7 +552,6 @@ class PingMonitor @Inject constructor(
     private val shizukuManager: ShizukuManager
 ) {
     companion object {
-        // ICMP echo has near-zero cost. 2s polling keeps live overlay ping responsive without battery overhead.
         private const val POLL_INTERVAL_MS = 2_000L
     }
 
@@ -612,7 +575,7 @@ class PingMonitor @Inject constructor(
 
     private fun parsePingOutput(output: String): PingResult {
         if (output.isBlank()) return PingResult(0, MetricReadStatus.EmptyOutput)
-        
+
         return if (output.contains("time=")) {
             val ms = output.split("time=").getOrNull(1)
                 ?.split(" ")?.getOrNull(0)
@@ -657,7 +620,7 @@ class TopProcessMonitor @Inject constructor(
     val topProcess: Flow<TopProcess> = flow {
         while (true) {
             val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                    shizukuManager.hasPermission.value
+                shizukuManager.hasPermission.value
 
             val result = if (shizukuReady) {
                 try {

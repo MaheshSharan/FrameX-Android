@@ -23,10 +23,12 @@ internal object ThermalServiceParser {
         PACKAGE_OR_SOC(1),
         /** Clustered cores (e.g. CPU-CLUSTER, GOLD, SILVER, PRIME). */
         CLUSTER_AVERAGE(2),
-        /** Individual core sensor (e.g. cpu0..cpu7, TSENS_TZ_SENSOR). */
+        /** Individual core sensor (e.g. cpu0..cpu7, cpu-1-0-usr). */
         CORE_SENSOR(3),
+        /** Generic unlabelled Qualcomm tsens_tz_sensor* zone (lower priority than explicit CPU cores). */
+        GENERIC_TSENS(4),
         /** Fallback hotspot or junction diode (e.g. HOTSPOT, JUNCTION, MAX_TEMP). */
-        HOTSPOT_FALLBACK(4)
+        HOTSPOT_FALLBACK(5)
     }
 
     data class CpuCandidate(
@@ -209,11 +211,15 @@ internal object ThermalServiceParser {
             return CpuCandidateRank.HOTSPOT_FALLBACK
         }
         if (n == "CPU" || n.contains("CPU-PACKAGE") || n.contains("CPUSS") ||
-            n.contains("MTKTS_SOC") || n.contains("TS_SOC") || n == "SOC" || n.contains("SOC-THERM")) {
+            n.contains("MTKTS_SOC") || n.contains("TS_SOC") || n == "SOC" || n.contains("SOC-THERM")
+        ) {
             return CpuCandidateRank.PACKAGE_OR_SOC
         }
         if (n.contains("CLUSTER") || n.contains("GOLD") || n.contains("SILVER") || n.contains("PRIME")) {
             return CpuCandidateRank.CLUSTER_AVERAGE
+        }
+        if (n.contains("TSENS") && !n.contains("CPU")) {
+            return CpuCandidateRank.GENERIC_TSENS
         }
         return CpuCandidateRank.CORE_SENSOR
     }
@@ -226,13 +232,13 @@ internal object ThermalServiceParser {
             CpuCandidateRank.PACKAGE_OR_SOC -> {
                 bestCandidates.map { it.sensor.valueC }.average().toFloat()
             }
-            CpuCandidateRank.CLUSTER_AVERAGE -> {
-                // Max across clusters reflects the active/loaded cluster
+            CpuCandidateRank.CLUSTER_AVERAGE,
+            CpuCandidateRank.CORE_SENSOR -> {
+                // Peak across active clusters/cores reflects actual thermal load driving throttling
                 bestCandidates.maxOf { it.sensor.valueC }
             }
-            CpuCandidateRank.CORE_SENSOR -> {
-                // Average across standard active core sensors
-                bestCandidates.map { it.sensor.valueC }.average().toFloat()
+            CpuCandidateRank.GENERIC_TSENS -> {
+                bestCandidates.maxOf { it.sensor.valueC }
             }
             CpuCandidateRank.HOTSPOT_FALLBACK -> {
                 // Fallback only if no package/cluster/core sensors exist

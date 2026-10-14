@@ -229,8 +229,10 @@ fun thermalStatusShortLabel(
     skinTempC: Float = 0f,
     isThrottling: Boolean = false
 ): String {
-    // 1. Android system thermal status is authoritative when non-zero
-    if (status > 0) {
+    // 1. Android system thermal status is authoritative when non-zero,
+    // guarded against buggy custom ROMs/SoCs reporting status >= 3 on a cold SoC (< 45°C).
+    val isErroneousHighStatus = status >= 3 && cpuTempC > 0f && cpuTempC < 45f && skinTempC < 38f
+    if (status > 0 && !isErroneousHighStatus) {
         return when (status) {
             1 -> "LGT"
             2 -> "WARM"
@@ -249,5 +251,49 @@ fun thermalStatusShortLabel(
     return advisory.shortLabel
 }
 
-private const val KBPS_PER_MBPS = 1024f
+/**
+ * Resolves the hardware & permission capability for a given overlay [MetricModuleId] in O(1) time.
+ */
+fun resolveModuleCapability(
+    id: MetricModuleId,
+    metricsState: MetricsState,
+    isShizukuReady: Boolean
+): MetricCapability = when (id) {
+    MetricModuleId.FPS -> {
+        if (!isShizukuReady) {
+            MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
+        } else {
+            metricsState.fpsReadStatus.toCapability(requiresShizuku = true)
+        }
+    }
+    MetricModuleId.CPU_FREQUENCY,
+    MetricModuleId.CPU_CLUSTERS -> {
+        if (metricsState.cpuReadStatus == MetricReadStatus.PermissionDenied ||
+            metricsState.cpuReadStatus == MetricReadStatus.NoShizuku
+        ) {
+            metricsState.cpuReadStatus.toCapability(requiresShizuku = !isShizukuReady)
+        } else {
+            MetricReadStatus.Ok.toCapability(requiresShizuku = false)
+        }
+    }
+    MetricModuleId.THERMAL_MONITOR -> {
+        if (!isShizukuReady) {
+            MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
+        } else if (metricsState.thermalReadStatus == MetricReadStatus.HardwareUnsupported ||
+            metricsState.thermalReadStatus == MetricReadStatus.EmptyOutput
+        ) {
+            MetricReadStatus.HardwareUnsupported.toCapability(requiresShizuku = true)
+        } else {
+            MetricReadStatus.Ok.toCapability(requiresShizuku = true)
+        }
+    }
+    MetricModuleId.RAM_USAGE,
+    MetricModuleId.BATTERY_TEMPERATURE,
+    MetricModuleId.BATTERY_LEVEL,
+    MetricModuleId.CLOCK,
+    MetricModuleId.SESSION_TIMER,
+    MetricModuleId.NETWORK_SPEED,
+    MetricModuleId.PING -> MetricReadStatus.Ok.toCapability(requiresShizuku = false)
+}
 
+private const val KBPS_PER_MBPS = 1024f

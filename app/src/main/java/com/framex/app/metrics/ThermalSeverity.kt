@@ -73,7 +73,8 @@ enum class ThermalSeverity(
             skinTempC: Float = 0f,
             isThrottling: Boolean = false
         ): ThermalSeverity {
-            if (status > 0) return fromStatus(status)
+            val isErroneousHighStatus = status >= 3 && cpuTempC > 0f && cpuTempC < 45f && skinTempC < 38f
+            if (status > 0 && !isErroneousHighStatus) return fromStatus(status)
             if (isThrottling) return SEVERE
             val advisory = SensorTemperatureAdvisory.fromTemperatures(cpuTempC, skinTempC)
             return when (advisory) {

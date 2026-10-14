@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.framex.app.R
 import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
 import com.framex.app.metrics.MetricModuleId
+import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.isIconShown
 import com.framex.app.metrics.resolveMetricModuleOrder
+import com.framex.app.metrics.resolveModuleCapability
 import com.framex.app.repository.SettingsRepository
+import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,14 +20,15 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class OverlayCustomizationViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val shizukuManager: ShizukuManager,
+    private val metricsEngine: MetricsEngine
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OverlayCustomizationUiState())
@@ -75,7 +79,15 @@ class OverlayCustomizationViewModel @Inject constructor(
             StyleSettingsSnapshot(opacity, scale, monospace, colorIndex)
         }
 
-        combine(moduleSettingsFlow, styleSettingsFlow) { modSnap, styleSnap ->
+        val capabilityFlow = combine(
+            shizukuManager.isShizukuAvailable,
+            shizukuManager.hasPermission,
+            metricsEngine.metricsState
+        ) { avail, perm, metrics ->
+            (avail && perm) to metrics
+        }
+
+        combine(moduleSettingsFlow, styleSettingsFlow, capabilityFlow) { modSnap, styleSnap, (shizukuReady, metricsState) ->
             savedMode = modSnap.mode
             savedModuleOrder = modSnap.fullOrder
             savedEnabledSet = modSnap.enabledModules
@@ -85,7 +97,8 @@ class OverlayCustomizationViewModel @Inject constructor(
                 ModuleRowState(
                     id = id,
                     enabled = modSnap.enabledModules.contains(id.storageKey),
-                    showIcon = isIconShown(modSnap.enabledIcons, id.storageKey)
+                    showIcon = isIconShown(modSnap.enabledIcons, id.storageKey),
+                    capability = resolveModuleCapability(id, metricsState, shizukuReady)
                 )
             }
 
@@ -101,7 +114,13 @@ class OverlayCustomizationViewModel @Inject constructor(
                         hasChanges = false
                     )
                 } else {
+                    val refreshedModules = current.modules.map { existing ->
+                        existing.copy(
+                            capability = resolveModuleCapability(existing.id, metricsState, shizukuReady)
+                        )
+                    }
                     current.copy(
+                        modules = refreshedModules,
                         opacity = styleSnap.opacity,
                         overlayScale = styleSnap.scale,
                         useMonospace = styleSnap.monospace,
@@ -150,6 +169,8 @@ class OverlayCustomizationViewModel @Inject constructor(
                 }
             }
             OverlayCustomizationUiEvent.ResetToDefaultOrder -> {
+                val isShizukuReady = shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value
+                val currentMetrics = metricsEngine.metricsState.value
                 _uiState.update { current ->
                     val enabledById = current.modules.associate { it.id to it.enabled }
                     val showIconById = current.modules.associate { it.id to it.showIcon }
@@ -157,7 +178,8 @@ class OverlayCustomizationViewModel @Inject constructor(
                         ModuleRowState(
                             id = id,
                             enabled = enabledById[id] ?: false,
-                            showIcon = showIconById[id] ?: true
+                            showIcon = showIconById[id] ?: true,
+                            capability = resolveModuleCapability(id, currentMetrics, isShizukuReady)
                         )
                     }
                     val updated = current.copy(modules = resetModules)

@@ -8,6 +8,7 @@ interface ICommandRunner {
     int executeCommandWithExitCode(String command);
     CommandResult executeCommandWithResult(String command);
     String readProcStat();
+    String readCpuTelemetry();
     String getThermalTemperatures();
     SuspendResult suspendPackages(in String[] packageNames, boolean suspended);
     int setAppOpMode(in String[] packageNames, int opCode, int mode);

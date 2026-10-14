@@ -8,11 +8,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.util.Locale
@@ -22,22 +23,29 @@ import javax.inject.Singleton
 data class MetricsState(
     val fps: Int = 0,
     val jankyFrames: Int = 0,
+    val totalFrames: Int = 0,
+    val frameTimeMs: Int = 0,
+    val fpsReadStatus: MetricReadStatus = MetricReadStatus.Loading,
     val cpuMhz: Int = 0,
     val cpuPercentage: Int? = null,
     val cpuClusterUltraMhz: Int = 0,
     val cpuClusterPerfMhz: Int = 0,
     val cpuClusterEffMhz: Int = 0,
+    val cpuClusters: List<CpuClusterMetric> = emptyList(),
+    val cpuReadStatus: MetricReadStatus = MetricReadStatus.Loading,
     val ramUsedGb: Float = 0f,
     val ramTotalGb: Float = 0f,
     val batteryTempC: Float = 0f,
     val batteryLevel: Int = -1,
+    val batteryVoltageMv: Int = 0,
+    val batteryCurrentMa: Float = 0f,
+    val powerWatts: Float = 0f,
     val currentTime: String = "",
     val sessionElapsedSec: Long = 0L,
     val networkRxKbps: Float = 0f,
     val networkTxKbps: Float = 0f,
     val pingMs: Int = 0,
     val pingReadStatus: MetricReadStatus = MetricReadStatus.Loading,
-    // Full thermal breakdown — see ThermalMonitor.ThermalState for field meaning.
     val thermalCpuC: Float = 0f,
     val thermalGpuC: Float = 0f,
     val thermalNpuC: Float = 0f,
@@ -50,8 +58,6 @@ data class MetricsState(
     val hasThermalSkin: Boolean = false,
     val hasThermalBattery: Boolean = false,
     val isThrottling: Boolean = false,
-    // Busiest process at this tick (see TopProcessMonitor) — names the likely
-    // culprit when a frame drop isn't explained by thermal or frequency alone.
     val topProcessName: String? = null,
     val topProcessCpuPercent: Float = 0f,
     val topProcesses: List<CpuInfoTopParser.TopProcess> = emptyList(),
@@ -74,28 +80,44 @@ class MetricsEngine @Inject constructor(
     private val _metricsState = MutableStateFlow(MetricsState())
     val metricsState: StateFlow<MetricsState> = _metricsState.asStateFlow()
 
-    // Rolling window of the last 60 FPS readings (≈ 60 seconds at 1s poll rate).
-    // Used by the Dashboard chart to show a real sparkline from recent samples.
     private val _fpsHistory = MutableStateFlow<List<Int>>(emptyList())
     val fpsHistory: StateFlow<List<Int>> = _fpsHistory.asStateFlow()
 
-    // Timestamped snapshot of the full metrics state, appended every ~1s regardless
-    // of which modules are enabled for the overlay. This is the source of truth for
-    // the "what caused the frame drop" correlation graph and for session log export —
-    // both need every metric on the same timeline, not just what the user chose to
-    // display on-screen. Capped to avoid unbounded memory growth during long sessions.
     data class MetricsSnapshot(val timestampMs: Long, val state: MetricsState)
     private val _snapshotHistory = MutableStateFlow<List<MetricsSnapshot>>(emptyList())
     val snapshotHistory: StateFlow<List<MetricsSnapshot>> = _snapshotHistory.asStateFlow()
 
-    // SupervisorJob: one failing monitor coroutine never cancels the others.
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val moduleJobs = mutableMapOf<String, Job>()
+    private var snapshotTickJob: Job? = null
     private var sessionStartTimeMs: Long = SystemClock.elapsedRealtime()
+
+    private val fpsRing = ArrayDeque<Int>(MAX_FPS_HISTORY_SIZE + 1)
+    private val snapshotRing = ArrayDeque<MetricsSnapshot>(MAX_SNAPSHOTS + 1)
+    private val ringLock = Any()
+
+    // Tracks whether the floating overlay window is actively visible on screen.
+    // Prevents polling overlay modules when the overlay service is stopped/hidden.
+    private val _isOverlayActive = MutableStateFlow(false)
+    val isOverlayActive: StateFlow<Boolean> = _isOverlayActive.asStateFlow()
+
+    private val _screenOverrideRequests = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    private val screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
+
+    fun setOverlayActive(active: Boolean) {
+        _isOverlayActive.value = active
+    }
 
     fun resetSessionTimer() {
         sessionStartTimeMs = SystemClock.elapsedRealtime()
         _metricsState.value = _metricsState.value.copy(sessionElapsedSec = 0L)
+    }
+
+    fun clearSnapshotHistory() {
+        synchronized(ringLock) {
+            snapshotRing.clear()
+            _snapshotHistory.value = emptyList()
+        }
     }
 
     private fun getCurrentFormattedTime(): String {
@@ -103,18 +125,10 @@ class MetricsEngine @Inject constructor(
         return String.format(Locale.US, "%02d:%02d", now.hour, now.minute)
     }
 
-    // Transient, NOT persisted, NOT shown in the overlay toggle UI.
-    // Multiple independent callers (a screen wanting live readings, a recording
-    // session wanting the full diagnostic set) can each hold their own named
-    // request here without one clobbering the other when either releases its set.
-    // The overlay (OverlayManager/AppearanceScreen) reads settingsRepository.enabledModules
-    // directly, so anything added here never affects what the overlay displays.
-    private val _screenOverrideRequests = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
-    private val screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
-
-    /** Request that [modules] keep polling regardless of the persisted overlay toggle,
-     *  under [requesterKey] so unrelated requesters don't clobber each other.
-     *  Pass emptySet() to release this requester's request. */
+    /**
+     * Request that [modules] poll while a screen or recording session is active,
+     * under [requesterKey] so independent callers never clobber one another.
+     */
     fun setScreenOverrideModules(modules: Set<String>, requesterKey: String = "default") {
         val next = if (modules.isEmpty()) {
             _screenOverrideRequests.value - requesterKey
@@ -126,161 +140,215 @@ class MetricsEngine @Inject constructor(
     }
 
     init {
-        // FPS always runs — it is the core metric and has near-zero overhead.
-        // currentTime and monotonic sessionElapsedSec are refreshed on each ~1s frame tick.
-        engineScope.launch {
-            var loggedFirstFps = false
-            fpsMonitor.fpsState.collect { state ->
-                val elapsed = (SystemClock.elapsedRealtime() - sessionStartTimeMs) / 1000L
-                val timeStr = getCurrentFormattedTime()
-                _metricsState.value = _metricsState.value.copy(
-                    fps = state.fps,
-                    jankyFrames = state.jankyFrames,
-                    currentTime = timeStr,
-                    sessionElapsedSec = elapsed.coerceAtLeast(0L)
-                )
-                if (!loggedFirstFps && state.fps > 0) {
-                    loggedFirstFps = true
-                    auditLogRepository.addLog("Telemetry: FPS Polling Active", "SurfaceFlinger stream initialized (first reading: ${state.fps} FPS)", LogStatus.SUCCESS)
-                }
-                // Append to rolling history, capped at MAX_FPS_HISTORY_SIZE entries.
-                val next = ArrayDeque(_fpsHistory.value).also { d ->
-                    d.addLast(state.fps)
-                    if (d.size > MAX_FPS_HISTORY_SIZE) d.removeFirst()
-                }
-                _fpsHistory.value = next.toList()
-
-                // Snapshot the full state at this tick for logging/correlation, capped
-                // at MAX_SNAPSHOTS (~1hr at 1s cadence) so long sessions don't grow unbounded.
-                val snapshots = ArrayDeque(_snapshotHistory.value).also { d ->
-                    d.addLast(MetricsSnapshot(System.currentTimeMillis(), _metricsState.value))
-                    if (d.size > MAX_SNAPSHOTS) d.removeFirst()
-                }
-                _snapshotHistory.value = snapshots.toList()
-            }
-        }
-
-        // All other monitors only run while their module toggle is enabled by the user
-        // (settingsRepository.enabledModules) OR temporarily requested by a screen/recording
-        // (screenOverrideModules). The overlay only ever looks at the former, so a
-        // screen override never changes what the overlay shows — only what gets measured.
-        // This means zero polling happens for disabled modules — no wasted CPU, battery, or Shizuku calls.
         engineScope.launch {
             combine(
+                _isOverlayActive,
                 settingsRepository.enabledModules,
                 screenOverrideModules,
                 settingsRepository.isGamingModeActiveFlow
-            ) { persisted, override, gamingActive ->
-                val base = persisted + override + if (gamingActive) setOf("thermal") else emptySet()
-                // Issue #86: Keep battery temp continuously monitored for timeline recording.
-                // Battery temperature monitor is a passive sticky broadcast check.
-                base + setOf("temp")
-            }.collect { enabled ->
-                toggleModule("cpu", enabled) {
-                    coroutineScope {
-                        launch {
-                            cpuMonitor.cpuUsage.collect {
-                                _metricsState.value = _metricsState.value.copy(cpuMhz = it)
-                            }
-                        }
-                        launch {
-                            cpuMonitor.cpuPercentageUsage.collect {
-                                _metricsState.value = _metricsState.value.copy(cpuPercentage = it)
-                            }
-                        }
-                    }
+            ) { overlayActive, persistedOverlayMods, screenMods, gamingActive ->
+                buildSet {
+                    if (overlayActive) addAll(persistedOverlayMods)
+                    addAll(screenMods)
+                    if (gamingActive) add("thermal")
                 }
-                toggleModule("cpu_cluster", enabled) {
-                    cpuMonitor.cpuClusterUsage.collect { clusters ->
+            }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    updateActiveCollectors(enabled)
+                }
+        }
+    }
+
+    private fun updateActiveCollectors(enabled: Set<String>) {
+        toggleModule("fps", enabled) {
+            var loggedFirstFps = false
+            fpsMonitor.fpsState.collect { state ->
+                _metricsState.value = _metricsState.value.copy(
+                    fps = state.fps,
+                    jankyFrames = state.jankyFrames,
+                    totalFrames = state.totalFrames,
+                    frameTimeMs = state.maxFrameTimeMs,
+                    fpsReadStatus = state.readStatus
+                )
+                if (!loggedFirstFps && state.fps > 0) {
+                    loggedFirstFps = true
+                    auditLogRepository.addLog(
+                        "Telemetry: FPS Polling Active",
+                        "SurfaceFlinger stream initialized (first reading: ${state.fps} FPS)",
+                        LogStatus.SUCCESS
+                    )
+                }
+                val updatedHistory = synchronized(ringLock) {
+                    fpsRing.addLast(state.fps)
+                    if (fpsRing.size > MAX_FPS_HISTORY_SIZE) fpsRing.removeFirst()
+                    ArrayList(fpsRing)
+                }
+                _fpsHistory.value = updatedHistory
+            }
+        }
+
+        val needsCpu = "cpu" in enabled || "cpu_cluster" in enabled
+        if (needsCpu) {
+            if (moduleJobs["cpu_combined"]?.isActive != true) {
+                moduleJobs["cpu_combined"] = engineScope.launch {
+                    cpuMonitor.cpuSnapshot.collect { snap ->
                         _metricsState.value = _metricsState.value.copy(
-                            cpuClusterEffMhz = clusters.effMhz,
-                            cpuClusterPerfMhz = clusters.perfMhz,
-                            cpuClusterUltraMhz = clusters.ultraMhz
+                            cpuMhz = if ("cpu" in enabled || "cpu_cluster" in enabled) snap.peakMhz else 0,
+                            cpuPercentage = snap.totalUsagePercent,
+                            cpuClusterEffMhz = snap.effMhz,
+                            cpuClusterPerfMhz = snap.perfMhz,
+                            cpuClusterUltraMhz = snap.ultraMhz,
+                            cpuClusters = snap.clusters,
+                            cpuReadStatus = snap.readStatus
                         )
                     }
                 }
-                toggleModule("ram", enabled) {
-                    ramMonitor.ramUsage.collect {
+            }
+        } else {
+            moduleJobs["cpu_combined"]?.cancel()
+            moduleJobs.remove("cpu_combined")
+            _metricsState.value = _metricsState.value.copy(
+                cpuMhz = 0,
+                cpuPercentage = null,
+                cpuClusterEffMhz = 0,
+                cpuClusterPerfMhz = 0,
+                cpuClusterUltraMhz = 0,
+                cpuClusters = emptyList(),
+                cpuReadStatus = MetricReadStatus.Loading
+            )
+        }
+
+        toggleModule("ram", enabled) {
+            ramMonitor.ramUsage.collect {
+                _metricsState.value = _metricsState.value.copy(
+                    ramUsedGb = it.usedGb,
+                    ramTotalGb = it.totalGb
+                )
+            }
+        }
+
+        toggleModule("net", enabled) {
+            networkMonitor.networkSpeed.collect {
+                _metricsState.value = _metricsState.value.copy(
+                    networkRxKbps = it.rxSpeedKbps,
+                    networkTxKbps = it.txSpeedKbps
+                )
+            }
+        }
+
+        val needsBattery = "temp" in enabled || "battery_level" in enabled || "power" in enabled
+        if (needsBattery) {
+            if (moduleJobs["battery_combined"]?.isActive != true) {
+                moduleJobs["battery_combined"] = engineScope.launch {
+                    batteryMonitor.batteryState.collect { b ->
                         _metricsState.value = _metricsState.value.copy(
-                            ramUsedGb = it.usedGb, ramTotalGb = it.totalGb
+                            batteryTempC = b.tempC,
+                            batteryLevel = b.level,
+                            batteryVoltageMv = b.voltageMv,
+                            batteryCurrentMa = b.currentMa,
+                            powerWatts = b.powerWatts
                         )
                     }
                 }
-                toggleModule("net", enabled) {
-                    networkMonitor.networkSpeed.collect {
-                        _metricsState.value = _metricsState.value.copy(
-                            networkRxKbps = it.rxSpeedKbps, networkTxKbps = it.txSpeedKbps
+            }
+        } else {
+            moduleJobs["battery_combined"]?.cancel()
+            moduleJobs.remove("battery_combined")
+            _metricsState.value = _metricsState.value.copy(
+                batteryTempC = 0f,
+                batteryLevel = -1,
+                batteryVoltageMv = 0,
+                batteryCurrentMa = 0f,
+                powerWatts = 0f
+            )
+        }
+
+        toggleModule("thermal", enabled) {
+            var lastThermalStatus = -1
+            thermalMonitor.thermalState.collect { t ->
+                _metricsState.value = _metricsState.value.copy(
+                    thermalCpuC = t.cpuC,
+                    thermalGpuC = t.gpuC,
+                    thermalNpuC = t.npuC,
+                    thermalSkinC = t.skinC,
+                    thermalStatus = t.status,
+                    thermalReadStatus = t.readStatus,
+                    hasThermalCpu = t.hasCpu,
+                    hasThermalGpu = t.hasGpu,
+                    hasThermalNpu = t.hasNpu,
+                    hasThermalSkin = t.hasSkin,
+                    hasThermalBattery = t.hasBattery,
+                    isThrottling = t.isThrottling
+                )
+                if (t.status != lastThermalStatus) {
+                    lastThermalStatus = t.status
+                    if (t.status >= 1) {
+                        auditLogRepository.addLog(
+                            "Thermal Alert",
+                            "${t.statusLabel} (CPU: ${t.cpuC}°C, GPU: ${t.gpuC}°C, Skin: ${t.skinC}°C)",
+                            LogStatus.FAILED
                         )
-                    }
-                }
-                toggleModule("temp", enabled) {
-                    batteryMonitor.batteryTemp.collect {
-                        _metricsState.value = _metricsState.value.copy(batteryTempC = it)
-                    }
-                }
-                toggleModule("battery_level", enabled) {
-                    batteryMonitor.batteryLevel.collect {
-                        _metricsState.value = _metricsState.value.copy(batteryLevel = it)
-                    }
-                }
-                toggleModule("thermal", enabled) {
-                    var lastThermalStatus = -1
-                    thermalMonitor.thermalState.collect { t ->
-                        _metricsState.value = _metricsState.value.copy(
-                            thermalCpuC = t.cpuC,
-                            thermalGpuC = t.gpuC,
-                            thermalNpuC = t.npuC,
-                            thermalSkinC = t.skinC,
-                            thermalStatus = t.status,
-                            thermalReadStatus = t.readStatus,
-                            hasThermalCpu = t.hasCpu,
-                            hasThermalGpu = t.hasGpu,
-                            hasThermalNpu = t.hasNpu,
-                            hasThermalSkin = t.hasSkin,
-                            hasThermalBattery = t.hasBattery,
-                            isThrottling = t.isThrottling
-                        )
-                        if (t.status != lastThermalStatus) {
-                            lastThermalStatus = t.status
-                            if (t.status >= 1) { // 1: Light, 2: Moderate, 3: Severe, 4: Critical
-                                auditLogRepository.addLog(
-                                    "Thermal Alert",
-                                    "${t.statusLabel} (CPU: ${t.cpuC}°C, GPU: ${t.gpuC}°C, Skin: ${t.skinC}°C)",
-                                    LogStatus.FAILED
-                                )
-                            } else if (lastThermalStatus != -1) {
-                                auditLogRepository.addLog(
-                                    "Thermal Status",
-                                    "Normal operating temperature restored",
-                                    LogStatus.SUCCESS
-                                )
-                            }
-                        }
-                    }
-                }
-                toggleModule("ping", enabled) {
-                    pingMonitor.ping.collect { p ->
-                        _metricsState.value = _metricsState.value.copy(
-                            pingMs = p.pingMs,
-                            pingReadStatus = p.readStatus
-                        )
-                    }
-                }
-                toggleModule("top_process", enabled) {
-                    topProcessMonitor.topProcess.collect { top ->
-                        _metricsState.value = _metricsState.value.copy(
-                            topProcessName = if (top.readStatus == MetricReadStatus.Ok) top.name else null,
-                            topProcessCpuPercent = top.cpuPercent,
-                            topProcesses = if (top.readStatus == MetricReadStatus.Ok) top.topProcesses else emptyList(),
-                            topProcessReadStatus = top.readStatus
+                    } else if (lastThermalStatus != -1) {
+                        auditLogRepository.addLog(
+                            "Thermal Status",
+                            "Normal operating temperature restored",
+                            LogStatus.SUCCESS
                         )
                     }
                 }
             }
         }
+
+        toggleModule("ping", enabled) {
+            pingMonitor.ping.collect { p ->
+                _metricsState.value = _metricsState.value.copy(
+                    pingMs = p.pingMs,
+                    pingReadStatus = p.readStatus
+                )
+            }
+        }
+
+        toggleModule("top_process", enabled) {
+            topProcessMonitor.topProcess.collect { top ->
+                _metricsState.value = _metricsState.value.copy(
+                    topProcessName = if (top.readStatus == MetricReadStatus.Ok) top.name else null,
+                    topProcessCpuPercent = top.cpuPercent,
+                    topProcesses = if (top.readStatus == MetricReadStatus.Ok) top.topProcesses else emptyList(),
+                    topProcessReadStatus = top.readStatus
+                )
+            }
+        }
+
+        // Maintain clock, session timer, and snapshot timeline only while at least one consumer is active.
+        if (enabled.isNotEmpty()) {
+            if (snapshotTickJob?.isActive != true) {
+                snapshotTickJob = engineScope.launch {
+                    while (true) {
+                        val elapsed = (SystemClock.elapsedRealtime() - sessionStartTimeMs) / 1000L
+                        val timeStr = getCurrentFormattedTime()
+                        val current = _metricsState.value.copy(
+                            currentTime = timeStr,
+                            sessionElapsedSec = elapsed.coerceAtLeast(0L)
+                        )
+                        _metricsState.value = current
+
+                        val snapList = synchronized(ringLock) {
+                            snapshotRing.addLast(MetricsSnapshot(System.currentTimeMillis(), current))
+                            if (snapshotRing.size > MAX_SNAPSHOTS) snapshotRing.removeFirst()
+                            ArrayList(snapshotRing)
+                        }
+                        _snapshotHistory.value = snapList
+                        delay(1000L)
+                    }
+                }
+            }
+        } else {
+            snapshotTickJob?.cancel()
+            snapshotTickJob = null
+        }
     }
 
-    /** Starts the module coroutine if key is in enabled set; cancels and zeroes it if not. */
     private fun toggleModule(key: String, enabled: Set<String>, block: suspend () -> Unit) {
         if (key in enabled) {
             if (moduleJobs[key]?.isActive == true) return
@@ -288,39 +356,44 @@ class MetricsEngine @Inject constructor(
         } else {
             moduleJobs[key]?.cancel()
             moduleJobs.remove(key)
-            // Reset state field to zero so the overlay doesn't show stale data.
             _metricsState.value = when (key) {
-                "cpu"         -> _metricsState.value.copy(cpuMhz = 0, cpuPercentage = null)
-                "cpu_cluster" -> _metricsState.value.copy(
-                    cpuClusterEffMhz = 0,
-                    cpuClusterPerfMhz = 0,
-                    cpuClusterUltraMhz = 0
+                "fps" -> _metricsState.value.copy(
+                    fps = 0,
+                    jankyFrames = 0,
+                    totalFrames = 0,
+                    frameTimeMs = 0,
+                    fpsReadStatus = MetricReadStatus.Loading
                 )
-                "ram"     -> _metricsState.value.copy(ramUsedGb = 0f, ramTotalGb = 0f)
-                "net"     -> _metricsState.value.copy(networkRxKbps = 0f, networkTxKbps = 0f)
-                "temp"    -> _metricsState.value.copy(batteryTempC = 0f)
-                "battery_level" -> _metricsState.value.copy(batteryLevel = -1)
+                "ram" -> _metricsState.value.copy(ramUsedGb = 0f, ramTotalGb = 0f)
+                "net" -> _metricsState.value.copy(networkRxKbps = 0f, networkTxKbps = 0f)
                 "thermal" -> _metricsState.value.copy(
-                    thermalCpuC = 0f, thermalGpuC = 0f, thermalNpuC = 0f,
-                    thermalSkinC = 0f, thermalStatus = 0,
+                    thermalCpuC = 0f,
+                    thermalGpuC = 0f,
+                    thermalNpuC = 0f,
+                    thermalSkinC = 0f,
+                    thermalStatus = 0,
                     thermalReadStatus = MetricReadStatus.Loading,
-                    hasThermalCpu = false, hasThermalGpu = false, hasThermalNpu = false,
-                    hasThermalSkin = false, hasThermalBattery = false
+                    hasThermalCpu = false,
+                    hasThermalGpu = false,
+                    hasThermalNpu = false,
+                    hasThermalSkin = false,
+                    hasThermalBattery = false,
+                    isThrottling = false
                 )
-                "ping"    -> _metricsState.value.copy(pingMs = 0, pingReadStatus = MetricReadStatus.Loading)
+                "ping" -> _metricsState.value.copy(pingMs = 0, pingReadStatus = MetricReadStatus.Loading)
                 "top_process" -> _metricsState.value.copy(
-                    topProcessName = null, topProcessCpuPercent = 0f,
+                    topProcessName = null,
+                    topProcessCpuPercent = 0f,
+                    topProcesses = emptyList(),
                     topProcessReadStatus = MetricReadStatus.Loading
                 )
-                else      -> _metricsState.value
+                else -> _metricsState.value
             }
         }
     }
 
     companion object {
         private const val MAX_FPS_HISTORY_SIZE = 60
-        // ~1 hour of history at 1s cadence. Long enough for a full gaming session's
-        // worth of correlation data without holding unbounded memory.
         private const val MAX_SNAPSHOTS = 3600
     }
 }

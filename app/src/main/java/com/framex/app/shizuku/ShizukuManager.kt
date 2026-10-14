@@ -233,6 +233,23 @@ class ShizukuManager @Inject constructor(
         }
     }
 
+    suspend fun readCpuTelemetry(): String {
+        if (!_isShizukuAvailable.value || !_hasPermission.value) {
+            return ""
+        }
+        return commandMutex.withLock {
+            val runner = awaitCommandRunner() ?: return@withLock ""
+            try {
+                withContext(Dispatchers.IO) {
+                    runner.readCpuTelemetry()
+                }
+            } catch (e: Exception) {
+                com.framex.app.utils.FrameXLog.e("readCpuTelemetry failed", e)
+                ""
+            }
+        }
+    }
+
     suspend fun getThermalTemperatures(): String {
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             com.framex.app.utils.FrameXLog.w("getThermalTemperatures called when Shizuku is unavailable")
