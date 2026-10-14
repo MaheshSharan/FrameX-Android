@@ -153,6 +153,24 @@ fun resolveMetricModuleOrder(persistedOrder: List<String>): List<MetricModuleId>
     return known + missing
 }
 
+/**
+ * Formats available CPU cluster frequencies, omitting clusters that are absent (0 MHz)
+ * on 1-cluster or 2-cluster SoC architectures (e.g. "P:652 E:1017" or "U:3200 P:2400").
+ * Falls back to "P:0 E:0" while initial readings are loading.
+ */
+fun formatCpuClusters(ultraMhz: Int, perfMhz: Int, effMhz: Int): String {
+    val parts = buildList(3) {
+        if (ultraMhz > 0) add("U:$ultraMhz")
+        if (perfMhz > 0) add("P:$perfMhz")
+        if (effMhz > 0) add("E:$effMhz")
+    }
+    return if (parts.isNotEmpty()) {
+        parts.joinToString(" ")
+    } else {
+        "P:0 E:0"
+    }
+}
+
 /** Formats the live value of [id] from [metricsState] for display in the overlay. */
 fun metricValueFor(
     id: MetricModuleId,
@@ -161,12 +179,10 @@ fun metricValueFor(
 ): String = when (id) {
     MetricModuleId.FPS -> "${metricsState.fps}"
     MetricModuleId.CPU_FREQUENCY -> "${metricsState.cpuMhz} MHz"
-    MetricModuleId.CPU_CLUSTERS -> String.format(
-        Locale.US,
-        "U:%d P:%d E:%d",
-        metricsState.cpuClusterUltraMhz,
-        metricsState.cpuClusterPerfMhz,
-        metricsState.cpuClusterEffMhz
+    MetricModuleId.CPU_CLUSTERS -> formatCpuClusters(
+        ultraMhz = metricsState.cpuClusterUltraMhz,
+        perfMhz = metricsState.cpuClusterPerfMhz,
+        effMhz = metricsState.cpuClusterEffMhz
     )
     MetricModuleId.RAM_USAGE -> String.format(Locale.US, "%.1f GB", metricsState.ramUsedGb)
     MetricModuleId.BATTERY_TEMPERATURE -> String.format(Locale.US, "%.1f°C", metricsState.batteryTempC)
