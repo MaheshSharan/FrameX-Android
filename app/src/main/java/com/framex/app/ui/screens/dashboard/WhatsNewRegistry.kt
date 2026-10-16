@@ -25,35 +25,34 @@ object WhatsNewRegistry {
 
         val items = listOf(
             WhatsNewFeatureItem(
-                id = "execution_center",
-                category = UpdateItemCategory.GAME_MODE,
-                title = "Execution Center",
-                description = "We moved all gaming mode commands into the Execution Center in About & Legal. Tap Execution Center to view and customize them directly.",
-                isNewBadge = true,
-                actionId = "execution_center",
-                customIcon = Icons.Default.Terminal
-            ),
-            WhatsNewFeatureItem(
-                id = "faster_gaming_mode",
-                category = UpdateItemCategory.HARDWARE,
-                title = "Faster Game Mode & Restoration",
-                description = "Optimized background command execution and system restoration to apply and turn off settings much faster.",
-                isNewBadge = true,
+                id = "cpu_telemetry_overlay",
+                category = UpdateItemCategory.LIVE_METRICS,
+                title = "CPU Telemetry & Overlay",
+                description = "More accurate CPU telemetry readings and cleaner overlay reporting with unavailable clusters omitted.",
                 customIcon = Icons.Default.Speed
             ),
             WhatsNewFeatureItem(
-                id = "overlay_drag_jitter_fix",
-                category = UpdateItemCategory.BUG_FIXES,
-                title = "Overlay Drag & Screen Bounds",
-                description = "Fixed dragging jitter on the floating overlay and corrected screen edge snapping when rotating the device.",
-                customIcon = Icons.Default.OpenWith
+                id = "thermal_session_diagnostics",
+                category = UpdateItemCategory.HARDWARE,
+                title = "Session Logging & Thermals",
+                description = "Enhanced session logging with hitch tracking and overhauled thermal diagnostics with interactive charts.",
+                isNewBadge = true,
+                customIcon = Icons.Default.Memory
             ),
             WhatsNewFeatureItem(
-                id = "stability_and_memory_fixes",
+                id = "gaming_iqoo_sliders",
+                category = UpdateItemCategory.GAME_MODE,
+                title = "Dedicated iQOO Suite & Sliders",
+                description = "Separated iQOO and Vivo controls, resolved late game launch handshake, and restored standalone optimization sliders.",
+                isNewBadge = true,
+                customIcon = Icons.Default.Terminal
+            ),
+            WhatsNewFeatureItem(
+                id = "startup_behavior_fix",
                 category = UpdateItemCategory.BUG_FIXES,
-                title = "Stability & Memory Improvements",
-                description = "Resolved background freezes, smoothed out scrolling lists, and eliminated disk lag to keep the app light and responsive.",
-                customIcon = Icons.Default.Memory
+                title = "Startup & Updates",
+                description = "Fixed startup loading behavior when automatic update checking is disabled.",
+                customIcon = Icons.Default.OpenWith
             )
         )
 
