@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,6 +43,8 @@ import com.framex.app.ui.screens.performance.sections.HeroGamingCard
 import com.framex.app.ui.screens.performance.sections.RequirementsSection
 import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
 import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
+import com.framex.app.ui.theme.FrameXSpacing
+import com.framex.app.ui.theme.StatusGreen
 
 @Composable
 fun PerformanceScreen(
@@ -62,7 +65,7 @@ fun PerformanceScreen(
     val isActive = uiState.gamingState is GamingModeState.Active
     val isBusy = uiState.gamingState is GamingModeState.Enabling || uiState.gamingState is GamingModeState.Disabling
 
-    val activeColor = Color(0xFF22C55E)
+    val activeColor = StatusGreen
     val primaryRed = MaterialTheme.colorScheme.primary
 
     val progressTarget = when (val s = uiState.gamingState) {
@@ -85,10 +88,12 @@ fun PerformanceScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
         LazyColumn(
             modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
                 .fillMaxSize()
                 .navigationBarsPadding()
         ) {

@@ -108,7 +108,10 @@ sealed interface PerformanceUiEvent {
  * One-shot UI effects.
  */
 sealed interface PerformanceUiEffect {
-    data class ShowToast(val message: String) : PerformanceUiEffect
+    data class ShowToast(
+        @androidx.annotation.StringRes val messageResId: Int,
+        val formatArgs: List<Any> = emptyList()
+    ) : PerformanceUiEffect
 }
 
 data class SystemSettingsGroup(
@@ -172,6 +175,7 @@ data class ActionStateGroup(
     val activeLatencyDiagnostic: Int?
 )
 
+@Immutable
 data class IntermediateUiState(
     val userApps: List<AppInfo>,
     val googleApps: List<AppInfo>,

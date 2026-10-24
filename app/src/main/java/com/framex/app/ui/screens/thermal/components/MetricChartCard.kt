@@ -38,14 +38,20 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.framex.app.R
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.ui.components.WovenNetBackground
 import com.framex.app.ui.screens.thermal.formatDurationMinSec
 import com.framex.app.ui.theme.FrameXBorders
 import com.framex.app.ui.theme.FrameXShapes
+import kotlin.math.roundToInt
 
 @Immutable
 internal data class TelemetryLineSeries(
@@ -106,8 +112,41 @@ internal fun MetricChartCard(
         }
     }
 
+    val primarySeries = seriesList.firstOrNull()
+    val unitSuffix = remember(leftYLabels) {
+        val topLabel = leftYLabels.firstOrNull().orEmpty()
+        topLabel.filter { !it.isDigit() && it != '.' && it != '-' }.trim()
+    }
+    val (currentVal, minVal, maxVal) = remember(snapshots, primarySeries) {
+        if (snapshots.isEmpty() || primarySeries == null) {
+            Triple(0, 0, 0)
+        } else {
+            var minV = Float.MAX_VALUE
+            var maxV = Float.MIN_VALUE
+            for (snap in snapshots) {
+                val v = primarySeries.selector(snap)
+                if (v < minV) minV = v
+                if (v > maxV) maxV = v
+            }
+            val curV = primarySeries.selector(snapshots.last())
+            Triple(curV.roundToInt(), minV.roundToInt(), maxV.roundToInt())
+        }
+    }
+    val chartSummary = stringResource(
+        R.string.cd_metric_chart_summary,
+        title,
+        currentVal.toString(),
+        unitSuffix,
+        minVal.toString(),
+        maxVal.toString()
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = chartSummary
+            },
         shape = FrameXShapes.Card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke)
@@ -145,6 +184,7 @@ internal fun MetricChartCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(148.dp)
+                        .clearAndSetSemantics { }
                 ) {
                     val leftGutter = 34.dp.toPx()
                     val rightGutter = if (rightYLabels != null) 34.dp.toPx() else 6.dp.toPx()

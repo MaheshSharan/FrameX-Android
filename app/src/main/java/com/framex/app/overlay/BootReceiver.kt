@@ -4,33 +4,38 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
+import com.framex.app.repository.OverlaySettingsRepository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
- * Restarts the overlay service automatically after a device reboot
- * or after the app is updated (MY_PACKAGE_REPLACED).
- * Registered in AndroidManifest with RECEIVE_BOOT_COMPLETED permission.
+ * Restores the floating FPS overlay after a device reboot if it was active
+ * when the device shut down.
  */
+@AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
 
+    @Inject
+    lateinit var overlaySettingsRepository: OverlaySettingsRepository
+
     override fun onReceive(context: Context, intent: Intent) {
-        val validActions = setOf(
-            Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED
-        )
-        if (intent.action !in validActions) return
+        val action = intent.action ?: return
+        if (
+            action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_LOCKED_BOOT_COMPLETED &&
+            action != "android.intent.action.QUICKBOOT_POWERON"
+        ) {
+            return
+        }
 
-        // Only restart if the service was previously running (user had it enabled).
-        // OverlayService.isRunning is an in-process StateFlow, so it resets to false on
-        // a fresh boot. We rely on the SettingsRepository persisted preference instead.
-        val prefs = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-        val wasRunning = prefs.getBoolean("overlay_was_running", false)
-        if (!wasRunning) return
-
-        val serviceIntent = Intent(context, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
+        if (overlaySettingsRepository.wasOverlayRunning() && Settings.canDrawOverlays(context)) {
+            val serviceIntent = Intent(context, OverlayService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
         }
     }
 }

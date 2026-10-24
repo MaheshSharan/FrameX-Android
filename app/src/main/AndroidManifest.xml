@@ -55,7 +55,7 @@
         <service
             android:name=".overlay.OverlayService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback|dataSync"
+            android:foregroundServiceType="specialUse"
             android:stopWithTask="false" />
 
         <!-- System Quick Settings Tile for FrameX Overlay -->

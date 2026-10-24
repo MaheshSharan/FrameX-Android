@@ -1,8 +1,6 @@
 package com.framex.app.ui.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,9 +15,6 @@ import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import com.framex.app.R
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -27,14 +22,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.framex.app.R
+import com.framex.app.ui.theme.FrameXMotion
 
 /**
  * High-performance texture background that draws a woven diagonal net.
@@ -80,13 +79,15 @@ fun PrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    testTag: String = "primary_button",
     icon: @Composable (() -> Unit)? = null
 ) {
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed && enabled) 0.97f else 1.0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = FrameXMotion.pressScaleSpring(reduceMotion),
         label = "primaryBtnScale"
     )
 
@@ -95,6 +96,7 @@ fun PrimaryButton(
         enabled = enabled,
         interactionSource = interactionSource,
         modifier = modifier
+            .testTag(testTag)
             .fillMaxWidth()
             .defaultMinSize(minHeight = 56.dp)
             .graphicsLayer {
@@ -167,13 +169,15 @@ fun ActionRowTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showChevron: Boolean = true,
+    testTag: String = "action_row_tile_${title.lowercase().replace(' ', '_')}",
     icon: @Composable () -> Unit
 ) {
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.985f else 1.0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = FrameXMotion.pressScaleSpring(reduceMotion),
         label = "rowTileScale"
     )
 
@@ -181,6 +185,7 @@ fun ActionRowTile(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
+            .testTag(testTag)
             .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp)
             .graphicsLayer {
@@ -258,13 +263,15 @@ fun ActionGridCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     statusTag: (@Composable () -> Unit)? = null,
+    testTag: String = "action_grid_card_${title.lowercase().replace(' ', '_')}",
     icon: @Composable () -> Unit
 ) {
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.975f else 1.0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = FrameXMotion.pressScaleSpring(reduceMotion),
         label = "gridCardScale"
     )
 
@@ -272,6 +279,7 @@ fun ActionGridCard(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
+            .testTag(testTag)
             .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp)
             .graphicsLayer {

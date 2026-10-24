@@ -1,8 +1,11 @@
 package com.framex.app.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -30,10 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.framex.app.R
+import com.framex.app.ui.theme.FrameXMotion
 
 /**
  * Unified stadium action button for committing configuration changes.
@@ -45,18 +50,21 @@ fun FrameXApplyButton(
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    testTag: String = "framex_apply_button",
     applyText: String = stringResource(R.string.action_apply_changes),
     appliedText: String = stringResource(R.string.action_applied)
 ) {
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val buttonScale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1.0f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = if (reduceMotion) snap() else spring(stiffness = 500f),
         label = "applyButtonScale"
     )
     val containerColor by animateColorAsState(
         targetValue = if (hasChanges) accentColor else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = if (reduceMotion) snap() else spring(),
         label = "applyButtonContainerColor"
     )
 
@@ -76,6 +84,7 @@ fun FrameXApplyButton(
         ),
         shape = CircleShape,
         modifier = modifier
+            .testTag(testTag)
             .fillMaxWidth()
             .height(56.dp)
             .graphicsLayer {
@@ -85,7 +94,13 @@ fun FrameXApplyButton(
     ) {
         AnimatedContent(
             targetState = hasChanges,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                if (reduceMotion) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    fadeIn() togetherWith fadeOut()
+                }
+            },
             label = "applyButtonContent"
         ) { targetHasChanges ->
             Row(

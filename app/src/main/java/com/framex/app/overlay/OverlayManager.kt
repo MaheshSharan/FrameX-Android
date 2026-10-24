@@ -23,13 +23,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -72,6 +74,16 @@ class OverlayManager @Inject constructor(
     private val _isOverlayVisible = MutableStateFlow(false)
     val isOverlayVisible: StateFlow<Boolean> = _isOverlayVisible.asStateFlow()
 
+    fun onScreenOff() {
+        overlayLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+    }
+
+    fun onScreenOn() {
+        if (composeView != null) {
+            overlayLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        }
+    }
+
     fun showOverlay() {
         FrameXLog.d("Attempting to show overlay...")
         if (composeView != null) {
@@ -87,20 +99,20 @@ class OverlayManager @Inject constructor(
         composeView = ComposeView(context).apply {
             setContent {
                 FrameXTheme {
-                    val mode by settingsRepository.overlayMode.collectAsState()
-                    val enabledModules by settingsRepository.enabledModules.collectAsState()
-                    val enabledModuleIcons by settingsRepository.enabledModuleIcons.collectAsState()
-                    val cpuHotWarningEnabled by settingsRepository.cpuHotWarningEnabled.collectAsState()
-                    val moduleOrder by settingsRepository.moduleOrder.collectAsState()
-                    val opacity by settingsRepository.overlayOpacity.collectAsState()
-                    val textSize by settingsRepository.overlayTextSize.collectAsState()
-                    val overlayScale by settingsRepository.overlayScale.collectAsState()
-                    val useMonospace by settingsRepository.overlayUseMonospace.collectAsState()
-                    val colorIndex by settingsRepository.overlayColorIndex.collectAsState()
-                    val bgColorIndex by settingsRepository.overlayBgColorIndex.collectAsState()
-                    val borderColorIndex by settingsRepository.overlayBorderColorIndex.collectAsState()
-                    val textColorIndex by settingsRepository.overlayTextColorIndex.collectAsState()
-                    val metricsState by metricsEngine.metricsState.collectAsState()
+                    val mode by settingsRepository.overlayMode.collectAsStateWithLifecycle()
+                    val enabledModules by settingsRepository.enabledModules.collectAsStateWithLifecycle()
+                    val enabledModuleIcons by settingsRepository.enabledModuleIcons.collectAsStateWithLifecycle()
+                    val cpuHotWarningEnabled by settingsRepository.cpuHotWarningEnabled.collectAsStateWithLifecycle()
+                    val moduleOrder by settingsRepository.moduleOrder.collectAsStateWithLifecycle()
+                    val opacity by settingsRepository.overlayOpacity.collectAsStateWithLifecycle()
+                    val textSize by settingsRepository.overlayTextSize.collectAsStateWithLifecycle()
+                    val overlayScale by settingsRepository.overlayScale.collectAsStateWithLifecycle()
+                    val useMonospace by settingsRepository.overlayUseMonospace.collectAsStateWithLifecycle()
+                    val colorIndex by settingsRepository.overlayColorIndex.collectAsStateWithLifecycle()
+                    val bgColorIndex by settingsRepository.overlayBgColorIndex.collectAsStateWithLifecycle()
+                    val borderColorIndex by settingsRepository.overlayBorderColorIndex.collectAsStateWithLifecycle()
+                    val textColorIndex by settingsRepository.overlayTextColorIndex.collectAsStateWithLifecycle()
+                    val metricsState by metricsEngine.metricsState.collectAsStateWithLifecycle()
                     
                     OverlayContent(
                         mode = mode,
@@ -328,9 +340,9 @@ fun OverlayContent(
     metricsState: com.framex.app.metrics.MetricsState,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER")
     onModeToggle: () -> Unit = {}
 ) {
+    val haptics = LocalHapticFeedback.current
     com.framex.app.ui.components.OverlayPreviewContent(
         mode = mode,
         enabledModules = enabledModules,
@@ -347,6 +359,14 @@ fun OverlayContent(
         textColorIndex = textColorIndex,
         metricsState = metricsState,
         modifier = Modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onModeToggle()
+                    }
+                )
+            }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = { onDragEnd() },

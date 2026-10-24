@@ -1,8 +1,10 @@
 package com.framex.app.shizuku
 
 import android.content.Context
+import com.framex.app.utils.FrameXLog
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 class CommandRunnerService private constructor(
@@ -33,56 +35,80 @@ class CommandRunnerService private constructor(
     @Volatile
     private var resolvedThermalStrategy: ThermalReadStrategy? = null
 
-    override fun executeCommand(command: String): String {
+    /**
+     * Executes a shell command with a strict wall-clock deadline and bounded output buffer.
+     * Prevents wedged kernel nodes or hung subshells from permanently deadlocking the
+     * single-connection Shizuku IPC mutex.
+     */
+    private fun executeBoundedProcess(
+        command: String,
+        timeoutMs: Long = COMMAND_TIMEOUT_MS
+    ): Pair<Int, String> {
+        var process: Process? = null
         return try {
-            val process = ProcessBuilder("sh", "-c", command)
+            val proc = ProcessBuilder("sh", "-c", command)
                 .redirectErrorStream(true)
                 .start()
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText().trim()
+            process = proc
+
+            val outputBuilder = StringBuilder()
+            val readerThread = Thread {
+                try {
+                    BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
+                        val buffer = CharArray(4096)
+                        var read: Int
+                        while (reader.read(buffer).also { read = it } != -1) {
+                            val remaining = MAX_OUTPUT_CHARS - outputBuilder.length
+                            if (remaining > 0) {
+                                outputBuilder.append(buffer, 0, minOf(read, remaining))
+                            } else {
+                                // Drain remaining stream without growing heap allocation.
+                                break
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Stream closed on process termination or timeout destroyForcibly.
+                }
+            }.apply {
+                name = "CmdRunner-Reader"
+                isDaemon = true
+                start()
             }
-            process.waitFor()
-            output
+
+            val completed = proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            if (!completed) {
+                proc.destroyForcibly()
+                readerThread.join(200L)
+                FrameXLog.w("Command timed out after ${timeoutMs}ms: $command", tag = TAG)
+                return COMMAND_TIMED_OUT to "Error executing command: Timed out after ${timeoutMs}ms"
+            }
+
+            readerThread.join(500L)
+            val exitCode = proc.exitValue()
+            exitCode to outputBuilder.toString().trim()
         } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
-            "Error executing command: ${e.message}"
+            process?.destroyForcibly()
+            FrameXLog.e("Error executing command: $command", e, tag = TAG)
+            COMMAND_EXECUTION_FAILED to "Error executing command: ${e.message}"
         }
+    }
+
+    override fun executeCommand(command: String): String {
+        val (_, output) = executeBoundedProcess(command)
+        return output
     }
 
     override fun executeCommandWithExitCode(command: String): Int {
-        return try {
-            val process = ProcessBuilder("sh", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText()
-            }
-            process.waitFor()
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
-            COMMAND_EXECUTION_FAILED
-        }
+        val (exitCode, _) = executeBoundedProcess(command)
+        return exitCode
     }
 
     override fun executeCommandWithResult(command: String): CommandResult {
-        return try {
-            val process = ProcessBuilder("sh", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText().trim()
-            }
-            val exitCode = process.waitFor()
-            CommandResult().apply {
-                this.output = output
-                this.exitCode = exitCode
-            }
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command with result: $command", e)
-            CommandResult().apply {
-                this.output = "Error executing command: ${e.message}"
-                this.exitCode = COMMAND_EXECUTION_FAILED
-            }
+        val (exitCode, output) = executeBoundedProcess(command)
+        return CommandResult().apply {
+            this.output = output
+            this.exitCode = exitCode
         }
     }
 
@@ -524,6 +550,10 @@ class CommandRunnerService private constructor(
     }
 
     private companion object {
+        const val TAG = "CmdRunner"
         const val COMMAND_EXECUTION_FAILED = -1
+        const val COMMAND_TIMED_OUT = -2
+        const val COMMAND_TIMEOUT_MS = 10_000L
+        const val MAX_OUTPUT_CHARS = 256 * 1024
     }
 }

@@ -2,6 +2,7 @@ package com.framex.app.ui.screens.performance
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.framex.app.R
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.AppInfo
 import com.framex.app.gaming.EsportsOptimizationEngine
@@ -353,7 +354,7 @@ class PerformanceViewModel @Inject constructor(
 
     fun enableGamingMode() {
         if (settingsRepository.launcherGames.value.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             return
         }
         viewModelScope.launch {
@@ -362,7 +363,7 @@ class PerformanceViewModel @Inject constructor(
             if (gamingModeEngine.state.value == GamingModeState.Active) {
                 gamingServiceController.startGamingService()
                 if (settingsRepository.getGamingPlatformPath() == GamingPlatformPath.VIVO) {
-                    _effectChannel.send(PerformanceUiEffect.ShowToast("Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations."))
+                    _effectChannel.send(PerformanceUiEffect.ShowToast(R.string.perf_toast_vivo_pid_hint))
                 }
             }
         }
@@ -434,7 +435,7 @@ class PerformanceViewModel @Inject constructor(
 
     fun addAllLauncherGamesToPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             onComplete(false)
             return
         }
@@ -448,8 +449,12 @@ class PerformanceViewModel @Inject constructor(
                 val raw = vivoIqooSharedTools.getRawPerfGameList()
                 _rawPerfGameList.value = raw
                 _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
-                val msg = if (allSuccess) "Added ${packages.size} game(s) to Perf List ✓" else "Some games could not be added to Perf List"
-                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+                val effect = if (allSuccess) {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_perf_list_added, listOf(packages.size))
+                } else {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_perf_list_add_err)
+                }
+                _effectChannel.send(effect)
             } catch (t: Throwable) {
                 FrameXLog.e("addAllLauncherGamesToPerfList failed", t)
                 allSuccess = false
@@ -461,7 +466,7 @@ class PerformanceViewModel @Inject constructor(
 
     fun removeAllLauncherGamesFromPerfList(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             onComplete(false)
             return
         }
@@ -475,8 +480,12 @@ class PerformanceViewModel @Inject constructor(
                 val raw = vivoIqooSharedTools.getRawPerfGameList()
                 _rawPerfGameList.value = raw
                 _vivoPerfGameList.value = raw.split(":").map { it.trim() }.filter { it.isNotBlank() }
-                val msg = if (allSuccess) "Removed ${packages.size} game(s) from Perf List ✓" else "Some games could not be removed from Perf List"
-                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+                val effect = if (allSuccess) {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_perf_list_removed, listOf(packages.size))
+                } else {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_perf_list_remove_err)
+                }
+                _effectChannel.send(effect)
             } catch (t: Throwable) {
                 FrameXLog.e("removeAllLauncherGamesFromPerfList failed", t)
                 allSuccess = false
@@ -502,7 +511,7 @@ class PerformanceViewModel @Inject constructor(
 
     fun addAllLauncherGamesTo144List(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             onComplete(false)
             return
         }
@@ -516,8 +525,12 @@ class PerformanceViewModel @Inject constructor(
                 val raw = vivoIqooSharedTools.getRaw144MergeList()
                 _raw144MergeList.value = raw
                 _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                val msg = if (allSuccess) "Added ${packages.size} game(s) to 144Hz Merge List ✓" else "Some games could not be added to 144Hz Merge List"
-                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+                val effect = if (allSuccess) {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_144_list_added, listOf(packages.size))
+                } else {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_144_list_add_err)
+                }
+                _effectChannel.send(effect)
             } catch (t: Throwable) {
                 FrameXLog.e("addAllLauncherGamesTo144List failed", t)
                 allSuccess = false
@@ -529,7 +542,7 @@ class PerformanceViewModel @Inject constructor(
 
     fun removeAllLauncherGamesFrom144List(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             onComplete(false)
             return
         }
@@ -543,8 +556,12 @@ class PerformanceViewModel @Inject constructor(
                 val raw = vivoIqooSharedTools.getRaw144MergeList()
                 _raw144MergeList.value = raw
                 _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                val msg = if (allSuccess) "Removed ${packages.size} game(s) from 144Hz Merge List ✓" else "Some games could not be removed from 144Hz Merge List"
-                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+                val effect = if (allSuccess) {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_144_list_removed, listOf(packages.size))
+                } else {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_144_list_remove_err)
+                }
+                _effectChannel.send(effect)
             } catch (t: Throwable) {
                 FrameXLog.e("removeAllLauncherGamesFrom144List failed", t)
                 allSuccess = false
@@ -560,8 +577,8 @@ class PerformanceViewModel @Inject constructor(
             val raw = vivoIqooSharedTools.getRaw144MergeList()
             _raw144MergeList.value = raw
             _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-            val msg = if (ok) "Added to 144Hz Merge List ✓" else "Failed to add to 144Hz Merge List"
-            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+            val resId = if (ok) R.string.perf_toast_144_single_added else R.string.perf_toast_144_single_add_err
+            _effectChannel.send(PerformanceUiEffect.ShowToast(resId))
         }
     }
 
@@ -571,14 +588,14 @@ class PerformanceViewModel @Inject constructor(
             val raw = vivoIqooSharedTools.getRaw144MergeList()
             _raw144MergeList.value = raw
             _mergeList144.value = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-            val msg = if (ok) "Removed from 144Hz Merge List ✓" else "Failed to remove from 144Hz Merge List"
-            _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+            val resId = if (ok) R.string.perf_toast_144_single_removed else R.string.perf_toast_144_single_remove_err
+            _effectChannel.send(PerformanceUiEffect.ShowToast(resId))
         }
     }
 
     fun compileAllLauncherGamesSpeed(packages: Set<String>, onComplete: (Boolean) -> Unit) {
         if (packages.isEmpty()) {
-            _effectChannel.trySend(PerformanceUiEffect.ShowToast("Kindly add a minimum of one game in game launcher"))
+            _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
             onComplete(false)
             return
         }
@@ -589,8 +606,12 @@ class PerformanceViewModel @Inject constructor(
                     val ok = vivoIqooSharedTools.compileSpeedAot(pkg)
                     if (!ok) allSuccess = false
                 }
-                val msg = if (allSuccess) "AOT compiled ${packages.size} app(s) to speed filter ✓" else "AOT compilation failed for one or more apps"
-                _effectChannel.send(PerformanceUiEffect.ShowToast(msg))
+                val effect = if (allSuccess) {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_aot_compiled, listOf(packages.size))
+                } else {
+                    PerformanceUiEffect.ShowToast(R.string.perf_toast_aot_compile_err)
+                }
+                _effectChannel.send(effect)
             } catch (t: Throwable) {
                 FrameXLog.e("compileAllLauncherGamesSpeed failed", t)
                 allSuccess = false

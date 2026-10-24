@@ -32,10 +32,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.framex.app.R
 import com.framex.app.ui.theme.FrameXSpacing
+import com.framex.app.ui.theme.StatusEmerald
+import com.framex.app.ui.theme.StatusRed
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -92,7 +99,7 @@ fun SystemHealthGaugesSection(
                     modifier = Modifier
                         .size(5.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF10B981))
+                        .background(StatusEmerald)
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
@@ -111,14 +118,14 @@ fun SystemHealthGaugesSection(
             OscilloscopeGaugeCard(
                 label = "CPU",
                 percentage = cpuVal,
-                accentColor = Color(0xFFEF4444),
+                accentColor = StatusRed,
                 modifier = Modifier.weight(1f)
             )
 
             OscilloscopeGaugeCard(
                 label = "RAM",
                 percentage = ramPercentage,
-                accentColor = Color(0xFF10B981),
+                accentColor = StatusEmerald,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -221,7 +228,7 @@ fun SystemHealthGaugesSection(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             ),
-                            color = Color(0xFF10B981)
+                            color = StatusEmerald
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
@@ -245,7 +252,7 @@ fun SystemHealthGaugesSection(
                                     .height(30.dp * fraction)
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(
-                                        Color(0xFF10B981).copy(alpha = (0.25f + fraction * 0.75f).coerceIn(0.2f, 1f))
+                                        StatusEmerald.copy(alpha = (0.25f + fraction * 0.75f).coerceIn(0.2f, 1f))
                                     )
                             )
                         }
@@ -266,8 +273,16 @@ private fun OscilloscopeGaugeCard(
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val gaugeSummary = stringResource(
+        R.string.cd_gauge_summary,
+        label,
+        "${percentage.toInt()} percent, minimum 0 percent, maximum 100 percent"
+    )
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                contentDescription = gaugeSummary
+            }
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF0F1117))
             .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
@@ -339,7 +354,7 @@ private fun WaveformGraph(
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.clearAndSetSemantics { }) {
         val width = size.width
         val height = size.height
         val midY = height * 0.55f

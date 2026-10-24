@@ -7,8 +7,15 @@ val PrimaryDarkRed = Color(0xFFB3122F)
 
 val BackgroundLight = Color(0xFFF8F6F6)
 val BackgroundDark = Color(0xFF0F0F0F)
+val AboutBackgroundDark = Color(0xFF0C0D12)
 val SurfaceDark = Color(0xFF1A1A1A)
 val SurfaceLight = Color(0xFF2A2A2A)
+
+// Semantic status tokens
+val StatusGreen = Color(0xFF22C55E)
+val StatusEmerald = Color(0xFF10B981)
+val StatusAmber = Color(0xFFF59E0B)
+val StatusRed = Color(0xFFEF4444)
 
 // Muted generic colors for Appearance screen:
 val MutedBlue = Color(0xFF60A5FA)

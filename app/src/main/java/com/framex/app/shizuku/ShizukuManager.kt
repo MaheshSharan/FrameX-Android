@@ -149,24 +149,58 @@ class ShizukuManager @Inject constructor(
         return null
     }
 
+    private suspend fun <T> executeLockedWithDeadline(
+        operationName: String,
+        timeoutMs: Long = IPC_COMMAND_DEADLINE_MS,
+        defaultValue: T,
+        block: (ICommandRunner) -> T
+    ): T {
+        val result = withTimeoutOrNull(timeoutMs) {
+            commandMutex.withLock {
+                val runner = awaitCommandRunner() ?: run {
+                    com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in $operationName")
+                    return@withLock defaultValue
+                }
+                try {
+                    withContext(Dispatchers.IO) {
+                        block(runner)
+                    }
+                } catch (e: android.os.DeadObjectException) {
+                    com.framex.app.utils.FrameXLog.w("$operationName encountered DeadObjectException; clearing stale binder", e)
+                    disconnectUserService(remove = true)
+                    refreshState()
+                    defaultValue
+                } catch (e: android.os.RemoteException) {
+                    com.framex.app.utils.FrameXLog.e("$operationName failed with RemoteException", e)
+                    defaultValue
+                } catch (e: SecurityException) {
+                    com.framex.app.utils.FrameXLog.e("$operationName failed with SecurityException", e)
+                    refreshState()
+                    defaultValue
+                } catch (e: Exception) {
+                    com.framex.app.utils.FrameXLog.e("$operationName failed", e)
+                    defaultValue
+                }
+            }
+        }
+        if (result == null) {
+            com.framex.app.utils.FrameXLog.w("$operationName timed out waiting for IPC lock/execution after ${timeoutMs}ms")
+            return defaultValue
+        }
+        return result
+    }
+
     suspend fun executeCommand(command: String): String {
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             com.framex.app.utils.FrameXLog.w("executeCommand called when Shizuku is unavailable or permitted")
             return ""
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in executeCommand")
-                return@withLock ""
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.executeCommand(command)
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("executeCommand failed: $command", e)
-                ""
-            }
+        return executeLockedWithDeadline(
+            operationName = "executeCommand($command)",
+            timeoutMs = IPC_COMMAND_DEADLINE_MS,
+            defaultValue = ""
+        ) { runner ->
+            runner.executeCommand(command)
         }
     }
 
@@ -175,19 +209,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("executeCommandWithExitCode called when Shizuku is unavailable or permission is not granted")
             return COMMAND_EXECUTION_FAILED
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in executeCommandWithExitCode")
-                return@withLock COMMAND_EXECUTION_FAILED
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.executeCommandWithExitCode(command)
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("executeCommandWithExitCode failed: $command", e)
-                COMMAND_EXECUTION_FAILED
-            }
+        return executeLockedWithDeadline(
+            operationName = "executeCommandWithExitCode($command)",
+            timeoutMs = IPC_COMMAND_DEADLINE_MS,
+            defaultValue = COMMAND_EXECUTION_FAILED
+        ) { runner ->
+            runner.executeCommandWithExitCode(command)
         }
     }
 
@@ -196,19 +223,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("executeCommandWithResult called when Shizuku is unavailable or permission is not granted")
             return null
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in executeCommandWithResult")
-                return@withLock null
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.executeCommandWithResult(command)
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("executeCommandWithResult failed: $command", e)
-                null
-            }
+        return executeLockedWithDeadline<CommandResult?>(
+            operationName = "executeCommandWithResult($command)",
+            timeoutMs = IPC_COMMAND_DEADLINE_MS,
+            defaultValue = null
+        ) { runner ->
+            runner.executeCommandWithResult(command)
         }
     }
 
@@ -217,19 +237,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("readProcStat called when Shizuku is unavailable")
             return ""
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in readProcStat")
-                return@withLock ""
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.readProcStat()
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("readProcStat failed", e)
-                ""
-            }
+        return executeLockedWithDeadline(
+            operationName = "readProcStat",
+            timeoutMs = IPC_TELEMETRY_DEADLINE_MS,
+            defaultValue = ""
+        ) { runner ->
+            runner.readProcStat()
         }
     }
 
@@ -237,16 +250,12 @@ class ShizukuManager @Inject constructor(
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             return ""
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: return@withLock ""
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.readCpuTelemetry()
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("readCpuTelemetry failed", e)
-                ""
-            }
+        return executeLockedWithDeadline(
+            operationName = "readCpuTelemetry",
+            timeoutMs = IPC_TELEMETRY_DEADLINE_MS,
+            defaultValue = ""
+        ) { runner ->
+            runner.readCpuTelemetry()
         }
     }
 
@@ -255,19 +264,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("getThermalTemperatures called when Shizuku is unavailable")
             return ""
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in getThermalTemperatures")
-                return@withLock ""
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.getThermalTemperatures()
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("getThermalTemperatures failed", e)
-                ""
-            }
+        return executeLockedWithDeadline(
+            operationName = "getThermalTemperatures",
+            timeoutMs = IPC_TELEMETRY_DEADLINE_MS,
+            defaultValue = ""
+        ) { runner ->
+            runner.getThermalTemperatures()
         }
     }
 
@@ -284,19 +286,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("suspendPackages skipped: Shizuku unavailable/unpermitted or package list empty")
             return null
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in suspendPackages")
-                return@withLock null
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.suspendPackages(packageNames.toTypedArray(), suspended)
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("suspendPackages failed", e)
-                null
-            }
+        return executeLockedWithDeadline<SuspendResult?>(
+            operationName = "suspendPackages(count=${packageNames.size}, suspended=$suspended)",
+            timeoutMs = IPC_BATCH_DEADLINE_MS,
+            defaultValue = null
+        ) { runner ->
+            runner.suspendPackages(packageNames.toTypedArray(), suspended)
         }
     }
 
@@ -305,19 +300,12 @@ class ShizukuManager @Inject constructor(
             com.framex.app.utils.FrameXLog.w("setAppOpMode skipped: Shizuku unavailable/unpermitted or package list empty")
             return 0
         }
-        return commandMutex.withLock {
-            val runner = awaitCommandRunner() ?: run {
-                com.framex.app.utils.FrameXLog.w("CommandRunner unavailable after bind attempt in setAppOpMode")
-                return@withLock 0
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    runner.setAppOpMode(packageNames.toTypedArray(), opCode, mode)
-                }
-            } catch (e: Exception) {
-                com.framex.app.utils.FrameXLog.e("setAppOpMode failed", e)
-                0
-            }
+        return executeLockedWithDeadline(
+            operationName = "setAppOpMode(count=${packageNames.size}, opCode=$opCode)",
+            timeoutMs = IPC_BATCH_DEADLINE_MS,
+            defaultValue = 0
+        ) { runner ->
+            runner.setAppOpMode(packageNames.toTypedArray(), opCode, mode)
         }
     }
 
@@ -351,6 +339,14 @@ class ShizukuManager @Inject constructor(
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
                 if (userServiceConnection !== this) return
                 com.framex.app.utils.FrameXLog.w("connectUserService: onServiceConnected")
+                runCatching {
+                    service?.linkToDeath({
+                        com.framex.app.utils.FrameXLog.w("CommandRunner IBinder died via DeathRecipient")
+                        commandRunner = null
+                        isConnecting = false
+                        refreshState()
+                    }, 0)
+                }
                 val runner = ICommandRunner.Stub.asInterface(service)
                 commandRunner = runner
                 isConnecting = false
@@ -412,6 +408,9 @@ class ShizukuManager @Inject constructor(
         private const val INITIAL_BIND_DELAY_MS = 2000L
         private const val MAX_BIND_RETRIES = 3
         private const val BIND_RETRY_DELAY_MS = 500L
+        private const val IPC_TELEMETRY_DEADLINE_MS = 6_000L
+        private const val IPC_COMMAND_DEADLINE_MS = 15_000L
+        private const val IPC_BATCH_DEADLINE_MS = 25_000L
         private const val USER_SERVICE_TAG = "framex-command-runner"
         private const val COMMAND_EXECUTION_FAILED = -1
     }

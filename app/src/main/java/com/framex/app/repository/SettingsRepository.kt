@@ -1,657 +1,154 @@
 package com.framex.app.repository
 
 import android.content.Context
-import android.content.SharedPreferences
+import com.framex.app.gaming.GamingOptimizationSnapshot
 import com.framex.app.gaming.GamingPlatformPath
-import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Facade delegating preference operations to the four domain-scoped DataStore repositories:
+ * [OverlaySettingsRepository], [GamingSettingsRepository],
+ * [ExecutionCenterSettingsRepository], and [AppPreferencesRepository].
+ */
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext context: Context
+    val overlay: OverlaySettingsRepository,
+    val gaming: GamingSettingsRepository,
+    val executionCenter: ExecutionCenterSettingsRepository,
+    val appPrefs: AppPreferencesRepository
 ) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("framex_settings", Context.MODE_PRIVATE)
-
-    private val _overlayMode = MutableStateFlow(prefs.getString(KEY_OVERLAY_MODE, "Compact") ?: "Compact")
-    val overlayMode: StateFlow<String> = _overlayMode.asStateFlow()
-
-    // Default: FPS only. Other monitors start only when user enables them in overlay config.
-    private val _enabledModules = MutableStateFlow(
-        prefs.getStringSet(KEY_ENABLED_MODULES, setOf("fps")) ?: setOf("fps")
+    constructor(context: Context) : this(
+        store = FrameXPreferenceStore(context)
     )
-    val enabledModules: StateFlow<Set<String>> = _enabledModules.asStateFlow()
 
-    // Default: all module icons enabled. Users can toggle individual module icons off.
-    private val _enabledModuleIcons = MutableStateFlow(
-        prefs.getStringSet(KEY_ENABLED_MODULE_ICONS, DEFAULT_MODULE_ICONS) ?: DEFAULT_MODULE_ICONS
+    private constructor(store: FrameXPreferenceStore) : this(
+        overlay = OverlaySettingsRepository(store),
+        gaming = GamingSettingsRepository(store),
+        executionCenter = ExecutionCenterSettingsRepository(store),
+        appPrefs = AppPreferencesRepository(store)
     )
-    val enabledModuleIcons: StateFlow<Set<String>> = _enabledModuleIcons.asStateFlow()
 
-    // Display order of metric modules (both enabled and disabled), as module storage keys.
-    // Stored as a single delimited string rather than a StringSet — SharedPreferences'
-    // StringSet has no guaranteed iteration order, which would silently discard any
-    // ordering the user set up via drag-and-drop in Overlay Config. Empty when the user
-    // has never customized ordering; callers fall back to the canonical default order
-    // (see MetricModule.kt's resolveMetricModuleOrder).
-    private val _moduleOrder = MutableStateFlow(loadModuleOrder())
-    val moduleOrder: StateFlow<List<String>> = _moduleOrder.asStateFlow()
-
-    private fun loadModuleOrder(): List<String> =
-        prefs.getString(KEY_MODULE_ORDER, null)
-            ?.split(MODULE_ORDER_DELIMITER)
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-
-    private val _overlayOpacity = MutableStateFlow(prefs.getFloat(KEY_OVERLAY_OPACITY, 0.75f))
-    val overlayOpacity: StateFlow<Float> = _overlayOpacity.asStateFlow()
-
-    private val _overlayTextSize = MutableStateFlow(prefs.getInt(KEY_OVERLAY_TEXT_SIZE, 1))
-    val overlayTextSize: StateFlow<Int> = _overlayTextSize.asStateFlow()
-
-    private val _overlayScale = MutableStateFlow(
-        if (prefs.contains(KEY_OVERLAY_SCALE)) {
-            prefs.getFloat(KEY_OVERLAY_SCALE, 1.0f)
-        } else {
-            when (prefs.getInt(KEY_OVERLAY_TEXT_SIZE, 1)) {
-                0 -> 0.8f
-                2 -> 1.2f
-                else -> 1.0f
-            }
-        }
-    )
-    val overlayScale: StateFlow<Float> = _overlayScale.asStateFlow()
-
-    private val _overlayUseMonospace = MutableStateFlow(prefs.getBoolean(KEY_OVERLAY_USE_MONOSPACE, false))
-    val overlayUseMonospace: StateFlow<Boolean> = _overlayUseMonospace.asStateFlow()
-
-    private val _overlayColorIndex = MutableStateFlow(prefs.getInt(KEY_OVERLAY_COLOR_INDEX, 0))
-    val overlayColorIndex: StateFlow<Int> = _overlayColorIndex.asStateFlow()
-
-    // Container background color index: 0=Black, 1=Dark Navy, 2=Charcoal, 3=Transparent
-    private val _overlayBgColorIndex = MutableStateFlow(prefs.getInt(KEY_OVERLAY_BG_COLOR_INDEX, 0))
-    val overlayBgColorIndex: StateFlow<Int> = _overlayBgColorIndex.asStateFlow()
-
-    // Container border style index: 0=Accent, 1=None, 2=White Subtle, 3=Ghost
-    private val _overlayBorderColorIndex = MutableStateFlow(prefs.getInt(KEY_OVERLAY_BORDER_COLOR_INDEX, 0))
-    val overlayBorderColorIndex: StateFlow<Int> = _overlayBorderColorIndex.asStateFlow()
-
-    // Metric value text color index: 0=White, 1=Accent, 2=Silver, 3=Auto (FPS-based coloring)
-    private val _overlayTextColorIndex = MutableStateFlow(prefs.getInt(KEY_OVERLAY_TEXT_COLOR_INDEX, 0))
-    val overlayTextColorIndex: StateFlow<Int> = _overlayTextColorIndex.asStateFlow()
-
-    private val _isOnboardingCompleted = MutableStateFlow(prefs.getBoolean(KEY_IS_ONBOARDING_COMPLETED, false))
-    val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
-
-    // Overlay window position — persists the last dragged location across service restarts.
-    private val _overlayX = MutableStateFlow(prefs.getInt(KEY_OVERLAY_PORTRAIT_X, -1))
-    val overlayX: StateFlow<Int> = _overlayX.asStateFlow()
-
-    private val _overlayY = MutableStateFlow(prefs.getInt(KEY_OVERLAY_PORTRAIT_Y, -1))
-    val overlayY: StateFlow<Int> = _overlayY.asStateFlow()
-
-    // Thermal Diagnostics graph controls. Stored by enum name so the screen's selections
-    // survive navigating away and back (see issue #55).
-    private val _thermalTimeWindow = MutableStateFlow(
-        prefs.getString(KEY_THERMAL_TIME_WINDOW, null) ?: DEFAULT_THERMAL_TIME_WINDOW
-    )
-    val thermalTimeWindow: StateFlow<String> = _thermalTimeWindow.asStateFlow()
-
-    private val _thermalGraphMode = MutableStateFlow(
-        prefs.getString(KEY_THERMAL_GRAPH_MODE, null) ?: DEFAULT_THERMAL_GRAPH_MODE
-    )
-    val thermalGraphMode: StateFlow<String> = _thermalGraphMode.asStateFlow()
-
-    fun setThermalTimeWindow(windowName: String) {
-        prefs.edit().putString(KEY_THERMAL_TIME_WINDOW, windowName).apply()
-        _thermalTimeWindow.value = windowName
-    }
-
-    fun setThermalGraphMode(modeName: String) {
-        prefs.edit().putString(KEY_THERMAL_GRAPH_MODE, modeName).apply()
-        _thermalGraphMode.value = modeName
-    }
-
-    fun setOverlayMode(mode: String) {
-        prefs.edit().putString(KEY_OVERLAY_MODE, mode).apply()
-        _overlayMode.value = mode
-    }
-
-    fun setEnabledModules(modules: Set<String>) {
-        prefs.edit().putStringSet(KEY_ENABLED_MODULES, modules).apply()
-        _enabledModules.value = modules
-    }
-
-    fun setEnabledModuleIcons(icons: Set<String>) {
-        prefs.edit().putStringSet(KEY_ENABLED_MODULE_ICONS, icons).apply()
-        _enabledModuleIcons.value = icons
-    }
-
-    fun setModuleOrder(order: List<String>) {
-        prefs.edit().putString(KEY_MODULE_ORDER, order.joinToString(MODULE_ORDER_DELIMITER)).apply()
-        _moduleOrder.value = order
-    }
-
-    fun setOverlayOpacity(opacity: Float) {
-        prefs.edit().putFloat(KEY_OVERLAY_OPACITY, opacity).apply()
-        _overlayOpacity.value = opacity
-    }
-
-    fun setOverlayTextSize(size: Int) {
-        val targetScale = when (size) {
-            0 -> 0.8f
-            2 -> 1.2f
-            else -> 1.0f
-        }
-        setOverlayScale(targetScale)
-    }
-
-    fun setOverlayScale(scale: Float) {
-        prefs.edit().putFloat(KEY_OVERLAY_SCALE, scale).apply()
-        _overlayScale.value = scale
-        val matchedIndex = when {
-            kotlin.math.abs(scale - 0.8f) < 0.05f -> 0
-            kotlin.math.abs(scale - 1.0f) < 0.05f -> 1
-            kotlin.math.abs(scale - 1.2f) < 0.05f -> 2
-            else -> -1
-        }
-        if (matchedIndex != -1) {
-            prefs.edit().putInt(KEY_OVERLAY_TEXT_SIZE, matchedIndex).apply()
-            _overlayTextSize.value = matchedIndex
-        }
-    }
-
-    fun setOverlayUseMonospace(useMonospace: Boolean) {
-        prefs.edit().putBoolean(KEY_OVERLAY_USE_MONOSPACE, useMonospace).apply()
-        _overlayUseMonospace.value = useMonospace
-    }
-
-    fun setOverlayColorIndex(index: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_COLOR_INDEX, index).apply()
-        _overlayColorIndex.value = index
-    }
-
-    fun setOverlayBgColorIndex(index: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_BG_COLOR_INDEX, index).apply()
-        _overlayBgColorIndex.value = index
-    }
-
-    fun setOverlayBorderColorIndex(index: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_BORDER_COLOR_INDEX, index).apply()
-        _overlayBorderColorIndex.value = index
-    }
-
-    fun setOverlayTextColorIndex(index: Int) {
-        prefs.edit().putInt(KEY_OVERLAY_TEXT_COLOR_INDEX, index).apply()
-        _overlayTextColorIndex.value = index
-    }
-
-    fun setOnboardingCompleted(completed: Boolean) {
-        prefs.edit().putBoolean(KEY_IS_ONBOARDING_COMPLETED, completed).apply()
-        _isOnboardingCompleted.value = completed
-    }
-
-    fun getOverlayPosition(isLandscape: Boolean): Pair<Int, Int> {
-        val keyX = if (isLandscape) KEY_OVERLAY_LANDSCAPE_X else KEY_OVERLAY_PORTRAIT_X
-        val keyY = if (isLandscape) KEY_OVERLAY_LANDSCAPE_Y else KEY_OVERLAY_PORTRAIT_Y
-        return Pair(prefs.getInt(keyX, -1), prefs.getInt(keyY, -1))
-    }
-
-    fun setOverlayPosition(isLandscape: Boolean, x: Int, y: Int) {
-        val keyX = if (isLandscape) KEY_OVERLAY_LANDSCAPE_X else KEY_OVERLAY_PORTRAIT_X
-        val keyY = if (isLandscape) KEY_OVERLAY_LANDSCAPE_Y else KEY_OVERLAY_PORTRAIT_Y
-        prefs.edit().putInt(keyX, x).putInt(keyY, y).apply()
-        _overlayX.value = x
-        _overlayY.value = y
-    }
-
-    // ---- Gaming Mode --------------------------------------------------------
-
-    /** Persisted whitelist — package names the user has opted out of killing. */
-    private val _gamingModeWhitelist = MutableStateFlow(
-        prefs.getStringSet(KEY_GAMING_WHITELIST, emptySet()) ?: emptySet()
-    )
-    val gamingModeWhitelist: StateFlow<Set<String>> = _gamingModeWhitelist.asStateFlow()
-
-    fun setGamingModeWhitelist(pkgs: Set<String>) {
-        prefs.edit().putStringSet(KEY_GAMING_WHITELIST, pkgs).apply()
-        _gamingModeWhitelist.value = pkgs
-    }
-
-    fun toggleGamingWhitelistApp(packageName: String) {
-        val current = _gamingModeWhitelist.value.toMutableSet()
-        if (current.contains(packageName)) current.remove(packageName) else current.add(packageName)
-        setGamingModeWhitelist(current)
-    }
-
-    private val _isGamingModeActiveFlow = MutableStateFlow(prefs.getBoolean(KEY_GAMING_MODE_ACTIVE, false))
-    val isGamingModeActiveFlow: StateFlow<Boolean> = _isGamingModeActiveFlow.asStateFlow()
-
-    /** Whether Gaming Mode was active when the app was last killed. Used for recovery. */
-    fun setGamingModeActive(active: Boolean) {
-        prefs.edit().putBoolean(KEY_GAMING_MODE_ACTIVE, active).apply()
-        _isGamingModeActiveFlow.value = active
-    }
-
-    fun isGamingModeActive(): Boolean = prefs.getBoolean(KEY_GAMING_MODE_ACTIVE, false)
-
-    /**
-     * The set of packages whose AppOps we changed during the last Gaming Mode
-     * session.  Stored so disableGamingMode() only resets what it actually changed.
-     */
-    fun setGamingAffectedPackages(pkgs: Set<String>) {
-        prefs.edit().putStringSet(KEY_GAMING_AFFECTED_PKGS, pkgs).apply()
-    }
-
-    fun getGamingAffectedPackages(): Set<String> =
-        prefs.getStringSet(KEY_GAMING_AFFECTED_PKGS, emptySet()) ?: emptySet()
-
-    fun needsThermalOverrideRecovery(): Boolean =
-        prefs.getBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, false) ||
-        prefs.getInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, 0) < THERMAL_OVERRIDE_RECOVERY_VERSION
-
-    fun setNeedsThermalOverrideActive(active: Boolean) {
-        prefs.edit().putBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, active).apply()
-    }
-
-    fun markThermalOverrideRecoveryComplete() {
-        prefs.edit()
-            .putBoolean(KEY_THERMAL_OVERRIDE_ACTIVE, false)
-            .putInt(KEY_THERMAL_OVERRIDE_RECOVERY_VERSION, THERMAL_OVERRIDE_RECOVERY_VERSION)
-            .apply()
-    }
-
-    // ---- Game Launcher ------------------------------------------------------
-
-    private val _launcherGames = MutableStateFlow(
-        prefs.getStringSet(KEY_LAUNCHER_GAMES, emptySet()) ?: emptySet()
-    )
-    val launcherGames: StateFlow<Set<String>> = _launcherGames.asStateFlow()
-
-    fun setLauncherGames(pkgs: Set<String>) {
-        prefs.edit().putStringSet(KEY_LAUNCHER_GAMES, pkgs).apply()
-        _launcherGames.value = pkgs
-    }
-
-    fun toggleLauncherGame(packageName: String) {
-        val current = _launcherGames.value.toMutableSet()
-        val whitelist = _gamingModeWhitelist.value.toMutableSet()
-        if (current.contains(packageName)) {
-            current.remove(packageName)
-        } else {
-            current.add(packageName)
-            whitelist.add(packageName)
-            setGamingModeWhitelist(whitelist)
-        }
-        setLauncherGames(current)
-    }
-
-    // Per-game configs
-    fun getGameConfigBoostRam(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_boost_ram", true)
-    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_boost_ram", enabled).apply()
-
-    fun getGameConfigDisableBrightness(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_disable_brightness", true)
-    fun setGameConfigDisableBrightness(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_disable_brightness", enabled).apply()
-
-    fun getGameConfigDisableRotate(pkg: String): Boolean = prefs.getBoolean("game_config_${pkg}_disable_rotate", true)
-    fun setGameConfigDisableRotate(pkg: String, enabled: Boolean) = prefs.edit().putBoolean("game_config_${pkg}_disable_rotate", enabled).apply()
-
-    fun getGameConfigRingtoneVol(pkg: String): Int = prefs.getInt("game_config_${pkg}_ringtone_vol", 50)
-    fun setGameConfigRingtoneVol(pkg: String, vol: Int) = prefs.edit().putInt("game_config_${pkg}_ringtone_vol", vol).apply()
-
-    // ---- Esports Optimizations ----------------------------------------------
-
-    private val _auditLoggingEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUDIT_LOGGING_ENABLED, false))
-    val auditLoggingEnabled: StateFlow<Boolean> = _auditLoggingEnabled.asStateFlow()
-
-    fun setAuditLoggingEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUDIT_LOGGING_ENABLED, enabled).apply()
-        _auditLoggingEnabled.value = enabled
-    }
-
-    private val _vivoOptEnabled = MutableStateFlow(prefs.getBoolean(KEY_VIVO_OPT_ENABLED, true))
-    val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
-
-    private val _cpuPriorityLock = MutableStateFlow(prefs.getBoolean(KEY_CPU_PRIORITY_LOCK, true))
-    val cpuPriorityLock: StateFlow<Boolean> = _cpuPriorityLock.asStateFlow()
-
-    private val _networkFirewall = MutableStateFlow(prefs.getBoolean(KEY_NETWORK_FIREWALL, false))
-    val networkFirewall: StateFlow<Boolean> = _networkFirewall.asStateFlow()
-
-    private val _refreshRateLock = MutableStateFlow(prefs.getBoolean(KEY_REFRESH_RATE_LOCK, false))
-    val refreshRateLock: StateFlow<Boolean> = _refreshRateLock.asStateFlow()
-
-    private val _touchBoost = MutableStateFlow(prefs.getBoolean(KEY_TOUCH_BOOST, false))
-    val touchBoost: StateFlow<Boolean> = _touchBoost.asStateFlow()
-
-    private val _framePacingOverlay = MutableStateFlow(prefs.getBoolean(KEY_FRAME_PACING_OVERLAY, false))
-    val framePacingOverlay: StateFlow<Boolean> = _framePacingOverlay.asStateFlow()
-
-    fun setVivoOptEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_OPT_ENABLED, enabled).apply()
-        _vivoOptEnabled.value = enabled
-    }
-
-    fun setCpuPriorityLock(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_CPU_PRIORITY_LOCK, enabled).apply()
-        _cpuPriorityLock.value = enabled
-    }
-
-    fun setNetworkFirewall(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_NETWORK_FIREWALL, enabled).apply()
-        _networkFirewall.value = enabled
-    }
-
-    fun setRefreshRateLock(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_REFRESH_RATE_LOCK, enabled).apply()
-        _refreshRateLock.value = enabled
-    }
-
-    fun setTouchBoost(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_TOUCH_BOOST, enabled).apply()
-        _touchBoost.value = enabled
-    }
-
-    fun setFramePacingOverlay(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_FRAME_PACING_OVERLAY, enabled).apply()
-        _framePacingOverlay.value = enabled
-    }
-
-    private val _fixedPerformanceMode = MutableStateFlow(prefs.getBoolean(KEY_FIXED_PERFORMANCE_MODE, false))
-    val fixedPerformanceMode: StateFlow<Boolean> = _fixedPerformanceMode.asStateFlow()
-
-    fun setFixedPerformanceMode(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_FIXED_PERFORMANCE_MODE, enabled).apply()
-        _fixedPerformanceMode.value = enabled
-    }
-
-    private val _autoUpdateCheckEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE_CHECK_ENABLED, true))
-    val autoUpdateCheckEnabled: StateFlow<Boolean> = _autoUpdateCheckEnabled.asStateFlow()
-
-    fun setAutoUpdateCheckEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_UPDATE_CHECK_ENABLED, enabled).apply()
-        _autoUpdateCheckEnabled.value = enabled
-    }
-
-    private val _deepFreezeEnabled = MutableStateFlow(prefs.getBoolean(KEY_DEEP_FREEZE_ENABLED, false))
-    val deepFreezeEnabled: StateFlow<Boolean> = _deepFreezeEnabled.asStateFlow()
-
-    fun setDeepFreezeEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_DEEP_FREEZE_ENABLED, enabled).apply()
-        _deepFreezeEnabled.value = enabled
-    }
-
-    private val _disableThermalThrottling = MutableStateFlow(prefs.getBoolean(KEY_DISABLE_THERMAL_THROTTLING, false))
-    val disableThermalThrottling: StateFlow<Boolean> = _disableThermalThrottling.asStateFlow()
-
-    fun setDisableThermalThrottling(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_DISABLE_THERMAL_THROTTLING, enabled).apply()
-        _disableThermalThrottling.value = enabled
-    }
-
-    private val _ramCachePreTrimEnabled = MutableStateFlow(prefs.getBoolean(KEY_RAM_CACHE_PRE_TRIM_ENABLED, true))
-    val ramCachePreTrimEnabled: StateFlow<Boolean> = _ramCachePreTrimEnabled.asStateFlow()
-
-    fun setRamCachePreTrimEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_RAM_CACHE_PRE_TRIM_ENABLED, enabled).apply()
-        _ramCachePreTrimEnabled.value = enabled
-    }
-
-    private val _disablePhantomProcKiller = MutableStateFlow(prefs.getBoolean(KEY_DISABLE_PHANTOM_PROC_KILLER, true))
-    val disablePhantomProcKiller: StateFlow<Boolean> = _disablePhantomProcKiller.asStateFlow()
-
-    fun setDisablePhantomProcKiller(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_DISABLE_PHANTOM_PROC_KILLER, enabled).apply()
-        _disablePhantomProcKiller.value = enabled
-    }
-
-    private val _vivoMonsterMode = MutableStateFlow(prefs.getBoolean(KEY_VIVO_MONSTER_MODE, false))
-    val vivoMonsterMode: StateFlow<Boolean> = _vivoMonsterMode.asStateFlow()
-
-    fun setVivoMonsterMode(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_MONSTER_MODE, enabled).apply()
-        _vivoMonsterMode.value = enabled
-    }
-
-    private val _vivoVipThread = MutableStateFlow(prefs.getBoolean(KEY_VIVO_VIP_THREAD, false))
-    val vivoVipThread: StateFlow<Boolean> = _vivoVipThread.asStateFlow()
-
-    fun setVivoVipThread(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_VIP_THREAD, enabled).apply()
-        _vivoVipThread.value = enabled
-    }
-
-    private val _vivoGameHandshake = MutableStateFlow(prefs.getBoolean(KEY_VIVO_GAME_HANDSHAKE, false))
-    val vivoGameHandshake: StateFlow<Boolean> = _vivoGameHandshake.asStateFlow()
-
-    fun setVivoGameHandshake(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_GAME_HANDSHAKE, enabled).apply()
-        _vivoGameHandshake.value = enabled
-    }
-
-    private val _vivoGyroPromotion = MutableStateFlow(prefs.getBoolean(KEY_VIVO_GYRO_PROMOTION, false))
-    val vivoGyroPromotion: StateFlow<Boolean> = _vivoGyroPromotion.asStateFlow()
-
-    fun setVivoGyroPromotion(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_GYRO_PROMOTION, enabled).apply()
-        _vivoGyroPromotion.value = enabled
-    }
-
-    private val _vivoTouchOptimization = MutableStateFlow(prefs.getBoolean(KEY_VIVO_TOUCH_OPTIMIZATION, false))
-    val vivoTouchOptimization: StateFlow<Boolean> = _vivoTouchOptimization.asStateFlow()
-
-    fun setVivoTouchOptimization(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_TOUCH_OPTIMIZATION, enabled).apply()
-        _vivoTouchOptimization.value = enabled
-    }
-
-    private val _vivo144FpsUnlock = MutableStateFlow(prefs.getBoolean(KEY_VIVO_144FPS_UNLOCK, false))
-    val vivo144FpsUnlock: StateFlow<Boolean> = _vivo144FpsUnlock.asStateFlow()
-
-    fun setVivo144FpsUnlock(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_144FPS_UNLOCK, enabled).apply()
-        _vivo144FpsUnlock.value = enabled
-    }
-
-    private val _vivoMaintenancePulse = MutableStateFlow(prefs.getBoolean(KEY_VIVO_MAINTENANCE_PULSE, false))
-    val vivoMaintenancePulse: StateFlow<Boolean> = _vivoMaintenancePulse.asStateFlow()
-
-    fun setVivoMaintenancePulse(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_MAINTENANCE_PULSE, enabled).apply()
-        _vivoMaintenancePulse.value = enabled
-    }
-
-    private val _vivoPulseGamePlusMode = MutableStateFlow(prefs.getBoolean(KEY_VIVO_PULSE_GAME_PLUS_MODE, false))
-    val vivoPulseGamePlusMode: StateFlow<Boolean> = _vivoPulseGamePlusMode.asStateFlow()
-
-    fun setVivoPulseGamePlusMode(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_PULSE_GAME_PLUS_MODE, enabled).apply()
-        _vivoPulseGamePlusMode.value = enabled
-    }
-
-    private val _vivoPulseStandardPromotion = MutableStateFlow(prefs.getBoolean(KEY_VIVO_PULSE_STANDARD_PROMOTION, false))
-    val vivoPulseStandardPromotion: StateFlow<Boolean> = _vivoPulseStandardPromotion.asStateFlow()
-
-    fun setVivoPulseStandardPromotion(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_PULSE_STANDARD_PROMOTION, enabled).apply()
-        _vivoPulseStandardPromotion.value = enabled
-    }
-
-    private val _vivoPulseSceneMoreFps = MutableStateFlow(prefs.getBoolean(KEY_VIVO_PULSE_SCENE_MORE_FPS, false))
-    val vivoPulseSceneMoreFps: StateFlow<Boolean> = _vivoPulseSceneMoreFps.asStateFlow()
-
-    fun setVivoPulseSceneMoreFps(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VIVO_PULSE_SCENE_MORE_FPS, enabled).apply()
-        _vivoPulseSceneMoreFps.value = enabled
-    }
-
-    private val _cpuHotWarningEnabled = MutableStateFlow(prefs.getBoolean(KEY_CPU_HOT_WARNING_ENABLED, true))
-    val cpuHotWarningEnabled: StateFlow<Boolean> = _cpuHotWarningEnabled.asStateFlow()
-
-    fun setCpuHotWarningEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_CPU_HOT_WARNING_ENABLED, enabled).apply()
-        _cpuHotWarningEnabled.value = enabled
-    }
-
-    private val _hasSeenDeepFreezeNotice = MutableStateFlow(prefs.getBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, false))
-    val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
-
-    fun setHasSeenDeepFreezeNotice(seen: Boolean) {
-        prefs.edit().putBoolean(KEY_HAS_SEEN_DEEP_FREEZE_NOTICE, seen).apply()
-        _hasSeenDeepFreezeNotice.value = seen
-    }
-
-    private val _overlayWasRunning = MutableStateFlow(prefs.getBoolean(KEY_OVERLAY_WAS_RUNNING, false))
-    val overlayWasRunning: StateFlow<Boolean> = _overlayWasRunning.asStateFlow()
-
-    fun setOverlayWasRunning(running: Boolean) {
-        prefs.edit().putBoolean(KEY_OVERLAY_WAS_RUNNING, running).apply()
-        _overlayWasRunning.value = running
-    }
-
-    // ---- Gaming Optimization Snapshot (Crash-Safe Recovery) -----------------
-
-    /**
-     * Saves the current gaming optimization snapshot.
-     * Uses synchronous commit() to guarantee disk persistence before system writes execute.
-     */
-    fun saveGamingOptimizationSnapshot(snapshot: com.framex.app.gaming.GamingOptimizationSnapshot) {
-        prefs.edit().putString(KEY_GAMING_OPT_SNAPSHOT, snapshot.toJson()).commit()
-    }
-
-    /**
-     * Loads the persisted gaming optimization snapshot, if any.
-     * Returns null if no active snapshot exists or if deserialization fails.
-     */
-    fun loadGamingOptimizationSnapshot(): com.framex.app.gaming.GamingOptimizationSnapshot? {
-        val json = prefs.getString(KEY_GAMING_OPT_SNAPSHOT, null) ?: return null
-        return com.framex.app.gaming.GamingOptimizationSnapshot.fromJson(json)
-    }
-
-    /**
-     * Clears the persisted gaming optimization snapshot. Call only after successful restoration.
-     * Uses synchronous commit() to guarantee snapshot removal on disk.
-     */
-    fun clearGamingOptimizationSnapshot() {
-        prefs.edit().remove(KEY_GAMING_OPT_SNAPSHOT).commit()
-    }
-
-    /**
-     * Returns true if there is an active gaming optimization snapshot that needs recovery.
-     */
-    fun hasActiveGamingSnapshot(): Boolean {
-        return prefs.contains(KEY_GAMING_OPT_SNAPSHOT)
-    }
-
-    // ---- Gaming Platform Path Session Routing -------------------------------
-
-    private val _gamingPlatformPath = MutableStateFlow<GamingPlatformPath?>(
-        prefs.getString(KEY_GAMING_PLATFORM_PATH, null)?.let {
-            runCatching { GamingPlatformPath.valueOf(it) }.getOrNull()
-        }
-    )
-    val gamingPlatformPath: StateFlow<GamingPlatformPath?> = _gamingPlatformPath.asStateFlow()
-
-    fun getGamingPlatformPath(): GamingPlatformPath? = _gamingPlatformPath.value
-
-    fun setGamingPlatformPath(path: GamingPlatformPath?) {
-        if (path != null) {
-            prefs.edit().putString(KEY_GAMING_PLATFORM_PATH, path.name).apply()
-        } else {
-            prefs.edit().remove(KEY_GAMING_PLATFORM_PATH).apply()
-        }
-        _gamingPlatformPath.value = path
-    }
-
-    // ---- Post-Update What's New Tracking ------------------------------------
-
-    private val _lastSeenVersionCode = MutableStateFlow(prefs.getLong(KEY_LAST_SEEN_VERSION_CODE, 0L))
-    val lastSeenVersionCode: StateFlow<Long> = _lastSeenVersionCode.asStateFlow()
-
-    fun getLastSeenVersionCode(): Long = _lastSeenVersionCode.value
-
-    fun updateLastSeenVersionCode(versionCode: Long) {
-        prefs.edit().putLong(KEY_LAST_SEEN_VERSION_CODE, versionCode).apply()
-        _lastSeenVersionCode.value = versionCode
-    }
-
-    // ---- Legacy Cleanup Migration --------------------------------------------
-
-    fun needsLegacySettingsCleanup(): Boolean =
-        prefs.getInt(KEY_LEGACY_SETTINGS_CLEANUP_VERSION, 0) < LEGACY_SETTINGS_CLEANUP_VERSION
-
-    fun markLegacySettingsCleanupComplete() {
-        prefs.edit()
-            .putInt(KEY_LEGACY_SETTINGS_CLEANUP_VERSION, LEGACY_SETTINGS_CLEANUP_VERSION)
-            .apply()
-    }
-
-    companion object {
-        private const val KEY_LAST_SEEN_VERSION_CODE = "last_seen_version_code"
-        private const val KEY_GAMING_PLATFORM_PATH = "gaming_platform_path"
-        private const val KEY_OVERLAY_MODE = "overlay_mode"
-        private const val KEY_THERMAL_TIME_WINDOW = "thermal_time_window"
-        private const val KEY_THERMAL_GRAPH_MODE = "thermal_graph_mode"
-        private const val DEFAULT_THERMAL_TIME_WINDOW = "SEC_60"
-        private const val DEFAULT_THERMAL_GRAPH_MODE = "FPS_THERMAL"
-        private const val KEY_ENABLED_MODULES = "enabled_modules"
-        private const val KEY_ENABLED_MODULE_ICONS = "enabled_module_icons"
-        private val DEFAULT_MODULE_ICONS: Set<String> =
-            DEFAULT_METRIC_MODULE_ORDER.map { it.storageKey }.toSet()
-        private const val KEY_MODULE_ORDER = "module_order"
-        private const val MODULE_ORDER_DELIMITER = ","
-        private const val KEY_OVERLAY_OPACITY = "overlay_opacity"
-        private const val KEY_OVERLAY_TEXT_SIZE = "overlay_text_size"
-        private const val KEY_OVERLAY_SCALE = "overlay_scale"
-        private const val KEY_OVERLAY_USE_MONOSPACE = "overlay_use_monospace"
-        private const val KEY_OVERLAY_COLOR_INDEX = "overlay_color_index"
-        private const val KEY_OVERLAY_BG_COLOR_INDEX = "overlay_bg_color_index"
-        private const val KEY_OVERLAY_BORDER_COLOR_INDEX = "overlay_border_color_index"
-        private const val KEY_OVERLAY_TEXT_COLOR_INDEX = "overlay_text_color_index"
-        private const val KEY_IS_ONBOARDING_COMPLETED = "is_onboarding_completed"
-        private const val KEY_OVERLAY_PORTRAIT_X = "overlay_x"
-        private const val KEY_OVERLAY_PORTRAIT_Y = "overlay_y"
-        private const val KEY_OVERLAY_LANDSCAPE_X = "overlay_landscape_x"
-        private const val KEY_OVERLAY_LANDSCAPE_Y = "overlay_landscape_y"
-        private const val KEY_GAMING_WHITELIST = "gaming_mode_whitelist"
-        private const val KEY_GAMING_MODE_ACTIVE = "gaming_mode_active"
-        private const val KEY_GAMING_AFFECTED_PKGS = "gaming_affected_pkgs"
-        private const val KEY_THERMAL_OVERRIDE_ACTIVE = "thermal_override_active"
-        private const val KEY_THERMAL_OVERRIDE_RECOVERY_VERSION = "thermal_override_recovery_version"
-        private const val THERMAL_OVERRIDE_RECOVERY_VERSION = 1
-        private const val KEY_LAUNCHER_GAMES = "launcher_games"
-        private const val KEY_AUDIT_LOGGING_ENABLED = "audit_logging_enabled"
-        private const val KEY_VIVO_OPT_ENABLED = "esports_vivo_opt_enabled"
-        private const val KEY_CPU_PRIORITY_LOCK = "esports_cpu_priority_lock"
-        private const val KEY_NETWORK_FIREWALL = "esports_network_firewall"
-        private const val KEY_REFRESH_RATE_LOCK = "esports_refresh_rate_lock"
-        private const val KEY_TOUCH_BOOST = "esports_touch_boost"
-        private const val KEY_FRAME_PACING_OVERLAY = "esports_frame_pacing_overlay"
-        private const val KEY_FIXED_PERFORMANCE_MODE = "esports_fixed_performance_mode"
-        private const val KEY_DEEP_FREEZE_ENABLED = "gaming_deep_freeze_enabled"
-        private const val KEY_DISABLE_THERMAL_THROTTLING = "gaming_disable_thermal_throttling"
-        private const val KEY_RAM_CACHE_PRE_TRIM_ENABLED = "gaming_ram_cache_pre_trim_enabled"
-        private const val KEY_DISABLE_PHANTOM_PROC_KILLER = "gaming_disable_phantom_proc_killer"
-        private const val KEY_VIVO_MONSTER_MODE = "gaming_vivo_monster_mode"
-        private const val KEY_VIVO_VIP_THREAD = "gaming_vivo_vip_thread"
-        private const val KEY_VIVO_GAME_HANDSHAKE = "gaming_vivo_game_handshake"
-        private const val KEY_VIVO_GYRO_PROMOTION = "gaming_vivo_gyro_promotion"
-        private const val KEY_VIVO_TOUCH_OPTIMIZATION = "gaming_vivo_touch_optimization"
-        private const val KEY_VIVO_144FPS_UNLOCK = "gaming_vivo_144fps_unlock"
-        private const val KEY_VIVO_MAINTENANCE_PULSE = "gaming_vivo_maintenance_pulse"
-        private const val KEY_VIVO_PULSE_GAME_PLUS_MODE = "gaming_vivo_pulse_game_plus_mode"
-        private const val KEY_VIVO_PULSE_STANDARD_PROMOTION = "gaming_vivo_pulse_standard_promotion"
-        private const val KEY_VIVO_PULSE_SCENE_MORE_FPS = "gaming_vivo_pulse_scene_more_fps"
-        private const val KEY_CPU_HOT_WARNING_ENABLED = "cpu_hot_warning_enabled"
-        private const val KEY_HAS_SEEN_DEEP_FREEZE_NOTICE = "has_seen_deep_freeze_notice"
-        private const val KEY_AUTO_UPDATE_CHECK_ENABLED = "auto_update_check_enabled"
-        private const val KEY_OVERLAY_WAS_RUNNING = "overlay_was_running"
-        private const val KEY_GAMING_OPT_SNAPSHOT = "gaming_opt_snapshot"
-        private const val KEY_LEGACY_SETTINGS_CLEANUP_VERSION = "legacy_settings_cleanup_version"
-        private const val LEGACY_SETTINGS_CLEANUP_VERSION = 1
-    }
+    // --- Overlay domain ---
+    val overlayMode: StateFlow<String> get() = overlay.overlayMode
+    val enabledModules: StateFlow<Set<String>> get() = overlay.enabledModules
+    val enabledModuleIcons: StateFlow<Set<String>> get() = overlay.enabledModuleIcons
+    val cpuHotWarningEnabled: StateFlow<Boolean> get() = overlay.cpuHotWarningEnabled
+    val moduleOrder: StateFlow<List<String>> get() = overlay.moduleOrder
+    val overlayOpacity: StateFlow<Float> get() = overlay.overlayOpacity
+    val overlayTextSize: StateFlow<Int> get() = overlay.overlayTextSize
+    val overlayScale: StateFlow<Float> get() = overlay.overlayScale
+    val overlayUseMonospace: StateFlow<Boolean> get() = overlay.overlayUseMonospace
+    val overlayColorIndex: StateFlow<Int> get() = overlay.overlayColorIndex
+    val overlayBgColorIndex: StateFlow<Int> get() = overlay.overlayBgColorIndex
+    val overlayBorderColorIndex: StateFlow<Int> get() = overlay.overlayBorderColorIndex
+    val overlayTextColorIndex: StateFlow<Int> get() = overlay.overlayTextColorIndex
+
+    fun setOverlayMode(mode: String) = overlay.setOverlayMode(mode)
+    fun setEnabledModules(modules: Set<String>) = overlay.setEnabledModules(modules)
+    fun toggleModule(module: String, enabled: Boolean) = overlay.toggleModule(module, enabled)
+    fun setEnabledModuleIcons(icons: Set<String>) = overlay.setEnabledModuleIcons(icons)
+    fun toggleModuleIcon(module: String, enabled: Boolean) = overlay.toggleModuleIcon(module, enabled)
+    fun setCpuHotWarningEnabled(enabled: Boolean) = overlay.setCpuHotWarningEnabled(enabled)
+    fun setModuleOrder(order: List<String>) = overlay.setModuleOrder(order)
+    fun setOverlayOpacity(opacity: Float) = overlay.setOverlayOpacity(opacity)
+    fun setOverlayTextSize(size: Int) = overlay.setOverlayTextSize(size)
+    fun setOverlayScale(scale: Float) = overlay.setOverlayScale(scale)
+    fun setOverlayUseMonospace(useMonospace: Boolean) = overlay.setOverlayUseMonospace(useMonospace)
+    fun setOverlayColorIndex(index: Int) = overlay.setOverlayColorIndex(index)
+    fun setOverlayBgColorIndex(index: Int) = overlay.setOverlayBgColorIndex(index)
+    fun setOverlayBorderColorIndex(index: Int) = overlay.setOverlayBorderColorIndex(index)
+    fun setOverlayTextColorIndex(index: Int) = overlay.setOverlayTextColorIndex(index)
+    fun resetOverlayToDefaults() = overlay.resetOverlayToDefaults()
+    fun getOverlayPosition(isLandscape: Boolean): Pair<Int, Int> = overlay.getOverlayPosition(isLandscape)
+    fun setOverlayPosition(isLandscape: Boolean, x: Int, y: Int) = overlay.setOverlayPosition(isLandscape, x, y)
+    fun wasOverlayRunning(): Boolean = overlay.wasOverlayRunning()
+    fun setOverlayWasRunning(running: Boolean) = overlay.setOverlayWasRunning(running)
+
+    // --- Gaming domain ---
+    val gamingModeWhitelist: StateFlow<Set<String>> get() = gaming.gamingModeWhitelist
+    val launcherGames: StateFlow<Set<String>> get() = gaming.launcherGames
+    val deepFreezeEnabled: StateFlow<Boolean> get() = gaming.deepFreezeEnabled
+    val hasSeenDeepFreezeNotice: StateFlow<Boolean> get() = gaming.hasSeenDeepFreezeNotice
+    val vivoOptEnabled: StateFlow<Boolean> get() = gaming.vivoOptEnabled
+    val gamingPlatformPath: StateFlow<GamingPlatformPath> get() = gaming.gamingPlatformPath
+    val isGamingModeActiveFlow: StateFlow<Boolean> get() = gaming.isGamingModeActiveFlow
+
+    fun toggleGamingWhitelistApp(packageName: String) = gaming.toggleGamingWhitelistApp(packageName)
+    fun setLauncherGames(games: Set<String>) = gaming.setLauncherGames(games)
+    fun toggleLauncherGame(packageName: String) = gaming.toggleLauncherGame(packageName)
+    fun setDeepFreezeEnabled(enabled: Boolean) = gaming.setDeepFreezeEnabled(enabled)
+    fun setHasSeenDeepFreezeNotice(seen: Boolean) = gaming.setHasSeenDeepFreezeNotice(seen)
+    fun setVivoOptEnabled(enabled: Boolean) = gaming.setVivoOptEnabled(enabled)
+    fun getGamingPlatformPath(): GamingPlatformPath = gaming.getGamingPlatformPath()
+    fun setGamingPlatformPath(path: GamingPlatformPath?) = gaming.setGamingPlatformPath(path)
+    fun isGamingModeActive(): Boolean = gaming.isGamingModeActive()
+    fun setGamingModeActive(active: Boolean) = gaming.setGamingModeActive(active)
+    fun getGamingAffectedPackages(): Set<String> = gaming.getGamingAffectedPackages()
+    fun setGamingAffectedPackages(packages: Set<String>) = gaming.setGamingAffectedPackages(packages)
+    fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) =
+        gaming.saveGamingOptimizationSnapshot(snapshot)
+    fun loadGamingOptimizationSnapshot(): GamingOptimizationSnapshot? =
+        gaming.loadGamingOptimizationSnapshot()
+    fun clearGamingOptimizationSnapshot() = gaming.clearGamingOptimizationSnapshot()
+    fun hasActiveGamingSnapshot(): Boolean = gaming.hasActiveGamingSnapshot()
+    fun needsThermalOverrideRecovery(): Boolean = gaming.needsThermalOverrideRecovery()
+    fun setNeedsThermalOverrideActive(active: Boolean) = gaming.setNeedsThermalOverrideActive(active)
+    fun markThermalOverrideRecoveryComplete() = gaming.markThermalOverrideRecoveryComplete()
+    fun needsLegacySettingsCleanup(): Boolean = gaming.needsLegacySettingsCleanup()
+    fun markLegacySettingsCleanupComplete() = gaming.markLegacySettingsCleanupComplete()
+    fun cleanupLegacyPreferences() = gaming.cleanupLegacyPreferences()
+    fun getGameConfigBoostRam(pkg: String): Boolean = gaming.getGameConfigBoostRam(pkg)
+    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) = gaming.setGameConfigBoostRam(pkg, enabled)
+
+    // --- Execution Center domain ---
+    val disableThermalThrottling: StateFlow<Boolean> get() = executionCenter.disableThermalThrottling
+    val ramCachePreTrimEnabled: StateFlow<Boolean> get() = executionCenter.ramCachePreTrimEnabled
+    val disablePhantomProcKiller: StateFlow<Boolean> get() = executionCenter.disablePhantomProcKiller
+    val cpuPriorityLock: StateFlow<Boolean> get() = executionCenter.cpuPriorityLock
+    val fixedPerformanceMode: StateFlow<Boolean> get() = executionCenter.fixedPerformanceMode
+    val networkFirewall: StateFlow<Boolean> get() = executionCenter.networkFirewall
+    val refreshRateLock: StateFlow<Boolean> get() = executionCenter.refreshRateLock
+    val touchBoost: StateFlow<Boolean> get() = executionCenter.touchBoost
+    val vivoMonsterMode: StateFlow<Boolean> get() = executionCenter.vivoMonsterMode
+    val vivoVipThread: StateFlow<Boolean> get() = executionCenter.vivoVipThread
+    val vivoGameHandshake: StateFlow<Boolean> get() = executionCenter.vivoGameHandshake
+    val vivoGyroPromotion: StateFlow<Boolean> get() = executionCenter.vivoGyroPromotion
+    val vivoTouchOptimization: StateFlow<Boolean> get() = executionCenter.vivoTouchOptimization
+    val vivo144FpsUnlock: StateFlow<Boolean> get() = executionCenter.vivo144FpsUnlock
+    val vivoMaintenancePulse: StateFlow<Boolean> get() = executionCenter.vivoMaintenancePulse
+    val vivoPulseGamePlusMode: StateFlow<Boolean> get() = executionCenter.vivoPulseGamePlusMode
+    val vivoPulseStandardPromotion: StateFlow<Boolean> get() = executionCenter.vivoPulseStandardPromotion
+    val vivoPulseSceneMoreFps: StateFlow<Boolean> get() = executionCenter.vivoPulseSceneMoreFps
+    val auditLoggingEnabled: StateFlow<Boolean> get() = executionCenter.auditLoggingEnabled
+
+    fun setDisableThermalThrottling(enabled: Boolean) = executionCenter.setDisableThermalThrottling(enabled)
+    fun setRamCachePreTrimEnabled(enabled: Boolean) = executionCenter.setRamCachePreTrimEnabled(enabled)
+    fun setDisablePhantomProcKiller(enabled: Boolean) = executionCenter.setDisablePhantomProcKiller(enabled)
+    fun setCpuPriorityLock(enabled: Boolean) = executionCenter.setCpuPriorityLock(enabled)
+    fun setFixedPerformanceMode(enabled: Boolean) = executionCenter.setFixedPerformanceMode(enabled)
+    fun setNetworkFirewall(enabled: Boolean) = executionCenter.setNetworkFirewall(enabled)
+    fun setRefreshRateLock(enabled: Boolean) = executionCenter.setRefreshRateLock(enabled)
+    fun setTouchBoost(enabled: Boolean) = executionCenter.setTouchBoost(enabled)
+    fun setVivoMonsterMode(enabled: Boolean) = executionCenter.setVivoMonsterMode(enabled)
+    fun setVivoVipThread(enabled: Boolean) = executionCenter.setVivoVipThread(enabled)
+    fun setVivoGameHandshake(enabled: Boolean) = executionCenter.setVivoGameHandshake(enabled)
+    fun setVivoGyroPromotion(enabled: Boolean) = executionCenter.setVivoGyroPromotion(enabled)
+    fun setVivoTouchOptimization(enabled: Boolean) = executionCenter.setVivoTouchOptimization(enabled)
+    fun setVivo144FpsUnlock(enabled: Boolean) = executionCenter.setVivo144FpsUnlock(enabled)
+    fun setVivoMaintenancePulse(enabled: Boolean) = executionCenter.setVivoMaintenancePulse(enabled)
+    fun setVivoPulseGamePlusMode(enabled: Boolean) = executionCenter.setVivoPulseGamePlusMode(enabled)
+    fun setVivoPulseStandardPromotion(enabled: Boolean) = executionCenter.setVivoPulseStandardPromotion(enabled)
+    fun setVivoPulseSceneMoreFps(enabled: Boolean) = executionCenter.setVivoPulseSceneMoreFps(enabled)
+    fun setAuditLoggingEnabled(enabled: Boolean) = executionCenter.setAuditLoggingEnabled(enabled)
+
+    // --- App Preferences domain ---
+    val isOnboardingCompleted: StateFlow<Boolean> get() = appPrefs.isOnboardingCompleted
+    val autoUpdateCheckEnabled: StateFlow<Boolean> get() = appPrefs.autoUpdateCheckEnabled
+
+    fun setOnboardingCompleted(completed: Boolean) = appPrefs.setOnboardingCompleted(completed)
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) = appPrefs.setAutoUpdateCheckEnabled(enabled)
+    fun getLastSeenVersionCode(): Long = appPrefs.getLastSeenVersionCode()
+    fun updateLastSeenVersionCode(versionCode: Long) = appPrefs.updateLastSeenVersionCode(versionCode)
 }

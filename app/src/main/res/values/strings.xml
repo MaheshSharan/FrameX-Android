@@ -221,4 +221,76 @@
     <string name="performance_title">Performance</string>
     <string name="view_on_github">View on GitHub</string>
     <string name="contact_developer">Contact Developer</string>
+
+    <!-- Service Channels & Notifications -->
+    <string name="overlay_notif_channel_name">FrameX Overlay Service</string>
+    <string name="gaming_notif_channel_name">FrameX Gaming Mode</string>
+    <string name="gaming_notif_channel_desc">Shown while Gaming Mode is active</string>
+    <string name="gaming_notif_title_active">Gaming Mode Active</string>
+    <string name="gaming_notif_text_active">Background apps suspended · DND enabled</string>
+    <string name="gaming_notif_action_deactivate">Deactivate</string>
+    <string name="gaming_recovery_notif_title">Gaming Mode Interrupted</string>
+    <string name="gaming_recovery_notif_text">Tap to connect Shizuku and restore your apps.</string>
+
+    <!-- Gaming Mode Engine Status & Messages -->
+    <string name="gaming_toast_hardware_rolled_back">Hardware optimizations rolled back</string>
+    <string name="gaming_err_shizuku_unavailable">Shizuku not available or permission not granted</string>
+    <string name="gaming_err_revert_vivo_failed">Failed to revert prior Vivo optimizations</string>
+    <string name="gaming_err_snapshot_failed">Failed to capture system settings snapshot</string>
+    <string name="gaming_err_deactivate_shizuku">Deactivation incomplete: Shizuku service unavailable. Tap to retry.</string>
+    <string name="gaming_err_deactivate_partial">Deactivation incomplete: %1$d apps still suspended. Tap to retry.</string>
+    <string name="gaming_status_preparing">Preparing…</string>
+    <string name="gaming_status_initializing">Initializing…</string>
+    <string name="gaming_status_purging_ram">Purging RAM Cache…</string>
+    <string name="gaming_status_suspending_bg">Suspending Background Apps…</string>
+    <string name="gaming_status_suspending_count">Suspending %1$d background apps…</string>
+    <string name="gaming_status_purging_bg_cache">Purging background cache…</string>
+
+    <!-- Performance Screen Toasts & Banners -->
+    <string name="perf_toast_add_one_game">Kindly add a minimum of one game in game launcher</string>
+    <string name="perf_toast_vivo_pid_hint">Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.</string>
+    <string name="perf_toast_perf_list_added">Added %1$d game(s) to Perf List ✓</string>
+    <string name="perf_toast_perf_list_add_err">Some games could not be added to Perf List</string>
+    <string name="perf_toast_perf_list_removed">Removed %1$d game(s) from Perf List ✓</string>
+    <string name="perf_toast_perf_list_remove_err">Some games could not be removed from Perf List</string>
+    <string name="perf_toast_144_list_added">Added %1$d game(s) to 144Hz Merge List ✓</string>
+    <string name="perf_toast_144_list_add_err">Some games could not be added to 144Hz Merge List</string>
+    <string name="perf_toast_144_list_removed">Removed %1$d game(s) from 144Hz Merge List ✓</string>
+    <string name="perf_toast_144_list_remove_err">Some games could not be removed from 144Hz Merge List</string>
+    <string name="perf_toast_144_single_added">Added to 144Hz Merge List ✓</string>
+    <string name="perf_toast_144_single_add_err">Failed to add to 144Hz Merge List</string>
+    <string name="perf_toast_144_single_removed">Removed from 144Hz Merge List ✓</string>
+    <string name="perf_toast_144_single_remove_err">Failed to remove from 144Hz Merge List</string>
+    <string name="perf_toast_aot_compiled">AOT compiled %1$d app(s) to speed filter ✓</string>
+    <string name="perf_toast_aot_compile_err">AOT compilation failed for one or more apps</string>
+    <string name="perf_banner_ram_boosted">Boosted! Freed %1$d MB, stopped %2$d apps</string>
+    <string name="perf_banner_ping_ok">Latency check complete: %1$d ms</string>
+    <string name="perf_banner_ping_fail">Latency check failed: network unreachable</string>
+    <string name="perf_banner_reset_ok">Device settings reset to OS defaults</string>
+    <string name="perf_banner_reset_partial">Device reset partially completed</string>
+    <string name="perf_toast_open_shizuku_err">Unable to open Shizuku app</string>
+    <string name="perf_toast_open_write_settings_err">Unable to open Write Settings</string>
+    <string name="perf_toast_open_dnd_err">Unable to open DND settings</string>
+    <string name="perf_toast_open_notif_listener_err">Unable to open Notification Listener settings</string>
+
+    <!-- Chart & Gauge Accessibility Summaries -->
+    <string name="cd_metric_chart_summary">%1$s chart, current %2$s %3$s, minimum %4$s %3$s, maximum %5$s %3$s</string>
+    <string name="cd_gauge_summary">%1$s gauge, current %2$s</string>
+
+    <!-- Additional Service & Performance Toast Strings -->
+    <string name="overlay_channel_name">FrameX Overlay Service</string>
+    <string name="gaming_mode_channel_name">FrameX Gaming Mode</string>
+    <string name="gaming_mode_notif_title">Gaming Mode Active</string>
+    <string name="gaming_mode_notif_text">Background apps suspended · DND enabled</string>
+    <string name="gaming_mode_action_deactivate">Deactivate</string>
+    <string name="gaming_recovery_channel_name">System State Recovery</string>
+    <string name="perf_toast_boosted_apps_cleared">Boosted! %1$d background apps cleared.</string>
+    <string name="perf_toast_launching_env_clean">Launching\u2026 (Background environment already clean)</string>
+    <string name="perf_toast_launching_grant_shizuku">Launching game (Grant Shizuku for RAM Boost)</string>
+    <string name="perf_toast_unable_to_launch_app">Unable to launch application.</string>
+    <string name="perf_toast_failed_to_launch_game">Failed to launch game.</string>
+    <string name="perf_toast_app_disabled_in_background">%1$s disabled in background.</string>
+    <string name="perf_toast_grant_shizuku_disable_system">Grant Shizuku permission to disable system apps.</string>
+    <string name="perf_toast_app_restored">Restored %1$s.</string>
+    <string name="perf_toast_grant_shizuku_restore_system">Grant Shizuku permission to restore system apps.</string>
 </resources>

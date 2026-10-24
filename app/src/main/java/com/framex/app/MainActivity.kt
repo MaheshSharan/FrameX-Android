@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.ui.featurediscovery.FeatureDiscoveryHost
 import com.framex.app.ui.navigation.FrameXNavGraph
@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val colorIndex by settingsRepository.overlayColorIndex.collectAsState()
+            val colorIndex by settingsRepository.overlayColorIndex.collectAsStateWithLifecycle()
 
             FrameXTheme(colorIndex = colorIndex) {
                 Surface(

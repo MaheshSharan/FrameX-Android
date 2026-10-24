@@ -1,161 +1,198 @@
 package com.framex.app.overlay
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.os.Build
+import android.app.Service
 import android.os.IBinder
-import android.os.PowerManager
+import androidx.core.content.ContextCompat
+import com.framex.app.R
+import com.framex.app.metrics.MetricsEngine
+import com.framex.app.metrics.SessionLogger
+import com.framex.app.repository.SettingsRepository
+import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class OverlayService : Service() {
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     @Inject
     lateinit var overlayManager: OverlayManager
 
     @Inject
-    lateinit var settingsRepository: com.framex.app.repository.SettingsRepository
+    lateinit var metricsEngine: MetricsEngine
 
     @Inject
-    lateinit var auditLogRepository: com.framex.app.gaming.SystemAuditLogRepository
+    lateinit var sessionLogger: SessionLogger
 
-    private var wakeLock: PowerManager.WakeLock? = null
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
-    // Only hold the wake lock while the screen is actually on. Holding it for the entire
-    // lifetime of the service (previous behavior) prevented the device from ever entering
-    // deep sleep after screen-off, even when the overlay/game session was effectively idle.
-    // See: https://github.com/MaheshSharan/FrameX-Android/issues/20
+    private var visibilityObserverJob: Job? = null
+
     private val screenStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> releaseWakeLock()
-                Intent.ACTION_SCREEN_ON -> acquireWakeLock()
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    overlayManager.onScreenOff()
+                    // Keep telemetry engine running if an active session log is recording (Rule 4.1 / Plan 1.1).
+                    if (!sessionLogger.isRecording.value) {
+                        metricsEngine.setOverlayActive(false)
+                    }
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    overlayManager.onScreenOn()
+                    if (_isRunning.value) {
+                        metricsEngine.setOverlayActive(true)
+                    }
+                }
             }
         }
-    }
-
-    private fun acquireWakeLock() {
-        if (wakeLock?.isHeld == true) return
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "FrameX::OverlayWakeLock"
-        ).also { it.acquire() }
-    }
-
-    private fun releaseWakeLock() {
-        wakeLock?.let { if (it.isHeld) it.release() }
-        wakeLock = null
     }
 
     override fun onCreate() {
         super.onCreate()
         _isRunning.value = true
-        // Persist the running state so BootReceiver can auto-restart after reboot.
         settingsRepository.setOverlayWasRunning(true)
         createNotificationChannel()
-        // MEDIA_PLAYBACK is the universally accepted, permission-free type for overlay services.
-        // Combined with DATA_SYNC in the manifest so game-boost managers on MediaTek/Snapdragon
-        // OEM ROMs (vivo, IQOO, Realme) treat this service as I/O-critical, not killable.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val notification = OverlayNotificationBuilder.build(
+            context = this,
+            isOverlayVisible = overlayManager.isOverlayVisible.value
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
-                buildNotification(isOverlayVisible = true),
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
         } else {
-            startForeground(NOTIFICATION_ID, buildNotification(isOverlayVisible = true))
+            startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Acquire the WakeLock only while the screen is on (i.e. an active session), and
-        // register to release/reacquire it as the screen turns off/on so the device can
-        // still enter deep sleep once the user locks it.
-        acquireWakeLock()
-        registerReceiver(
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        ContextCompat.registerReceiver(
+            this,
             screenStateReceiver,
-            IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_OFF)
-                addAction(Intent.ACTION_SCREEN_ON)
-            }
+            screenFilter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
+        metricsEngine.setOverlayActive(true)
         overlayManager.showOverlay()
-        auditLogRepository.addLog(
-            "Overlay: Service Started",
-            "Foreground service started, wake lock acquired",
-            com.framex.app.gaming.LogStatus.SUCCESS
-        )
-        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
+        observeOverlayVisibility()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
+        super.onStartCommand(intent, flags, startId)
+        when (intent?.action) {
+            ACTION_START -> {
+                metricsEngine.setOverlayActive(true)
+                overlayManager.showOverlay()
+            }
+            ACTION_STOP -> {
+                if (sessionLogger.isRecording.value) {
+                    sessionLogger.stopRecording()
+                }
+                settingsRepository.setOverlayWasRunning(false)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_HIDE_OVERLAY -> {
+                overlayManager.hideOverlay()
+            }
+            ACTION_SHOW_OVERLAY -> {
+                overlayManager.showOverlay()
+            }
+            ACTION_START_LOG -> {
+                sessionLogger.startRecording()
+            }
+            ACTION_STOP_LOG -> {
+                sessionLogger.stopRecording()
+            }
         }
-        // START_STICKY: if the process is killed by OEM game-boost, the system will
-        // attempt to restart this service automatically with a null intent.
         return START_STICKY
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        _isRunning.value = false
-        // Clear the running flag so BootReceiver does not restart an intentionally stopped service.
-        settingsRepository.setOverlayWasRunning(false)
-        overlayManager.hideOverlay()
-        runCatching { unregisterReceiver(screenStateReceiver) }
-        releaseWakeLock()
-        auditLogRepository.addLog(
-            "Overlay: Service Stopped",
-            "Foreground service stopped, wake lock released",
-            com.framex.app.gaming.LogStatus.INFO
-        )
-        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+    override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         overlayManager.handleOrientationChange(newConfig.orientation)
+    }
+
+    private fun observeOverlayVisibility() {
+        visibilityObserverJob?.cancel()
+        visibilityObserverJob = serviceScope.launch {
+            overlayManager.isOverlayVisible.collect { isVisible ->
+                val notification = OverlayNotificationBuilder.build(
+                    context = this@OverlayService,
+                    isOverlayVisible = isVisible
+                )
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, notification)
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        _isRunning.value = false
+        visibilityObserverJob?.cancel()
+        serviceScope.cancel()
+        try {
+            unregisterReceiver(screenStateReceiver)
+        } catch (e: Exception) {
+            FrameXLog.w("screenStateReceiver was not registered or already unregistered", e)
+        }
+        if (sessionLogger.isRecording.value) {
+            sessionLogger.stopRecording()
+        }
+        metricsEngine.setOverlayActive(false)
+        overlayManager.hideOverlay()
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "FrameX Overlay Service",
+                getString(R.string.overlay_notif_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             )
-            channel.setShowBadge(false)
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
     }
 
-    private fun buildNotification(isOverlayVisible: Boolean): Notification =
-        OverlayNotificationBuilder.build(this, isOverlayVisible)
-
     companion object {
         const val CHANNEL_ID = "framex_overlay_channel"
-        // No explicit handling needed in onStartCommand: onCreate always calls
-        // overlayManager.showOverlay() unconditionally. This constant exists so callers
-        // (DashboardScreen, notification actions) can express intent explicitly rather
-        // than sending an action-less Intent.
-        const val ACTION_START = "com.framex.app.ACTION_START_OVERLAY"
-        const val ACTION_STOP = "com.framex.app.ACTION_STOP_OVERLAY"
-        const val NOTIFICATION_ID = 1
+        const val NOTIFICATION_ID = 1001
+        const val ACTION_START = "com.framex.app.ACTION_START"
+        const val ACTION_STOP = "com.framex.app.ACTION_STOP"
+        const val ACTION_HIDE_OVERLAY = "com.framex.app.ACTION_HIDE_OVERLAY"
+        const val ACTION_SHOW_OVERLAY = "com.framex.app.ACTION_SHOW_OVERLAY"
+        const val ACTION_START_LOG = "com.framex.app.ACTION_START_LOG"
+        const val ACTION_STOP_LOG = "com.framex.app.ACTION_STOP_LOG"
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()

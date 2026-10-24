@@ -34,6 +34,7 @@ import com.framex.app.ui.components.FrameXTopBar
 import com.framex.app.ui.screens.permissions.components.PermissionRow
 import com.framex.app.ui.screens.permissions.components.PermissionSummaryHeader
 import com.framex.app.ui.screens.permissions.components.ShizukuStatusCard
+import com.framex.app.ui.theme.FrameXSpacing
 
 /**
  * Pure, stateless permissions and system status screen.
@@ -89,9 +90,14 @@ fun PermissionsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
+                .fillMaxSize()
+        ) {
             // Header Bar
             FrameXTopBar(
                 title = stringResource(R.string.perm_screen_title),
@@ -196,7 +202,8 @@ fun PermissionsScreen(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 .navigationBarsPadding()
-                .padding(24.dp)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
             Button(
                 onClick = onNavigateBack,
@@ -206,6 +213,7 @@ fun PermissionsScreen(
                 ),
                 shape = CircleShape,
                 modifier = Modifier
+                    .widthIn(max = FrameXSpacing.MaxContentWidth)
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 56.dp)
             ) {
