@@ -43,7 +43,7 @@ class OverlaySettingsRepository @Inject constructor(
     private val _overlayOpacity = MutableStateFlow(store.getFloat("overlay_opacity", 0.8f))
     val overlayOpacity: StateFlow<Float> = _overlayOpacity.asStateFlow()
 
-    private val _overlayTextSize = MutableStateFlow(store.getInt("overlay_text_size", 11))
+    private val _overlayTextSize = MutableStateFlow(store.getInt("overlay_text_size", DEFAULT_TEXT_SIZE_INDEX))
     val overlayTextSize: StateFlow<Int> = _overlayTextSize.asStateFlow()
 
     private val _overlayScale = MutableStateFlow(store.getFloat("overlay_scale", 1.0f))
@@ -78,6 +78,7 @@ class OverlaySettingsRepository @Inject constructor(
             prefs[intPreferencesKey("overlay_bg_color_index")]?.let { _overlayBgColorIndex.value = it }
             prefs[intPreferencesKey("overlay_border_color_index")]?.let { _overlayBorderColorIndex.value = it }
             prefs[intPreferencesKey("overlay_text_color_index")]?.let { _overlayTextColorIndex.value = it }
+            prefs[stringPreferencesKey("module_order")]?.let { _moduleOrder.value = loadModuleOrder() }
         }
     }
 
@@ -175,7 +176,7 @@ class OverlaySettingsRepository @Inject constructor(
         _cpuHotWarningEnabled.value = true
         _moduleOrder.value = defaultOrderKeys
         _overlayOpacity.value = 0.8f
-        _overlayTextSize.value = 11
+        _overlayTextSize.value = DEFAULT_TEXT_SIZE_INDEX
         _overlayScale.value = 1.0f
         _overlayUseMonospace.value = false
         _overlayColorIndex.value = 0
@@ -189,7 +190,7 @@ class OverlaySettingsRepository @Inject constructor(
         store.updateMemoryCache("cpu_hot_warning_enabled", true)
         store.updateMemoryCache("module_order", defaultOrderStr)
         store.updateMemoryCache("overlay_opacity", 0.8f)
-        store.updateMemoryCache("overlay_text_size", 11)
+        store.updateMemoryCache("overlay_text_size", DEFAULT_TEXT_SIZE_INDEX)
         store.updateMemoryCache("overlay_scale", 1.0f)
         store.updateMemoryCache("overlay_use_monospace", false)
         store.updateMemoryCache("overlay_color_index", 0)
@@ -197,38 +198,21 @@ class OverlaySettingsRepository @Inject constructor(
         store.updateMemoryCache("overlay_border_color_index", 0)
         store.updateMemoryCache("overlay_text_color_index", 0)
 
-        store.batchUpdate(
-            legacyBlock = {
-                putString("overlay_mode", "Compact")
-                putStringSet("enabled_modules", defaultEnabledModules)
-                putStringSet("enabled_module_icons", emptySet())
-                putBoolean("cpu_hot_warning_enabled", true)
-                putString("module_order", defaultOrderStr)
-                putFloat("overlay_opacity", 0.8f)
-                putInt("overlay_text_size", 11)
-                putFloat("overlay_scale", 1.0f)
-                putBoolean("overlay_use_monospace", false)
-                putInt("overlay_color_index", 0)
-                putInt("overlay_bg_color_index", 0)
-                putInt("overlay_border_color_index", 0)
-                putInt("overlay_text_color_index", 0)
-            },
-            dataStoreBlock = { prefs ->
-                prefs[stringPreferencesKey("overlay_mode")] = "Compact"
-                prefs[stringSetPreferencesKey("enabled_modules")] = defaultEnabledModules
-                prefs[stringSetPreferencesKey("enabled_module_icons")] = emptySet()
-                prefs[booleanPreferencesKey("cpu_hot_warning_enabled")] = true
-                prefs[stringPreferencesKey("module_order")] = defaultOrderStr
-                prefs[floatPreferencesKey("overlay_opacity")] = 0.8f
-                prefs[intPreferencesKey("overlay_text_size")] = 11
-                prefs[floatPreferencesKey("overlay_scale")] = 1.0f
-                prefs[booleanPreferencesKey("overlay_use_monospace")] = false
-                prefs[intPreferencesKey("overlay_color_index")] = 0
-                prefs[intPreferencesKey("overlay_bg_color_index")] = 0
-                prefs[intPreferencesKey("overlay_border_color_index")] = 0
-                prefs[intPreferencesKey("overlay_text_color_index")] = 0
-            }
-        )
+        store.batchUpdate { prefs ->
+            prefs[stringPreferencesKey("overlay_mode")] = "Compact"
+            prefs[stringSetPreferencesKey("enabled_modules")] = defaultEnabledModules
+            prefs[stringSetPreferencesKey("enabled_module_icons")] = emptySet()
+            prefs[booleanPreferencesKey("cpu_hot_warning_enabled")] = true
+            prefs[stringPreferencesKey("module_order")] = defaultOrderStr
+            prefs[floatPreferencesKey("overlay_opacity")] = 0.8f
+            prefs[intPreferencesKey("overlay_text_size")] = DEFAULT_TEXT_SIZE_INDEX
+            prefs[floatPreferencesKey("overlay_scale")] = 1.0f
+            prefs[booleanPreferencesKey("overlay_use_monospace")] = false
+            prefs[intPreferencesKey("overlay_color_index")] = 0
+            prefs[intPreferencesKey("overlay_bg_color_index")] = 0
+            prefs[intPreferencesKey("overlay_border_color_index")] = 0
+            prefs[intPreferencesKey("overlay_text_color_index")] = 0
+        }
     }
 
     fun getOverlayPosition(isLandscape: Boolean): Pair<Int, Int> {
@@ -244,21 +228,20 @@ class OverlaySettingsRepository @Inject constructor(
         val prefix = if (isLandscape) "land" else "port"
         store.updateMemoryCache("overlay_x_$prefix", x)
         store.updateMemoryCache("overlay_y_$prefix", y)
-        store.batchUpdate(
-            legacyBlock = {
-                putInt("overlay_x_$prefix", x)
-                putInt("overlay_y_$prefix", y)
-            },
-            dataStoreBlock = { prefs ->
-                prefs[intPreferencesKey("overlay_x_$prefix")] = x
-                prefs[intPreferencesKey("overlay_y_$prefix")] = y
-            }
-        )
+        store.batchUpdate { prefs ->
+            prefs[intPreferencesKey("overlay_x_$prefix")] = x
+            prefs[intPreferencesKey("overlay_y_$prefix")] = y
+        }
     }
 
     fun wasOverlayRunning(): Boolean = store.getBoolean("overlay_was_running", false)
 
     fun setOverlayWasRunning(running: Boolean) {
         store.putBoolean("overlay_was_running", running)
+    }
+
+    private companion object {
+        /** Index into the 0.8x / 1.0x / 1.2x text scale options; 1 is the medium option. */
+        const val DEFAULT_TEXT_SIZE_INDEX = 1
     }
 }

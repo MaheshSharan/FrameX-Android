@@ -1,6 +1,5 @@
 package com.framex.app.repository
 
-import android.content.Context
 import com.framex.app.gaming.GamingOptimizationSnapshot
 import com.framex.app.gaming.GamingPlatformPath
 import kotlinx.coroutines.flow.StateFlow
@@ -19,10 +18,6 @@ class SettingsRepository @Inject constructor(
     val executionCenter: ExecutionCenterSettingsRepository,
     val appPrefs: AppPreferencesRepository
 ) {
-    constructor(context: Context) : this(
-        store = FrameXPreferenceStore(context)
-    )
-
     private constructor(store: FrameXPreferenceStore) : this(
         overlay = OverlaySettingsRepository(store),
         gaming = GamingSettingsRepository(store),
@@ -151,4 +146,12 @@ class SettingsRepository @Inject constructor(
     fun setAutoUpdateCheckEnabled(enabled: Boolean) = appPrefs.setAutoUpdateCheckEnabled(enabled)
     fun getLastSeenVersionCode(): Long = appPrefs.getLastSeenVersionCode()
     fun updateLastSeenVersionCode(versionCode: Long) = appPrefs.updateLastSeenVersionCode(versionCode)
+
+    suspend fun awaitSettingsLoaded() = appPrefs.awaitLoaded()
+    suspend fun flushRecoveryWrites() = gaming.flushWrites()
+
+    companion object {
+        /** Settings backed only by memory, for JVM unit tests that have no DataStore. */
+        fun inMemory(): SettingsRepository = SettingsRepository(FrameXPreferenceStore())
+    }
 }

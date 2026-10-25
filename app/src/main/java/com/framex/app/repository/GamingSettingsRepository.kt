@@ -36,7 +36,7 @@ class GamingSettingsRepository @Inject constructor(
     val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
 
     private val _vivoOptEnabled = MutableStateFlow(
-        store.getBoolean("vivo_opt_enabled", false)
+        store.getBoolean("vivo_opt_enabled", true)
     )
     val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
 
@@ -98,7 +98,7 @@ class GamingSettingsRepository @Inject constructor(
 
     fun setVivoOptEnabled(enabled: Boolean) {
         _vivoOptEnabled.value = enabled
-        store.putBoolean("vivo_opt_enabled", enabled, synchronousMirror = true)
+        store.putBoolean("vivo_opt_enabled", enabled)
     }
 
     fun getGamingPlatformPath(): GamingPlatformPath {
@@ -111,17 +111,23 @@ class GamingSettingsRepository @Inject constructor(
         val resolved = path ?: GamingPlatformPath.NONE
         _gamingPlatformPath.value = resolved
         if (path == null || path == GamingPlatformPath.NONE) {
-            store.remove("gaming_platform_path", synchronousMirror = true)
+            store.remove("gaming_platform_path")
         } else {
-            store.putString("gaming_platform_path", path.name, synchronousMirror = true)
+            store.putString("gaming_platform_path", path.name)
         }
     }
+
+    /**
+     * Suspends until every preference write issued so far is on disk. Call it after writing a
+     * recovery record and before the system mutation that the record protects (AGENTS 2.8).
+     */
+    suspend fun flushWrites() = store.flush()
 
     fun isGamingModeActive(): Boolean = store.getBoolean("is_gaming_mode_active", false)
 
     fun setGamingModeActive(active: Boolean) {
         _isGamingModeActiveFlow.value = active
-        store.putBoolean("is_gaming_mode_active", active, synchronousMirror = true)
+        store.putBoolean("is_gaming_mode_active", active)
     }
 
     fun getGamingAffectedPackages(): Set<String> {
@@ -130,14 +136,14 @@ class GamingSettingsRepository @Inject constructor(
 
     fun setGamingAffectedPackages(packages: Set<String>) {
         if (packages.isEmpty()) {
-            store.remove("gaming_affected_packages", synchronousMirror = true)
+            store.remove("gaming_affected_packages")
         } else {
             store.putStringSet("gaming_affected_packages", packages)
         }
     }
 
     fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) {
-        store.putString(KEY_GAMING_SNAPSHOT_JSON, snapshot.toJson(), synchronousMirror = true)
+        store.putString(KEY_GAMING_SNAPSHOT_JSON, snapshot.toJson())
     }
 
     fun loadGamingOptimizationSnapshot(): GamingOptimizationSnapshot? {
@@ -146,7 +152,7 @@ class GamingSettingsRepository @Inject constructor(
     }
 
     fun clearGamingOptimizationSnapshot() {
-        store.remove(KEY_GAMING_SNAPSHOT_JSON, synchronousMirror = true)
+        store.remove(KEY_GAMING_SNAPSHOT_JSON)
     }
 
     fun hasActiveGamingSnapshot(): Boolean {
@@ -158,11 +164,11 @@ class GamingSettingsRepository @Inject constructor(
     }
 
     fun setNeedsThermalOverrideActive(active: Boolean) {
-        store.putBoolean("needs_thermal_override_recovery", active, synchronousMirror = true)
+        store.putBoolean("needs_thermal_override_recovery", active)
     }
 
     fun markThermalOverrideRecoveryComplete() {
-        store.remove("needs_thermal_override_recovery", synchronousMirror = true)
+        store.remove("needs_thermal_override_recovery")
     }
 
     fun needsLegacySettingsCleanup(): Boolean {
@@ -170,7 +176,7 @@ class GamingSettingsRepository @Inject constructor(
     }
 
     fun markLegacySettingsCleanupComplete() {
-        store.putBoolean("legacy_settings_cleanup_v2_done", true, synchronousMirror = true)
+        store.putBoolean("legacy_settings_cleanup_v2_done", true)
     }
 
     fun cleanupLegacyPreferences() {

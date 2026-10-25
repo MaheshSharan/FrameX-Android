@@ -102,7 +102,7 @@ class ExecutionCenterSettingsRepository @Inject constructor(
     val vivoPulseSceneMoreFps: StateFlow<Boolean> = _vivoPulseSceneMoreFps.asStateFlow()
 
     private val _auditLoggingEnabled = MutableStateFlow(
-        store.getBoolean("audit_logging_enabled", true)
+        store.getBoolean("audit_logging_enabled", false)
     )
     val auditLoggingEnabled: StateFlow<Boolean> = _auditLoggingEnabled.asStateFlow()
 

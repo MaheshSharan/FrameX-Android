@@ -200,7 +200,7 @@ class VivoSuiteGateTest {
     fun persistedPath_activateWithVivo_flipToggle_revertRetainsVivoPath() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -257,7 +257,7 @@ class VivoSuiteGateTest {
     fun midSessionToggleOff_whileVivoPath_stopsPulse_revertsOptimizations_setsPathNone() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -312,7 +312,7 @@ class VivoSuiteGateTest {
     fun midSessionToggleOff_whenRevertFails_keepsVivoPathAndStopsPulse() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -369,7 +369,7 @@ class VivoSuiteGateTest {
     fun revertPlatformOptimizations_whenPathIsNull_fallsBackToHardwareCheck() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -408,7 +408,7 @@ class VivoSuiteGateTest {
     fun revertPlatformOptimizations_whenPathIsNone_skipsRevert() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -445,7 +445,7 @@ class VivoSuiteGateTest {
     fun midSessionToggleOff_whenNotVivoPath_doesNothing() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
@@ -483,7 +483,7 @@ class VivoSuiteGateTest {
     fun vivoSuiteGate_flowReactiveConsistency() {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         // Test on Vivo device
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
@@ -514,7 +514,7 @@ class VivoSuiteGateTest {
     fun optimizerManualMethods_returnDisabledValues_whenGateIsOff() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         // Gate off: Vivo hardware, but toggle is OFF
         settingsRepo.setVivoOptEnabled(false)
@@ -552,7 +552,7 @@ class VivoSuiteGateTest {
     fun optimizerManualMethods_returnDisabledValues_whenNonVivoHardware() = runBlocking {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
 
         // Gate off: Non-Vivo hardware, even if toggle is ON
         settingsRepo.setVivoOptEnabled(true)
@@ -597,7 +597,7 @@ class VivoSuiteGateTest {
     private fun createTestEngine(revertResult: Boolean = true): EngineTestRig {
         val sharedPrefs = createMockSharedPreferences()
         val mockContext = createMockContext(sharedPrefs)
-        val settingsRepo = SettingsRepository(mockContext)
+        val settingsRepo = SettingsRepository.inMemory()
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)

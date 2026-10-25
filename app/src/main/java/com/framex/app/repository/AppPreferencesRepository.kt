@@ -51,32 +51,28 @@ class AppPreferencesRepository @Inject constructor(
     fun isFeatureDiscoveryCompleted(version: Int): Boolean {
         return store.getBoolean(
             key = "feature_discovery_completed_v$version",
-            default = false,
-            useDiscoveryStore = true
+            default = false
         )
     }
 
     fun setFeatureDiscoveryCompleted(version: Int, completed: Boolean) {
         store.putBoolean(
             key = "feature_discovery_completed_v$version",
-            value = completed,
-            useDiscoveryStore = true
+            value = completed
         )
     }
 
     fun isFeatureDiscoverySkipped(version: Int): Boolean {
         return store.getBoolean(
             key = "feature_discovery_skipped_v$version",
-            default = false,
-            useDiscoveryStore = true
+            default = false
         )
     }
 
     fun setFeatureDiscoverySkipped(version: Int, skipped: Boolean) {
         store.putBoolean(
             key = "feature_discovery_skipped_v$version",
-            value = skipped,
-            useDiscoveryStore = true
+            value = skipped
         )
     }
 
@@ -86,19 +82,19 @@ class AppPreferencesRepository @Inject constructor(
     }
 
     fun isFeatureDiscoveryGloballyDismissed(): Boolean {
-        return store.getBoolean("globally_dismissed", default = false, useDiscoveryStore = true)
+        return store.getBoolean("globally_dismissed", default = false)
     }
 
     fun setFeatureDiscoveryGloballyDismissed(dismissed: Boolean) {
-        store.putBoolean("globally_dismissed", dismissed, useDiscoveryStore = true)
+        store.putBoolean("globally_dismissed", dismissed)
     }
 
     fun isFeatureDiscoveryScreenCompleted(screenIdName: String): Boolean {
-        return store.getBoolean("completed_${screenIdName.lowercase()}", default = false, useDiscoveryStore = true)
+        return store.getBoolean("completed_${screenIdName.lowercase()}", default = false)
     }
 
     fun setFeatureDiscoveryScreenCompleted(screenIdName: String, completed: Boolean) {
-        store.putBoolean("completed_${screenIdName.lowercase()}", completed, useDiscoveryStore = true)
+        store.putBoolean("completed_${screenIdName.lowercase()}", completed)
     }
 
     fun resetAllFeatureDiscovery() {
@@ -113,4 +109,7 @@ class AppPreferencesRepository @Inject constructor(
     fun setPrivilegeMode(mode: com.framex.app.privilege.PrivilegeMode) {
         store.putString("privilege_mode", mode.key)
     }
+
+    /** Suspends until the DataStore has been read; cold start paths must call this first. */
+    suspend fun awaitLoaded() = store.awaitLoaded()
 }

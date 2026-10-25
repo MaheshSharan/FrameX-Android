@@ -160,6 +160,8 @@ class SplashViewModel @Inject constructor(
         hasNavigated = true
 
         viewModelScope.launch {
+            // The flag defaults to false until the DataStore is read; wait so returning users skip onboarding.
+            settingsRepository.awaitSettingsLoaded()
             val completed = settingsRepository.isOnboardingCompleted.first()
             if (completed) {
                 _effectChannel.send(SplashUiEffect.NavigateToDashboard)

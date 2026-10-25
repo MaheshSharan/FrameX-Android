@@ -213,6 +213,7 @@ class GamingModeEngine @Inject constructor(
                 // Write durable recovery record BEFORE applying mutations (Rule 2.8 / Plan 6.2).
                 settingsRepository.setGamingPlatformPath(targetPath)
                 settingsRepository.setGamingModeActive(true)
+                settingsRepository.flushRecoveryWrites()
 
                 _state.value = GamingModeState.Enabling(
                     0.25f,
@@ -257,6 +258,7 @@ class GamingModeEngine @Inject constructor(
                     val persistedAffected = settingsRepository.getGamingAffectedPackages().toMutableSet()
                     persistedAffected.addAll(candidates)
                     settingsRepository.setGamingAffectedPackages(persistedAffected)
+                    settingsRepository.flushRecoveryWrites()
 
                     val suspendRes = shizukuManager.suspendPackages(candidates, suspended = true)
                     val failedSet = suspendRes?.failedPackages?.toSet() ?: emptySet()

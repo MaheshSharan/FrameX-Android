@@ -36,6 +36,7 @@ class EsportsOptimizationEngine @Inject constructor(
             return false
         }
         settingsRepository.saveGamingOptimizationSnapshot(snapshot)
+        settingsRepository.flushRecoveryWrites()
 
         FrameXLog.i("Applying Esports Optimizations (pkg=$packageName, uid=$uid)", tag = TAG)
 
@@ -203,8 +204,10 @@ class EsportsOptimizationEngine @Inject constructor(
             CommandSpec("cmd thermalservice override-status 0", OpPriority.PRIMARY)
         )
         if (settingsRepository.disableThermalThrottling.value) {
-            ledgerExecutor.executeBatch(Stage.POWER, powerSpecs)
+            // The recovery flag must be on disk before the override is applied.
             settingsRepository.setNeedsThermalOverrideActive(true)
+            settingsRepository.flushRecoveryWrites()
+            ledgerExecutor.executeBatch(Stage.POWER, powerSpecs)
             FrameXLog.i("RAM cache pre-trimming, ART heap compaction & thermal throttle override executed", tag = TAG)
         } else {
             ledgerExecutor.recordSkipped(Stage.POWER, powerSpecs)
