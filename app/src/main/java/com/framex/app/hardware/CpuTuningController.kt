@@ -27,7 +27,7 @@ class CpuTuningController @Inject constructor(
     }
 
     suspend fun probeCpuClusters(): List<CpuClusterPolicy> = withContext(Dispatchers.IO) {
-        val result = privilegeManager.executeCommand(BATCH_CPU_SCRIPT, 3000L)
+        val result = privilegeManager.exec(BATCH_CPU_SCRIPT, 3000L)
         if (!result.isSuccess || result.output.isBlank()) return@withContext emptyList()
 
         val policies = mutableListOf<CpuClusterPolicy>()
@@ -103,7 +103,7 @@ class CpuTuningController @Inject constructor(
     suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
         val path = "/sys/devices/system/cpu/cpufreq/policy$policyId/scaling_max_freq"
         val cmd = "chmod 664 $path 2>/dev/null; echo $maxFreqKHz > $path"
-        val res = privilegeManager.executeCommand(cmd)
+        val res = privilegeManager.exec(cmd)
         FrameXLog.i("CpuTuningController", "Set policy$policyId maxFreq=$maxFreqKHz -> success: ${res.isSuccess}")
         res.isSuccess
     }
@@ -111,7 +111,7 @@ class CpuTuningController @Inject constructor(
     suspend fun setClusterGovernor(policyId: Int, governor: String): Boolean = withContext(Dispatchers.IO) {
         val path = "/sys/devices/system/cpu/cpufreq/policy$policyId/scaling_governor"
         val cmd = "chmod 664 $path 2>/dev/null; echo '$governor' > $path"
-        val res = privilegeManager.executeCommand(cmd)
+        val res = privilegeManager.exec(cmd)
         FrameXLog.i("CpuTuningController", "Set policy$policyId governor=$governor -> success: ${res.isSuccess}")
         res.isSuccess
     }

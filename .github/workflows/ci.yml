@@ -21,6 +21,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Privilege layer boundary
+        run: |
+          if grep -rIl --include='*.kt' 'ShizukuManager' app/src/main \
+              | grep -v -e '/privilege/' -e '/shizuku/'; then
+            echo "ShizukuManager may only be used inside privilege/ and shizuku/" >&2
+            exit 1
+          fi
+
       - name: Run Android Lint
         run: ./gradlew lint
 

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.R
 import com.framex.app.repository.SystemPermissionRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,12 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class PermissionsViewModel @Inject constructor(
     private val systemPermissionRepository: SystemPermissionRepository,
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) : ViewModel() {
 
     private val _effectChannel = Channel<PermissionsUiEffect>(Channel.BUFFERED)
@@ -27,8 +28,8 @@ class PermissionsViewModel @Inject constructor(
     private val systemPermissionsState = MutableStateFlow(systemPermissionRepository.getPermissionsSnapshot())
 
     val uiState: StateFlow<PermissionsUiState> = combine(
-        shizukuManager.isShizukuAvailable,
-        shizukuManager.hasPermission,
+        privilegeManager.isAvailable,
+        privilegeManager.isReady,
         systemPermissionsState
     ) { isAvailable, hasPermission, sysState ->
         PermissionsUiState(
@@ -65,8 +66,8 @@ class PermissionsViewModel @Inject constructor(
     }
 
     private fun requestShizukuPermission() {
-        if (shizukuManager.isShizukuAvailable.value) {
-            shizukuManager.requestPermission()
+        if (privilegeManager.isAvailable.value) {
+            viewModelScope.launch { privilegeManager.requestAccess() }
         } else {
             _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_start_shizuku_first))
         }
@@ -84,7 +85,7 @@ class PermissionsViewModel @Inject constructor(
     }
 
     fun refreshPermissions() {
-        shizukuManager.refreshState()
+        privilegeManager.refresh()
         systemPermissionsState.value = systemPermissionRepository.getPermissionsSnapshot()
     }
 

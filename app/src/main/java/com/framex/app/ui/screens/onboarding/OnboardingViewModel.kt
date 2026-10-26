@@ -27,19 +27,22 @@ class OnboardingViewModel @Inject constructor(
     fun selectPrivilege(mode: PrivilegeMode, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             if (mode == PrivilegeMode.ROOT) {
-                val hasRoot = privilegeManager.checkRootAccess()
+                val previous = privilegeManager.currentMode.value
+                privilegeManager.switchMode(PrivilegeMode.ROOT)
+                privilegeManager.requestAccess()
+                val hasRoot = privilegeManager.isReady.value
                 if (hasRoot) {
                     _selectedMode.value = PrivilegeMode.ROOT
-                    privilegeManager.setMode(PrivilegeMode.ROOT)
                     _rootRequestFailed.value = false
                     onResult(true)
                 } else {
+                    privilegeManager.switchMode(previous)
                     _rootRequestFailed.value = true
                     onResult(false)
                 }
             } else {
                 _selectedMode.value = mode
-                privilegeManager.setMode(mode)
+                privilegeManager.switchMode(mode)
                 _rootRequestFailed.value = false
                 onResult(true)
             }

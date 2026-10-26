@@ -6,7 +6,7 @@ import com.framex.app.metrics.MetricsEngine
 import com.framex.app.overlay.OverlayService
 import com.framex.app.overlay.OverlayServiceController
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +20,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val overlayServiceController: OverlayServiceController,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val metricsEngine: MetricsEngine,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -65,8 +65,8 @@ class DashboardViewModel @Inject constructor(
     val uiState: StateFlow<DashboardUiState> = combine(
         OverlayService.isRunning,
         hasOverlayPermission,
-        shizukuManager.isShizukuAvailable,
-        shizukuManager.hasPermission,
+        privilegeManager.isAvailable,
+        privilegeManager.isReady,
         metricsEngine.fpsHistory
     ) { isRunning, hasOverlay, isShizukuAvail, hasShizukuPerm, history ->
         val stats = DashboardUtils.computeFpsStats(history)
@@ -88,8 +88,8 @@ class DashboardViewModel @Inject constructor(
         initialValue = DashboardUiState(
             isOverlayRunning = OverlayService.isRunning.value,
             hasOverlayPermission = overlayServiceController.hasOverlayPermission(),
-            isShizukuAvailable = shizukuManager.isShizukuAvailable.value,
-            hasShizukuPermission = shizukuManager.hasPermission.value,
+            isShizukuAvailable = privilegeManager.isAvailable.value,
+            hasShizukuPermission = privilegeManager.isReady.value,
             whatsNewInfo = _whatsNewInfo.value
         )
     )
@@ -111,6 +111,6 @@ class DashboardViewModel @Inject constructor(
 
     fun refreshPermissions() {
         hasOverlayPermission.value = overlayServiceController.hasOverlayPermission()
-        shizukuManager.refreshState()
+        privilegeManager.refresh()
     }
 }

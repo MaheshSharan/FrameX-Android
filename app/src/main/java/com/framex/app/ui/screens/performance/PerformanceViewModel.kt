@@ -16,7 +16,7 @@ import com.framex.app.gaming.VivoSuiteGate
 import com.framex.app.gaming.ledger.ExecutionLedger
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +38,7 @@ class PerformanceViewModel @Inject constructor(
     private val gamingModeEngine: GamingModeEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val vivoIqooSharedTools: VivoIqooSharedTools,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: MetricsEngine,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
@@ -131,8 +131,8 @@ class PerformanceViewModel @Inject constructor(
     // Grouped streams to stay strictly within combine limits
     private val shizukuAndGamingStream = combine(
         gamingModeEngine.state,
-        shizukuManager.isShizukuAvailable,
-        shizukuManager.hasPermission,
+        privilegeManager.isAvailable,
+        privilegeManager.isReady,
         settingsRepository.gamingModeWhitelist,
         settingsRepository.launcherGames
     ) { state, available, perm, wl, games ->
@@ -253,8 +253,8 @@ class PerformanceViewModel @Inject constructor(
 
         return PerformanceUiState(
             gamingState = gamingModeEngine.state.value,
-            isShizukuAvailable = shizukuManager.isShizukuAvailable.value,
-            hasShizukuPermission = shizukuManager.hasPermission.value,
+            isShizukuAvailable = privilegeManager.isAvailable.value,
+            hasShizukuPermission = privilegeManager.isReady.value,
             whitelist = settingsRepository.gamingModeWhitelist.value,
             launcherGames = settingsRepository.launcherGames.value,
             userApps = emptyList(),
@@ -417,7 +417,7 @@ class PerformanceViewModel @Inject constructor(
     }
 
     suspend fun manualBoostRam(whitelist: Set<String>): Pair<Long, Int> =
-        PerformanceUtils.manualBoostRam(whitelist, deviceDiagnosticManager, shizukuManager, gamingModeEngine)
+        PerformanceUtils.manualBoostRam(whitelist, deviceDiagnosticManager, privilegeManager, gamingModeEngine)
 
     fun refreshVivoPerfGameList() {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return
@@ -668,7 +668,7 @@ class PerformanceViewModel @Inject constructor(
     }
 
     suspend fun measureNetworkLatency(): Int? =
-        PerformanceUtils.measureNetworkLatency(shizukuManager)
+        PerformanceUtils.measureNetworkLatency(privilegeManager)
 
     suspend fun resetToDeviceDefaults(): Boolean =
         esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)

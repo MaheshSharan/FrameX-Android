@@ -10,7 +10,7 @@ import com.framex.app.metrics.isIconShown
 import com.framex.app.metrics.resolveMetricModuleOrder
 import com.framex.app.metrics.resolveModuleCapability
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class OverlayCustomizationViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val metricsEngine: MetricsEngine
 ) : ViewModel() {
 
@@ -80,8 +80,8 @@ class OverlayCustomizationViewModel @Inject constructor(
         }
 
         val capabilityFlow = combine(
-            shizukuManager.isShizukuAvailable,
-            shizukuManager.hasPermission,
+            privilegeManager.isAvailable,
+            privilegeManager.isReady,
             metricsEngine.metricsState
         ) { avail, perm, metrics ->
             (avail && perm) to metrics
@@ -169,7 +169,7 @@ class OverlayCustomizationViewModel @Inject constructor(
                 }
             }
             OverlayCustomizationUiEvent.ResetToDefaultOrder -> {
-                val isShizukuReady = shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value
+                val isShizukuReady = privilegeManager.isReady.value
                 val currentMetrics = metricsEngine.metricsState.value
                 _uiState.update { current ->
                     val enabledById = current.modules.associate { it.id to it.enabled }

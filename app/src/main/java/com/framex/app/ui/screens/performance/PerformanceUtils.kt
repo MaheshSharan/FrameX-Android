@@ -2,7 +2,7 @@ package com.framex.app.ui.screens.performance
 
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.GamingModeEngine
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import com.framex.app.utils.ShellSanitizer
 import kotlinx.coroutines.Dispatchers
@@ -18,14 +18,14 @@ object PerformanceUtils {
     suspend fun manualBoostRam(
         whitelist: Set<String>,
         deviceDiagnosticManager: DeviceDiagnosticManager,
-        shizukuManager: ShizukuManager,
+        privilegeManager: PrivilegeManager,
         gamingModeEngine: GamingModeEngine
     ): Pair<Long, Int> {
         val availBefore = deviceDiagnosticManager.getAvailableMemoryBytes()
         var stoppedCount = 0
-        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+        if (privilegeManager.isReady.value) {
             try {
-                shizukuManager.executeCommand("pm trim-caches 4G")
+                privilegeManager.execText("pm trim-caches 4G")
                 val targets = withContext(Dispatchers.IO) {
                     gamingModeEngine.getInstalledUserApps()
                         .filter { it.packageName !in whitelist }
@@ -37,14 +37,14 @@ object PerformanceUtils {
                     for (chunk in chunks) {
                         val chainedPayload = chunk.joinToString("; ") { "am force-stop $it" }
                         try {
-                            shizukuManager.executeCommand(chainedPayload)
+                            privilegeManager.execText(chainedPayload)
                             stoppedCount += chunk.size
                         } catch (e: Exception) {
                             FrameXLog.w("Failed to batch force-stop chunk: $chainedPayload", e)
                         }
                     }
                 }
-                shizukuManager.executeCommand("am kill-all")
+                privilegeManager.execText("am kill-all")
             } catch (e: Exception) {
                 FrameXLog.w("Error during manual RAM boost via Shizuku", e)
             }
@@ -59,10 +59,10 @@ object PerformanceUtils {
     const val SOCKET_TIMEOUT_MS = 1000
     const val RETRY_DELAY_MS = 150L
 
-    suspend fun measureNetworkLatency(shizukuManager: ShizukuManager): Int? {
-        if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+    suspend fun measureNetworkLatency(privilegeManager: PrivilegeManager): Int? {
+        if (privilegeManager.isReady.value) {
             try {
-                val output = shizukuManager.executeCommand("ping -c 1 8.8.8.8")
+                val output = privilegeManager.execText("ping -c 1 8.8.8.8")
                 if (output.contains("time=")) {
                     val pingMs = output.split("time=").getOrNull(1)
                         ?.split(" ")?.getOrNull(0)

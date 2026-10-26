@@ -51,6 +51,14 @@ class PrivilegeManager @Inject constructor(
         .map { it is BackendState.Connected }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
+    /** True when the selected backend exists on the device, even if access is not granted yet. */
+    val isAvailable: StateFlow<Boolean> = backendState
+        .map {
+            it is BackendState.Connected || it is BackendState.Connecting ||
+                (it is BackendState.NeedsUserAction && it.reason != ActionReason.SHIZUKU_NOT_RUNNING)
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
     /** Loads the saved mode and starts only that backend. Call once from Application. */
     fun start() {
         scope.launch {

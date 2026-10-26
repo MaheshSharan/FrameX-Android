@@ -43,7 +43,7 @@ class GpuTuningController @Inject constructor(
     private var isKgsl: Boolean = false
 
     suspend fun probeGpu(): GpuTuningState = withContext(Dispatchers.IO) {
-        val result = privilegeManager.executeCommand(BATCH_GPU_SCRIPT, 3000L)
+        val result = privilegeManager.exec(BATCH_GPU_SCRIPT, 3000L)
         if (!result.isSuccess || result.output.isBlank()) return@withContext defaultUnsupported()
 
         val lines = result.output.lines().map { it.trim() }.filter { it.isNotEmpty() }
@@ -164,7 +164,7 @@ class GpuTuningController @Inject constructor(
             isKgsl -> "chmod 664 $detectedBasePath/max_gpuclk 2>/dev/null; echo ${maxFreqKHz * 1000} > $detectedBasePath/max_gpuclk"
             else -> return@withContext false
         }
-        val res = privilegeManager.executeCommand(cmd)
+        val res = privilegeManager.exec(cmd)
         FrameXLog.i("GpuTuningController", "Set GPU max freq to ${maxFreqKHz}KHz -> success: ${res.isSuccess}")
         res.isSuccess
     }
@@ -177,7 +177,7 @@ class GpuTuningController @Inject constructor(
             else -> return@withContext false
         }
         val cmd = "chmod 664 $govPath 2>/dev/null; echo '$governor' > $govPath"
-        val res = privilegeManager.executeCommand(cmd)
+        val res = privilegeManager.exec(cmd)
         FrameXLog.i("GpuTuningController", "Set GPU governor to $governor -> success: ${res.isSuccess}")
         res.isSuccess
     }
