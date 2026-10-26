@@ -155,6 +155,7 @@ class GamingModeEngine @Inject constructor(
      */
     fun recoverPersistedState() {
         recoveryScope.launch {
+            settingsRepository.awaitSettingsLoaded()
             var triedRecordedBackend = false
             privilegeManager.isReady.collect { ready ->
                 val wasActive = settingsRepository.isGamingModeActive()
