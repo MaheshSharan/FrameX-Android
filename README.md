@@ -2,7 +2,7 @@
 
 ![FrameX Banner](docs/assets/banner.png)
 
-> Rootless Android performance overlay featuring live FPS metering, thermal diagnostics, and privileged gaming optimization via Shizuku.
+> Android performance overlay featuring live FPS metering, thermal diagnostics, and privileged gaming optimization. Works rootless through Shizuku, or with root through your root manager.
 
 <p align="center">
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
@@ -65,7 +65,7 @@ FrameX displays a fully customizable, low-overhead overlay on top of any applica
 ## Requirements
 
 - Android 8.0 (API 26) or higher
-- [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running
+- Either [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running, or a rooted device (Magisk, KernelSU). Pick the mode in Permissions. CPU and GPU tuning needs root.
 - Activate via Wireless Debugging (no PC needed on Android 11+) or ADB
 - Works with the Sui module on rooted devices
 
@@ -129,7 +129,7 @@ cd FrameX-Android
 | Foreground service (Special Use) | Ensures Gaming Mode stays active on Android 14+ |
 | Post Notifications (Android 13+) | Display session status & quick-control notification controls |
 | QUERY_ALL_PACKAGES | Load installed games and apps for Game Launcher optimization |
-| Shizuku Privileged API | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), ART RAM heap compaction, and OriginOS Esports hardware engine |
+| Shizuku or Root (your choice) | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), ART RAM heap compaction, and OriginOS Esports hardware engine |
 
 ---
 

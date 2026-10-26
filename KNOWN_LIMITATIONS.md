@@ -43,13 +43,13 @@ per-sensor HAL data at all. Battery Temp comes from a separate command
 
 ---
 
-## Gaming Mode: Vivo Platform Deactivation during Shizuku IPC Disconnect
+## Gaming Mode: Vivo Platform Deactivation during Privilege Backend Disconnect
 
-**Symptom:** If the Shizuku background service crashes or permission is revoked during Gaming Mode deactivation on a Vivo/iQOO device, platform-specific overrides may not be fully reverted.
+**Symptom:** If the privilege backend (Shizuku service or root shell) drops during Gaming Mode deactivation on a Vivo/iQOO device, platform-specific overrides may not be fully reverted.
 
-**Detail:** `revertPlatformOptimizations()` executes cleanup via Shizuku shell. If Shizuku Binder communication drops mid-deactivation, the failure is logged and session state is cleared to avoid locking the UI. If Gaming Mode is reactivated before a reboot, current values could be captured as baseline.
+**Detail:** `revertPlatformOptimizations()` runs cleanup through the active backend. If the connection drops mid-deactivation, the failure is logged and session state is cleared to avoid locking the UI. Crash recovery after a process restart uses the backend recorded when Gaming Mode started, even if you have since selected the other one. If that backend cannot connect in time, FrameX shows a high-priority recovery alert instead of guessing.
 
-**Workaround:** Ensure Shizuku remains running in the background before toggling off Gaming Mode, or reboot the device if Shizuku crashed while Gaming Mode was active.
+**Workaround:** Keep the backend running while toggling off Gaming Mode, or reboot the device if it crashed while Gaming Mode was active.
 
 ---
 
@@ -58,3 +58,21 @@ per-sensor HAL data at all. Battery Temp comes from a separate command
 **Detail:** When the "Vivo Hardware Optimizations" master toggle is switched off in Settings, the `Vivo Performance Tools` card (DEX speed compilation, `perf_game_list` management) and MEMC 120 FPS modal toggle are hidden from `PerformanceScreen`.
 
 **Behavior:** Backend methods (`removePerfGame`, `compileSpeedAot`, `setMemcTargetFps(enabled = false)`) remain callable by session cleanup routines via hardware-level gating (`isVivoHardware`), but user-facing UI controls require the master switch to be enabled.
+
+---
+
+## Root and Shizuku modes behave differently
+
+**Detail:** The selected mode is authoritative. FrameX never falls back from one backend to the other. Shizuku runs commands as the shell user; Root runs them as root. CPU and GPU tuning writes kernel files that the shell user cannot write on most devices, so tuning is read-only unless a probe shows the active backend can write them. Switching modes is refused while Gaming Mode is active or recovery is pending.
+
+**Not tested:** Root mode has not been verified on a rooted device across Magisk and KernelSU versions, and SELinux policies differ between ROMs.
+
+---
+
+## CPU and GPU limits can be overridden by the system
+
+**Symptom:** A frequency cap you set returns to a higher value after a few minutes.
+
+**Detail:** FrameX writes the value and reads it back to confirm the kernel accepted it. It does not keep watching it. Vendor services (for example OEM frequency-control or performance HAL services) can rewrite `scaling_max_freq` afterward, and the app cannot prevent that. Writing the value from a terminal may behave differently because the vendor service can react to the writer.
+
+**Workaround:** None inside FrameX. Use Restore defaults to return to the original values.

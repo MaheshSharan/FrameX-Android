@@ -49,6 +49,7 @@ class OverlayService : Service() {
 
     private var visibilityObserverJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockRefreshJob: Job? = null
 
     /** Held only while sampling is active; the timeout bounds it if teardown is ever missed. */
     private fun acquireSamplingWakeLock() {
@@ -58,9 +59,20 @@ class OverlayService : Service() {
             ?.also { wakeLock = it }
             ?: return
         lock.acquire(WAKE_LOCK_TIMEOUT_MS)
+        if (wakeLockRefreshJob?.isActive != true) {
+            // The timeout is only a safety net; while sampling continues the lock is renewed.
+            wakeLockRefreshJob = serviceScope.launch {
+                while (true) {
+                    kotlinx.coroutines.delay(WAKE_LOCK_REFRESH_MS)
+                    wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+                }
+            }
+        }
     }
 
     private fun releaseSamplingWakeLock() {
+        wakeLockRefreshJob?.cancel()
+        wakeLockRefreshJob = null
         try {
             wakeLock?.takeIf { it.isHeld }?.release()
         } catch (e: RuntimeException) {
@@ -212,6 +224,7 @@ class OverlayService : Service() {
     companion object {
         const val CHANNEL_ID = "framex_overlay_channel"
         private const val WAKE_LOCK_TIMEOUT_MS = 30L * 60L * 1000L
+        private const val WAKE_LOCK_REFRESH_MS = 20L * 60L * 1000L
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.framex.app.ACTION_START"
         const val ACTION_STOP = "com.framex.app.ACTION_STOP"
