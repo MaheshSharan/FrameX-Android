@@ -18,13 +18,13 @@ import com.framex.app.utils.FrameXLog
 object GamingNotificationHelper {
 
     private const val TAG = "GamingNotifHelper"
-    const val RECOVERY_CHANNEL_ID = GamingChannels.GAMING_CHANNEL_ID
+    const val RECOVERY_CHANNEL_ID = GamingChannels.ALERT_CHANNEL_ID
     const val RECOVERY_NOTIFICATION_ID = 1003
 
     fun showRecoveryNotification(context: Context) {
         try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            GamingChannels.ensure(context)
+            GamingChannels.ensureAlert(context)
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }

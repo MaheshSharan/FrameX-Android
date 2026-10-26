@@ -225,6 +225,19 @@
     <!-- Service Channels & Notifications -->
     <string name="overlay_notif_channel_name">FrameX Overlay Service</string>
     <string name="gaming_notif_channel_name">FrameX Gaming Mode</string>
+    <string name="perm_mode_title">Privilege mode</string>
+    <string name="perm_mode_shizuku">Shizuku</string>
+    <string name="perm_mode_shizuku_desc">Uses the Shizuku service. No root needed.</string>
+    <string name="perm_mode_root">Root</string>
+    <string name="perm_mode_root_desc">Uses your root manager (Magisk, KernelSU). Needed to change CPU and GPU limits.</string>
+    <string name="perm_mode_none">None</string>
+    <string name="perm_mode_none_desc">Overlay only. Gaming Mode and tuning are off.</string>
+    <string name="perm_mode_state_connected">Connected</string>
+    <string name="perm_mode_state_not_ready">Not connected yet</string>
+    <string name="perm_mode_root_retry">Request root access</string>
+    <string name="perm_mode_blocked_gaming">Turn off Gaming Mode before switching privilege mode.</string>
+    <string name="perm_mode_blocked_recovery">Finish restoring Gaming Mode changes before switching privilege mode.</string>
+    <string name="gaming_alert_channel_name">FrameX Gaming Mode alerts</string>
     <string name="gaming_notif_channel_desc">Shown while Gaming Mode is active</string>
     <string name="gaming_notif_title_active">Gaming Mode Active</string>
     <string name="gaming_notif_text_active">Background apps suspended · DND enabled</string>
