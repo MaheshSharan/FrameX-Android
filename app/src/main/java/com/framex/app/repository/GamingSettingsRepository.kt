@@ -130,6 +130,18 @@ class GamingSettingsRepository @Inject constructor(
         store.putBoolean("is_gaming_mode_active", active)
     }
 
+    /** Backend that applied the current Gaming Mode session; recovery must undo through the same one. */
+    fun getAppliedVia(): com.framex.app.privilege.PrivilegeMode =
+        com.framex.app.privilege.PrivilegeMode.fromKey(store.getString("gaming_applied_via", null))
+
+    fun setAppliedVia(mode: com.framex.app.privilege.PrivilegeMode?) {
+        if (mode == null || mode == com.framex.app.privilege.PrivilegeMode.NONE) {
+            store.remove("gaming_applied_via")
+        } else {
+            store.putString("gaming_applied_via", mode.key)
+        }
+    }
+
     fun getGamingAffectedPackages(): Set<String> {
         return store.getStringSet("gaming_affected_packages", emptySet())
     }

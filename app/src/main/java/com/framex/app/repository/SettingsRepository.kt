@@ -80,6 +80,8 @@ class SettingsRepository @Inject constructor(
     fun setGamingPlatformPath(path: GamingPlatformPath?) = gaming.setGamingPlatformPath(path)
     fun isGamingModeActive(): Boolean = gaming.isGamingModeActive()
     fun setGamingModeActive(active: Boolean) = gaming.setGamingModeActive(active)
+    fun getGamingAppliedVia() = gaming.getAppliedVia()
+    fun setGamingAppliedVia(mode: com.framex.app.privilege.PrivilegeMode?) = gaming.setAppliedVia(mode)
     fun getGamingAffectedPackages(): Set<String> = gaming.getGamingAffectedPackages()
     fun setGamingAffectedPackages(packages: Set<String>) = gaming.setGamingAffectedPackages(packages)
     fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) =

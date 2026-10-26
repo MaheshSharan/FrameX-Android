@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -75,6 +77,28 @@ class PrivilegeManager @Inject constructor(
         settings.appPrefs.setPrivilegeMode(target)
         activate(target)
         SwitchResult.SWITCHED
+    }
+
+    /**
+     * Runs [block] with [mode] active, then restores the selected mode. Used only for crash
+     * recovery, which must undo changes through the backend that made them. Returns null when
+     * that backend does not become ready in time.
+     */
+    suspend fun <T> runWithBackend(mode: PrivilegeMode, block: suspend () -> T): T? = switchLock.withLock {
+        val selected = _currentMode.value
+        if (mode == selected) return@withLock block()
+        activate(mode)
+        try {
+            val backend = backendFor(mode)
+            val ready = withTimeoutOrNull(RECOVERY_CONNECT_TIMEOUT_MS) {
+                backend?.state?.first { it is BackendState.Connected }
+                // isReady follows the backend state asynchronously; wait until it agrees.
+                isReady.first { it }
+            }
+            if (ready == null) null else block()
+        } finally {
+            activate(selected)
+        }
     }
 
     fun refresh() {
@@ -147,5 +171,6 @@ class PrivilegeManager @Inject constructor(
 
     private companion object {
         const val READ_TIMEOUT_MS = 3_000L
+        const val RECOVERY_CONNECT_TIMEOUT_MS = 35_000L
     }
 }

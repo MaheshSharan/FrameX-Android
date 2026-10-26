@@ -12,6 +12,7 @@ import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
+import com.framex.app.privilege.PrivilegeMode
 import com.framex.app.utils.FrameXLog
 import com.framex.app.utils.ShellSanitizer
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -154,6 +155,7 @@ class GamingModeEngine @Inject constructor(
      */
     fun recoverPersistedState() {
         recoveryScope.launch {
+            var triedRecordedBackend = false
             privilegeManager.isReady.collect { ready ->
                 val wasActive = settingsRepository.isGamingModeActive()
                 val hasSnapshot = settingsRepository.hasActiveGamingSnapshot()
@@ -164,6 +166,24 @@ class GamingModeEngine @Inject constructor(
                 }
 
                 if (_isSessionActive.value) {
+                    return@collect
+                }
+
+                // Undo through the backend that applied the changes, not the one selected now.
+                val recorded = settingsRepository.getGamingAppliedVia()
+                val current = privilegeManager.currentMode.value
+                if (recorded != PrivilegeMode.NONE && recorded != current) {
+                    if (triedRecordedBackend) return@collect
+                    triedRecordedBackend = true
+                    FrameXLog.w("Recovering Gaming Mode through recorded backend ${recorded.key}", tag = TAG)
+                    val recovered = privilegeManager.runWithBackend(recorded) {
+                        disableGamingMode()
+                        esportsOptimizationEngine.performLegacyCleanupIfNeeded()
+                        true
+                    }
+                    if (recovered != true || settingsRepository.isGamingModeActive()) {
+                        GamingNotificationHelper.showRecoveryNotification(context)
+                    }
                     return@collect
                 }
 
@@ -213,6 +233,7 @@ class GamingModeEngine @Inject constructor(
                 // Write durable recovery record BEFORE applying mutations (Rule 2.8 / Plan 6.2).
                 settingsRepository.setGamingPlatformPath(targetPath)
                 settingsRepository.setGamingModeActive(true)
+                settingsRepository.setGamingAppliedVia(privilegeManager.currentMode.value)
                 settingsRepository.flushRecoveryWrites()
 
                 _state.value = GamingModeState.Enabling(
@@ -380,6 +401,7 @@ class GamingModeEngine @Inject constructor(
 
                 settingsRepository.setGamingPlatformPath(null)
                 settingsRepository.setGamingModeActive(false)
+                settingsRepository.setGamingAppliedVia(null)
                 settingsRepository.clearGamingOptimizationSnapshot()
                 _activeGamePackage.value = null
                 _isSessionActive.value = false
