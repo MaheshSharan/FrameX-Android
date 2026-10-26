@@ -59,7 +59,7 @@ sealed class GamingModeState {
 class GamingModeEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val privilegeManager: PrivilegeManager,
-    private val esportsOptimizationEngine: EsportsOptimizationEngine,
+    private val genericGamingOptimizer: GenericGamingOptimizer,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val iqooGamingOptimizer: IqooGamingOptimizer,
     private val settingsRepository: SettingsRepository,
@@ -178,7 +178,7 @@ class GamingModeEngine @Inject constructor(
                     FrameXLog.w("Recovering Gaming Mode through recorded backend ${recorded.key}", tag = TAG)
                     val recovered = privilegeManager.runWithBackend(recorded) {
                         disableGamingMode()
-                        esportsOptimizationEngine.performLegacyCleanupIfNeeded()
+                        genericGamingOptimizer.performLegacyCleanupIfNeeded()
                         true
                     }
                     if (recovered != true || settingsRepository.isGamingModeActive()) {
@@ -190,7 +190,7 @@ class GamingModeEngine @Inject constructor(
                 if (ready) {
                     FrameXLog.w("Recovering interrupted Gaming Mode session via the selected privilege backend", tag = TAG)
                     disableGamingMode()
-                    esportsOptimizationEngine.performLegacyCleanupIfNeeded()
+                    genericGamingOptimizer.performLegacyCleanupIfNeeded()
                 } else {
                     GamingNotificationHelper.showRecoveryNotification(context)
                 }
@@ -241,7 +241,7 @@ class GamingModeEngine @Inject constructor(
                     safeString(R.string.gaming_status_initializing, "Initializing…")
                 )
 
-                val baselineApplied = esportsOptimizationEngine.applyOptimizationsForGame(
+                val baselineApplied = genericGamingOptimizer.applyOptimizationsForGame(
                     packageName = _activeGamePackage.value,
                     uid = resolvePackageUid(_activeGamePackage.value)
                 )
@@ -385,7 +385,7 @@ class GamingModeEngine @Inject constructor(
                 _suspendedPackagesCount.value = remainingSuspended.size
 
                 val platformReverted = revertPlatformOptimizations()
-                val esportsReverted = esportsOptimizationEngine.revertOptimizations()
+                val esportsReverted = genericGamingOptimizer.revertOptimizations()
                 restoreDndIfPermitted()
 
                 if (remainingSuspended.isNotEmpty() || !platformReverted || !esportsReverted) {
@@ -484,7 +484,7 @@ class GamingModeEngine @Inject constructor(
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext
         _activeGamePackage.value = safePkg
         val uid = resolvePackageUid(safePkg)
-        esportsOptimizationEngine.attachGame(safePkg, uid)
+        genericGamingOptimizer.attachGame(safePkg, uid)
 
         when (settingsRepository.getGamingPlatformPath()) {
             GamingPlatformPath.VIVO -> {

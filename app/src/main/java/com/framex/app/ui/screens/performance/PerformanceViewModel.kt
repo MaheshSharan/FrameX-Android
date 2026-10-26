@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.framex.app.R
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.AppInfo
-import com.framex.app.gaming.EsportsOptimizationEngine
+import com.framex.app.gaming.GenericGamingOptimizer
 import com.framex.app.gaming.GamingModeEngine
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.GamingPlatformPath
@@ -45,7 +45,7 @@ class PerformanceViewModel @Inject constructor(
     private val executionLedger: ExecutionLedger,
     private val vivoSuiteGate: VivoSuiteGate,
     private val gamingServiceController: GamingServiceController,
-    private val esportsOptimizationEngine: EsportsOptimizationEngine
+    private val genericGamingOptimizer: GenericGamingOptimizer
 ) : ViewModel() {
 
     private val _effectChannel = Channel<PerformanceUiEffect>(Channel.BUFFERED)
@@ -671,5 +671,5 @@ class PerformanceViewModel @Inject constructor(
         PerformanceUtils.measureNetworkLatency(privilegeManager)
 
     suspend fun resetToDeviceDefaults(): Boolean =
-        esportsOptimizationEngine.resetToDeviceDefaults(forceReset = true)
+        genericGamingOptimizer.resetToDeviceDefaults(forceReset = true)
 }

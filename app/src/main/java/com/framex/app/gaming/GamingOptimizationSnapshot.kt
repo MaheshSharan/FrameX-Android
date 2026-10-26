@@ -16,7 +16,9 @@ data class GamingOptimizationSnapshot(
     val peakRefreshRate: SettingValue?,
     val touchResponseSpeed: SettingValue?,
     val userPreferredDisplayModeId: SettingValue?,
-    val affectedPackages: Set<String>
+    val affectedPackages: Set<String>,
+    /** Absent in snapshots written by earlier builds. */
+    val monitorPhantomProcs: SettingValue? = null
 ) {
 
     // =========================================================================
@@ -40,6 +42,7 @@ data class GamingOptimizationSnapshot(
         json.put(KEY_PEAK_REFRESH_RATE, peakRefreshRate?.toJson() ?: JSONObject.NULL)
         json.put(KEY_TOUCH_RESPONSE_SPEED, touchResponseSpeed?.toJson() ?: JSONObject.NULL)
         json.put(KEY_USER_PREFERRED_DISPLAY_MODE_ID, userPreferredDisplayModeId?.toJson() ?: JSONObject.NULL)
+        json.put(KEY_MONITOR_PHANTOM_PROCS, monitorPhantomProcs?.toJson() ?: JSONObject.NULL)
     }
 
     private fun serializeAffectedPackages(json: JSONObject) {
@@ -63,6 +66,7 @@ data class GamingOptimizationSnapshot(
         private const val KEY_TOUCH_RESPONSE_SPEED = "touchResponseSpeed"
         private const val KEY_USER_PREFERRED_DISPLAY_MODE_ID = "userPreferredDisplayModeId"
         private const val KEY_AFFECTED_PACKAGES = "affectedPackages"
+        private const val KEY_MONITOR_PHANTOM_PROCS = "monitorPhantomProcs"
 
         fun fromJson(jsonStr: String): GamingOptimizationSnapshot? {
             return runCatching {
@@ -76,7 +80,8 @@ data class GamingOptimizationSnapshot(
                     peakRefreshRate = parseSettingValue(json, KEY_PEAK_REFRESH_RATE),
                     touchResponseSpeed = parseSettingValue(json, KEY_TOUCH_RESPONSE_SPEED),
                     userPreferredDisplayModeId = parseSettingValue(json, KEY_USER_PREFERRED_DISPLAY_MODE_ID),
-                    affectedPackages = parsePackageList(json, KEY_AFFECTED_PACKAGES)
+                    affectedPackages = parsePackageList(json, KEY_AFFECTED_PACKAGES),
+                    monitorPhantomProcs = parseSettingValue(json, KEY_MONITOR_PHANTOM_PROCS)
                 )
             }.onFailure { e ->
                 FrameXLog.e("Failed to parse GamingOptimizationSnapshot from JSON", e, tag = TAG)

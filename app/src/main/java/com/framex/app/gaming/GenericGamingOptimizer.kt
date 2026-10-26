@@ -1,5 +1,6 @@
 package com.framex.app.gaming
 
+import android.os.Build
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.ledger.CommandSpec
 import com.framex.app.gaming.ledger.LedgerExecutor
@@ -13,7 +14,7 @@ import javax.inject.Singleton
 import kotlin.math.abs
 
 @Singleton
-class EsportsOptimizationEngine @Inject constructor(
+class GenericGamingOptimizer @Inject constructor(
     private val privilegeManager: PrivilegeManager,
     private val settingsRepository: SettingsRepository,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
@@ -43,6 +44,7 @@ class EsportsOptimizationEngine @Inject constructor(
         applyMemoryAndThermalOptimizations()
         applyProcessPriorities(packageName)
         applyNetworkAndDozeExemptions(packageName, uid)
+        applyPhantomProcessGuard()
         applyPerformanceGovernor()
         applyDisplayRefreshRate()
         applyTouchResponseLatency()
@@ -251,8 +253,25 @@ class EsportsOptimizationEngine @Inject constructor(
         }
     }
 
+    /**
+     * Stops Android 12+ from killing background game helpers. The setting does not exist before
+     * API 31, and the original value is restored from the snapshot.
+     */
+    private suspend fun applyPhantomProcessGuard() {
+        if (!settingsRepository.disablePhantomProcKiller.value) return
+        val specs = listOf(
+            CommandSpec("cmd device_config put activity_manager max_phantom_processes 2147483647", OpPriority.DETAIL),
+            CommandSpec("settings put global settings_enable_monitor_phantom_procs false", OpPriority.DETAIL)
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ledgerExecutor.executeBatch(Stage.KERNEL, specs)
+        } else {
+            ledgerExecutor.recordSkipped(Stage.KERNEL, specs)
+        }
+    }
+
     private suspend fun applyPerformanceGovernor() {
-        if (deviceDiagnosticManager.isVivoOrIqoo()) {
+        if (!OemOverridePolicy.isAllowed(GenericOverride.FIXED_PERFORMANCE_MODE, deviceDiagnosticManager.isVivoOrIqoo())) {
             FrameXLog.w("Fixed performance mode bypassed on Vivo/iQOO firmware to prevent display lockout", tag = TAG)
             return
         }
@@ -313,6 +332,10 @@ class EsportsOptimizationEngine @Inject constructor(
         snapshot.minRefreshRate?.let { buildRestoreSettingCommand("system", "min_refresh_rate", it)?.let(cmds::add) }
         snapshot.peakRefreshRate?.let { buildRestoreSettingCommand("system", "peak_refresh_rate", it)?.let(cmds::add) }
         snapshot.touchResponseSpeed?.let { buildRestoreSettingCommand("system", "touch_response_speed", it)?.let(cmds::add) }
+        snapshot.monitorPhantomProcs?.let {
+            buildRestoreSettingCommand("global", "settings_enable_monitor_phantom_procs", it)?.let(cmds::add)
+            cmds.add("cmd device_config delete activity_manager max_phantom_processes")
+        }
 
         snapshot.userPreferredDisplayModeId?.let { setting ->
             val value = if (setting.existed && setting.value.isNotBlank()) setting.value else "-1"
@@ -340,6 +363,10 @@ class EsportsOptimizationEngine @Inject constructor(
         snapshot.minRefreshRate?.let { restoreSetting("system", "min_refresh_rate", it) }
         snapshot.peakRefreshRate?.let { restoreSetting("system", "peak_refresh_rate", it) }
         snapshot.touchResponseSpeed?.let { restoreSetting("system", "touch_response_speed", it) }
+        snapshot.monitorPhantomProcs?.let {
+            restoreSetting("global", "settings_enable_monitor_phantom_procs", it)
+            privilegeManager.execText("cmd device_config delete activity_manager max_phantom_processes")
+        }
         snapshot.userPreferredDisplayModeId?.let { setting ->
             val value = if (setting.existed && setting.value.isNotBlank()) setting.value else "-1"
             privilegeManager.execText("settings put secure user_preferred_display_mode_id $value")
@@ -365,6 +392,7 @@ class EsportsOptimizationEngine @Inject constructor(
             return null
         }
 
+        val phantomResult = privilegeManager.exec("settings get global settings_enable_monitor_phantom_procs")
         val existingSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
         val existingAffected = existingSnapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
 
@@ -376,7 +404,8 @@ class EsportsOptimizationEngine @Inject constructor(
             peakRefreshRate = SettingValue.fromCommandOutput(peakRefreshResult.output),
             touchResponseSpeed = SettingValue.fromCommandOutput(touchSpeedResult.output),
             userPreferredDisplayModeId = SettingValue.fromCommandOutput(displayModeResult.output),
-            affectedPackages = existingAffected
+            affectedPackages = existingAffected,
+            monitorPhantomProcs = if (phantomResult.isSuccess) SettingValue.fromCommandOutput(phantomResult.output) else null
         )
     }
 
@@ -411,7 +440,7 @@ class EsportsOptimizationEngine @Inject constructor(
         privilegeManager.isReady.value
 
     private companion object {
-        const val TAG = "EsportsEngine"
+        const val TAG = "GenericGaming"
 
         val LEGACY_RESET_COMMANDS = listOf(
             "settings delete system min_refresh_rate",

@@ -67,7 +67,6 @@ open class VivoGamingOptimizer @Inject constructor(
     private var baselineTouchSmooth: String? = null
     private var baselineMemcTouchRate: String? = null
     private var baselineGameCubeVipThread: String? = null
-    private var baselineMonitorPhantomProcs: String? = null
 
     // =========================================================================
     // Activation Sequence
@@ -157,7 +156,6 @@ open class VivoGamingOptimizer @Inject constructor(
         baselineTouchSmooth = querySetting("system", "touch_smooth")
         baselineMemcTouchRate = querySetting("global", "game_memc_request_touch_rate")
         baselineGameCubeVipThread = querySetting("global", "game_cube_vip_thread")
-        baselineMonitorPhantomProcs = querySetting("global", "settings_enable_monitor_phantom_procs")
     }
 
     private suspend fun executePowerAndThermalPayload() {
@@ -248,15 +246,8 @@ open class VivoGamingOptimizer @Inject constructor(
         if (settingsRepository.vivoVipThread.value) {
             specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:game_cube_vip_thread --bind value:s:1", com.framex.app.gaming.ledger.OpPriority.PRIMARY))
         }
-        if (settingsRepository.disablePhantomProcKiller.value) {
-            specs.add(com.framex.app.gaming.ledger.CommandSpec("cmd device_config put activity_manager max_phantom_processes 2147483647", com.framex.app.gaming.ledger.OpPriority.DETAIL))
-            specs.add(com.framex.app.gaming.ledger.CommandSpec("settings put global settings_enable_monitor_phantom_procs false", com.framex.app.gaming.ledger.OpPriority.DETAIL))
-        }
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
         if (safePkg != null) {
-            if (settingsRepository.cpuPriorityLock.value) {
-                specs.add(com.framex.app.gaming.ledger.CommandSpec("cmd activity set-bg-restriction-level --user 0 $safePkg unrestricted", com.framex.app.gaming.ledger.OpPriority.DETAIL))
-            }
             if (settingsRepository.vivoVipThread.value) {
                 specs.add(com.framex.app.gaming.ledger.CommandSpec("content insert --uri content://settings/global --bind name:s:speed_mode_apps --bind value:s:$safePkg", com.framex.app.gaming.ledger.OpPriority.DETAIL))
             }
@@ -374,19 +365,13 @@ open class VivoGamingOptimizer @Inject constructor(
         // 4. Hardware Gyroscope Suite
         revertCmds.add("content insert --uri content://settings/system --bind name:s:vivo_game_gyro_data_prediction --bind value:s:0")
 
-        // 5. Kernel, VIP Threads & Phantoms
+        // 5. Kernel & VIP Threads
         revertCmds.add("content insert --uri content://settings/global --bind name:s:game_cube_vip_thread --bind value:s:${baselineGameCubeVipThread ?: "0"}")
-        revertCmds.add("settings put global settings_enable_monitor_phantom_procs ${baselineMonitorPhantomProcs ?: "true"}")
 
         // 6. Periodic Maintenance Flags
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_plus_mode_key --bind value:s:0")
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_standard_promotion_mode --bind value:s:0")
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_scene_more_fps --bind value:s:0")
-
-        // 7. Background Restriction
-        activeGamePackage?.let { pkg ->
-            revertCmds.add("cmd activity set-bg-restriction-level --user 0 $pkg adaptive")
-        }
 
         // 8. O(1) Batched Deletes across System, Secure, and Global tables (replaces 10 individual JVM spawns with 3)
         revertCmds.add("content delete --uri content://settings/system --where \"name IN ('vivo_game_click_delay_promotion','vivo_game_touch_delay_promotion','vivo_game_gyro_promotion','vivo_game_gyro_dealy_promotion','vivo_game_gyro_anti_shake_promotion','sdk_game_target_fps','sdk_game_scene')\"")
