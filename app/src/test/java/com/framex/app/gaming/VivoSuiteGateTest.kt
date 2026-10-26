@@ -11,6 +11,9 @@ import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
+import com.framex.app.privilege.PrivilegeManager
+import com.framex.app.privilege.ShizukuBackend
+import com.framex.app.privilege.root.RootBackend
 import com.framex.app.shizuku.ShizukuManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -160,13 +163,13 @@ class VivoSuiteGateTest {
 
     private class TestVivoGamingOptimizer(
         context: Context,
-        shizukuManager: ShizukuManager,
+        privilegeManager: PrivilegeManager,
         settingsRepo: SettingsRepository,
         ledgerExecutor: LedgerExecutor,
         auditRepo: SystemAuditLogRepository,
         gate: VivoSuiteGate,
         deviceDiagnosticManager: DeviceDiagnosticManager = TestDeviceDiagnosticManager(context, isVivo = true)
-    ) : VivoGamingOptimizer(context, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate, deviceDiagnosticManager) {
+    ) : VivoGamingOptimizer(context, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate, deviceDiagnosticManager) {
         var revertCalled = false
         var revertResult = true
         var revertThrows: Throwable? = null
@@ -180,12 +183,12 @@ class VivoSuiteGateTest {
 
     private class TestIqooGamingOptimizer(
         context: Context,
-        shizukuManager: ShizukuManager,
+        privilegeManager: PrivilegeManager,
         settingsRepo: SettingsRepository,
         ledgerExecutor: LedgerExecutor,
         auditRepo: SystemAuditLogRepository,
         deviceDiagnosticManager: DeviceDiagnosticManager = TestDeviceDiagnosticManager(context, isVivo = false, isIqoo = true)
-    ) : IqooGamingOptimizer(context, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, deviceDiagnosticManager) {
+    ) : IqooGamingOptimizer(context, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, deviceDiagnosticManager) {
         var revertCalled = false
         override suspend fun revertOptimizations(): Boolean {
             revertCalled = true
@@ -205,19 +208,19 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate)
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -262,19 +265,19 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate)
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -317,21 +320,21 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate).apply {
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate).apply {
             revertResult = false // Simulate failure (e.g. Shizuku unavailable)
         }
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -374,19 +377,19 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate)
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -413,19 +416,19 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate)
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -450,19 +453,19 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate)
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
@@ -523,13 +526,13 @@ class VivoSuiteGateTest {
         assertFalse("Gate must be disabled when toggle is off", gate.isVivoSuiteEnabled)
 
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
 
         val optimizer = VivoGamingOptimizer(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             settingsRepository = settingsRepo,
             ledgerExecutor = ledgerExecutor,
             auditLogRepository = auditRepo,
@@ -537,7 +540,7 @@ class VivoSuiteGateTest {
             deviceDiagnosticManager = vivoManager
         )
 
-        val sharedTools = VivoIqooSharedTools(shizukuManager, gate)
+        val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
         assertFalse("injectPerfGameList must return false when suite disabled", sharedTools.injectPerfGameList("com.example.game"))
@@ -562,20 +565,20 @@ class VivoSuiteGateTest {
         assertFalse("Hardware is not Vivo", gate.isVivoHardware)
 
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
 
         val optimizer = VivoGamingOptimizer(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             settingsRepository = settingsRepo,
             ledgerExecutor = ledgerExecutor,
             auditLogRepository = auditRepo,
             vivoSuiteGate = gate,
             deviceDiagnosticManager = nonVivoManager
         )
-        val sharedTools = VivoIqooSharedTools(shizukuManager, gate)
+        val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware
         assertFalse(sharedTools.injectPerfGameList("com.example.game"))
@@ -601,21 +604,21 @@ class VivoSuiteGateTest {
         val vivoManager = TestDeviceDiagnosticManager(mockContext, isVivo = true)
         val gate = VivoSuiteGate(vivoManager, settingsRepo)
         val auditRepo = SystemAuditLogRepository(settingsRepo)
-        val shizukuManager = ShizukuManager(auditRepo)
+        val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
         val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(shizukuManager, ledger, auditRepo)
-        val testOptimizer = TestVivoGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo, gate).apply {
+        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
+        val testOptimizer = TestVivoGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo, gate).apply {
             this.revertResult = revertResult
         }
-        val esportsEngine = EsportsOptimizationEngine(shizukuManager, settingsRepo, vivoManager, ledgerExecutor)
+        val esportsEngine = EsportsOptimizationEngine(privilegeManager, settingsRepo, vivoManager, ledgerExecutor)
         val oemResolver = OemPackageResolver(gate)
 
         val engine = GamingModeEngine(
             context = mockContext,
-            shizukuManager = shizukuManager,
+            privilegeManager = privilegeManager,
             esportsOptimizationEngine = esportsEngine,
             vivoGamingOptimizer = testOptimizer,
-            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, shizukuManager, settingsRepo, ledgerExecutor, auditRepo),
+            iqooGamingOptimizer = TestIqooGamingOptimizer(mockContext, privilegeManager, settingsRepo, ledgerExecutor, auditRepo),
             settingsRepository = settingsRepo,
             oemPackageResolver = oemResolver,
             deviceDiagnosticManager = vivoManager,
