@@ -11,7 +11,7 @@ import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import com.framex.app.utils.ShellSanitizer
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,7 +57,7 @@ sealed class GamingModeState {
 @Singleton
 class GamingModeEngine @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val esportsOptimizationEngine: EsportsOptimizationEngine,
     private val vivoGamingOptimizer: VivoGamingOptimizer,
     private val iqooGamingOptimizer: IqooGamingOptimizer,
@@ -154,7 +154,7 @@ class GamingModeEngine @Inject constructor(
      */
     fun recoverPersistedState() {
         recoveryScope.launch {
-            shizukuManager.isShizukuAvailable.collect { available ->
+            privilegeManager.isReady.collect { ready ->
                 val wasActive = settingsRepository.isGamingModeActive()
                 val hasSnapshot = settingsRepository.hasActiveGamingSnapshot()
                 val affected = settingsRepository.getGamingAffectedPackages()
@@ -167,8 +167,8 @@ class GamingModeEngine @Inject constructor(
                     return@collect
                 }
 
-                if (available && shizukuManager.hasPermission.value) {
-                    FrameXLog.w("Recovering interrupted Gaming Mode session via Shizuku", tag = TAG)
+                if (ready) {
+                    FrameXLog.w("Recovering interrupted Gaming Mode session via the selected privilege backend", tag = TAG)
                     disableGamingMode()
                     esportsOptimizationEngine.performLegacyCleanupIfNeeded()
                 } else {
@@ -181,7 +181,7 @@ class GamingModeEngine @Inject constructor(
     suspend fun enableGamingMode(
         whitelist: Set<String> = settingsRepository.gamingModeWhitelist.value
     ) = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             _state.value = GamingModeState.Error(
                 safeString(
                     R.string.gaming_err_shizuku_unavailable,
@@ -260,7 +260,7 @@ class GamingModeEngine @Inject constructor(
                     settingsRepository.setGamingAffectedPackages(persistedAffected)
                     settingsRepository.flushRecoveryWrites()
 
-                    val suspendRes = shizukuManager.suspendPackages(candidates, suspended = true)
+                    val suspendRes = privilegeManager.suspendPackages(candidates, suspended = true)
                     val failedSet = suspendRes?.failedPackages?.toSet() ?: emptySet()
                     val verifiedSuspended = if (suspendRes != null) {
                         candidates.filter { it !in failedSet }.toSet()
@@ -331,7 +331,7 @@ class GamingModeEngine @Inject constructor(
             _state.value = GamingModeState.Disabling
             stopMaintenancePulse()
 
-            val isShizukuReady = shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value
+            val isShizukuReady = privilegeManager.isReady.value
             if (!isShizukuReady) {
                 val msg = safeString(
                     R.string.gaming_err_deactivate_shizuku,
@@ -349,12 +349,12 @@ class GamingModeEngine @Inject constructor(
 
                 var remainingSuspended = emptySet<String>()
                 if (toUnsuspend.isNotEmpty()) {
-                    val res = shizukuManager.suspendPackages(toUnsuspend.toList(), suspended = false)
+                    val res = privilegeManager.suspendPackages(toUnsuspend.toList(), suspended = false)
                     remainingSuspended = res?.failedPackages?.toSet() ?: toUnsuspend
                     if (remainingSuspended.isNotEmpty()) {
                         val stillFailing = mutableSetOf<String>()
                         for (pkg in remainingSuspended) {
-                            val exit = shizukuManager.executeCommandWithExitCode("cmd package unsuspend --user 0 $pkg")
+                            val exit = privilegeManager.execExit("cmd package unsuspend --user 0 $pkg")
                             if (exit != 0) stillFailing.add(pkg)
                         }
                         remainingSuspended = stillFailing
@@ -453,7 +453,7 @@ class GamingModeEngine @Inject constructor(
 
     suspend fun resolveProcessPid(packageName: String): Int = withContext(Dispatchers.IO) {
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext 0
-        val res = shizukuManager.executeCommandWithResult("pidof $safePkg")
+        val res = privilegeManager.exec("pidof $safePkg")
         val out = res?.output?.trim().orEmpty()
         out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }

@@ -5,7 +5,7 @@ import android.os.Build
 import android.os.PowerManager
 import com.framex.app.metrics.MetricReadStatus
 import com.framex.app.metrics.ThermalServiceParser
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +16,7 @@ import javax.inject.Singleton
 @Singleton
 class ThermalMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) {
     data class ThermalState(
         val cpuC: Float = 0f,
@@ -59,12 +59,11 @@ class ThermalMonitor @Inject constructor(
         var consecutiveFailures = 0
 
         while (true) {
-            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value
+            val shizukuReady = privilegeManager.isReady.value
 
             val state = if (shizukuReady) {
                 try {
-                    val output = shizukuManager.getThermalTemperatures()
+                    val output = privilegeManager.readThermalTemperatures().output
                     if (output.isBlank()) {
                         consecutiveFailures++
                         if (consecutiveFailures <= 3 && lastGoodState != null) {

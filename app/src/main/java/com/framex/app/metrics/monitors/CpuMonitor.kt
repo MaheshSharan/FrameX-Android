@@ -3,7 +3,7 @@ package com.framex.app.metrics.monitors
 import com.framex.app.metrics.CpuTelemetrySnapshot
 import com.framex.app.metrics.CpuTimes
 import com.framex.app.metrics.CpuTopologyParser
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -12,7 +12,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CpuMonitor @Inject constructor(
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) {
     /**
      * Unified O(1) CPU telemetry stream emitting peak MHz, total usage %,
@@ -21,11 +21,10 @@ class CpuMonitor @Inject constructor(
     val cpuSnapshot: Flow<CpuTelemetrySnapshot> = flow {
         var previousTimes: Map<Int, CpuTimes> = emptyMap()
         while (true) {
-            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value
+            val shizukuReady = privilegeManager.isReady.value
 
             val raw = if (shizukuReady) {
-                runCatching { shizukuManager.readCpuTelemetry() }.getOrDefault("")
+                runCatching { privilegeManager.readCpuTelemetry().output }.getOrDefault("")
             } else {
                 ""
             }

@@ -6,7 +6,7 @@ import com.framex.app.gaming.ledger.LedgerExecutor
 import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +20,7 @@ import com.framex.app.utils.ShellSanitizer
 @Singleton
 open class IqooGamingOptimizer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val settingsRepository: SettingsRepository,
     private val ledgerExecutor: LedgerExecutor,
     private val auditLogRepository: SystemAuditLogRepository,
@@ -50,7 +50,7 @@ open class IqooGamingOptimizer @Inject constructor(
         pid: Int = 0,
         onProgress: (suspend (Float, String) -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             auditLogRepository.addLog("Gaming Mode Activation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
@@ -131,7 +131,7 @@ open class IqooGamingOptimizer @Inject constructor(
     }
 
     suspend fun runPeriodicMaintenance() = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return@withContext
+        if (!privilegeManager.isReady.value) return@withContext
         if (!settingsRepository.vivoMaintenancePulse.value) return@withContext
 
         val specs = mutableListOf<CommandSpec>()
@@ -163,7 +163,7 @@ open class IqooGamingOptimizer @Inject constructor(
     }
 
     open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             auditLogRepository.addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
@@ -201,7 +201,7 @@ open class IqooGamingOptimizer @Inject constructor(
         commands.add("content delete --uri content://settings/secure --where \"name = 'sdk_game_scene'\"")
 
         val batchedCmd = commands.joinToString(" ; ")
-        val exitCode = shizukuManager.executeCommandWithExitCode(batchedCmd)
+        val exitCode = privilegeManager.execExit(batchedCmd)
         val success = (exitCode == 0)
 
         activeGamePackage = null
@@ -223,7 +223,7 @@ open class IqooGamingOptimizer @Inject constructor(
     }
 
     private suspend fun querySetting(table: String, name: String): String? {
-        val result = shizukuManager.executeCommandWithResult(
+        val result = privilegeManager.exec(
             "content query --uri content://settings/$table --projection value --where \"name='$name'\""
         )
         val line = result?.output?.lines()?.firstOrNull { it.contains("value=") } ?: return null
@@ -232,7 +232,7 @@ open class IqooGamingOptimizer @Inject constructor(
 
     private suspend fun queryProcessPid(packageName: String): Int {
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return 0
-        val res = shizukuManager.executeCommandWithResult("pidof $safePkg")
+        val res = privilegeManager.exec("pidof $safePkg")
         val out = res?.output?.trim().orEmpty()
         return out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }

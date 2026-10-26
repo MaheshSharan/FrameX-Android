@@ -2,7 +2,6 @@ package com.framex.app
 
 import android.app.Application
 import com.framex.app.gaming.GamingModeEngine
-import com.framex.app.shizuku.ShizukuManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -10,7 +9,7 @@ import javax.inject.Inject
 class FrameXApplication : Application() {
 
     @Inject
-    lateinit var shizukuManager: ShizukuManager
+    lateinit var privilegeManager: com.framex.app.privilege.PrivilegeManager
 
     @Inject
     lateinit var gamingModeEngine: GamingModeEngine
@@ -18,7 +17,7 @@ class FrameXApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         com.framex.app.utils.CrashHandler.init(this)
-        shizukuManager.init()
+        privilegeManager.start()
         // Recover gaming mode state if the process was killed while mode was active.
         gamingModeEngine.recoverPersistedState()
     }

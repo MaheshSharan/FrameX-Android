@@ -6,7 +6,7 @@ import com.framex.app.gaming.ledger.LedgerExecutor
 import com.framex.app.gaming.ledger.OpPriority
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,7 +14,7 @@ import kotlin.math.abs
 
 @Singleton
 class EsportsOptimizationEngine @Inject constructor(
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val settingsRepository: SettingsRepository,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
     private val ledgerExecutor: LedgerExecutor
@@ -97,7 +97,7 @@ class EsportsOptimizationEngine @Inject constructor(
         collectThermalAndIdleCommands(rollbackCmds)
 
         if (rollbackCmds.isNotEmpty()) {
-            shizukuManager.executeCommand(rollbackCmds.joinToString("; "))
+            privilegeManager.execText(rollbackCmds.joinToString("; "))
         }
 
         settingsRepository.clearGamingOptimizationSnapshot()
@@ -143,8 +143,8 @@ class EsportsOptimizationEngine @Inject constructor(
         if (!settingsRepository.needsThermalOverrideRecovery()) return true
         if (!isShizukuReady()) return false
 
-        val result = shizukuManager.executeCommandWithResult("cmd thermalservice reset")
-        if (result == null || result.exitCode != 0) {
+        val result = privilegeManager.exec("cmd thermalservice reset")
+        if (!result.isSuccess) {
             FrameXLog.w("Thermal override recovery failed", tag = TAG)
             return false
         }
@@ -331,7 +331,7 @@ class EsportsOptimizationEngine @Inject constructor(
         val packagesToUnsuspend = snapshot?.affectedPackages ?: settingsRepository.getGamingAffectedPackages()
         if (packagesToUnsuspend.isNotEmpty()) {
             FrameXLog.i("Resetting suspended packages: ${packagesToUnsuspend.size} apps", tag = TAG)
-            shizukuManager.suspendPackages(packagesToUnsuspend.toList(), false)
+            privilegeManager.suspendPackages(packagesToUnsuspend.toList(), false)
             settingsRepository.setGamingAffectedPackages(emptySet())
         }
     }
@@ -342,11 +342,11 @@ class EsportsOptimizationEngine @Inject constructor(
         snapshot.touchResponseSpeed?.let { restoreSetting("system", "touch_response_speed", it) }
         snapshot.userPreferredDisplayModeId?.let { setting ->
             val value = if (setting.existed && setting.value.isNotBlank()) setting.value else "-1"
-            shizukuManager.executeCommand("settings put secure user_preferred_display_mode_id $value")
+            privilegeManager.execText("settings put secure user_preferred_display_mode_id $value")
         }
-        shizukuManager.executeCommand("cmd power set-fixed-performance-mode-enabled false")
-        shizukuManager.executeCommand("cmd thermalservice reset")
-        shizukuManager.executeCommand("cmd deviceidle unforce")
+        privilegeManager.execText("cmd power set-fixed-performance-mode-enabled false")
+        privilegeManager.execText("cmd thermalservice reset")
+        privilegeManager.execText("cmd deviceidle unforce")
         return true
     }
 
@@ -355,13 +355,13 @@ class EsportsOptimizationEngine @Inject constructor(
     // =========================================================================
 
     private suspend fun captureSnapshot(packageName: String?, uid: Int?): GamingOptimizationSnapshot? {
-        val minRefreshResult = shizukuManager.executeCommandWithResult("settings get system min_refresh_rate")
-        val peakRefreshResult = shizukuManager.executeCommandWithResult("settings get system peak_refresh_rate")
-        val touchSpeedResult = shizukuManager.executeCommandWithResult("settings get system touch_response_speed")
-        val displayModeResult = shizukuManager.executeCommandWithResult("settings get secure user_preferred_display_mode_id")
+        val minRefreshResult = privilegeManager.exec("settings get system min_refresh_rate")
+        val peakRefreshResult = privilegeManager.exec("settings get system peak_refresh_rate")
+        val touchSpeedResult = privilegeManager.exec("settings get system touch_response_speed")
+        val displayModeResult = privilegeManager.exec("settings get secure user_preferred_display_mode_id")
 
-        if (minRefreshResult == null || peakRefreshResult == null || touchSpeedResult == null || displayModeResult == null) {
-            FrameXLog.e("IPC failure capturing generic display/touch settings, aborting optimization", tag = TAG)
+        if (listOf(minRefreshResult, peakRefreshResult, touchSpeedResult, displayModeResult).any { !it.isSuccess }) {
+            FrameXLog.e("Privilege failure capturing generic display/touch settings, aborting optimization", tag = TAG)
             return null
         }
 
@@ -392,14 +392,14 @@ class EsportsOptimizationEngine @Inject constructor(
 
     private suspend fun restoreSetting(namespace: String, key: String, setting: SettingValue) {
         buildRestoreSettingCommand(namespace, key, setting)?.let {
-            shizukuManager.executeCommand(it)
+            privilegeManager.execText(it)
         }
     }
 
     private suspend fun executeCommandList(commands: List<String>): Boolean {
         if (commands.isEmpty()) return true
         val batchPayload = commands.joinToString("; ")
-        val exitCode = shizukuManager.executeCommandWithExitCode(batchPayload)
+        val exitCode = privilegeManager.execExit(batchPayload)
         return exitCode == 0
     }
 
@@ -408,7 +408,7 @@ class EsportsOptimizationEngine @Inject constructor(
     }
 
     private fun isShizukuReady(): Boolean =
-        shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value
+        privilegeManager.isReady.value
 
     private companion object {
         const val TAG = "EsportsEngine"

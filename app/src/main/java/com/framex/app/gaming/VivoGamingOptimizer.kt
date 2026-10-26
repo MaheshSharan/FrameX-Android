@@ -3,7 +3,7 @@ package com.framex.app.gaming
 import android.content.Context
 import android.widget.Toast
 import com.framex.app.device.DeviceDiagnosticManager
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,7 @@ import javax.inject.Singleton
 @Singleton
 open class VivoGamingOptimizer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val settingsRepository: com.framex.app.repository.SettingsRepository,
     private val ledgerExecutor: com.framex.app.gaming.ledger.LedgerExecutor,
     private val auditLogRepository: SystemAuditLogRepository,
@@ -78,7 +78,7 @@ open class VivoGamingOptimizer @Inject constructor(
         pid: Int = 0,
         onProgress: (suspend (Float, String) -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             FrameXLog.w("Shizuku unavailable, skipping Vivo gaming optimizations", tag = TAG)
             addLog("Gaming Mode Activation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
@@ -285,7 +285,7 @@ open class VivoGamingOptimizer @Inject constructor(
     }
 
     suspend fun runPeriodicMaintenance() = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) return@withContext
+        if (!privilegeManager.isReady.value) return@withContext
         if (!settingsRepository.vivoMaintenancePulse.value) {
             FrameXLog.d("Periodic maintenance pulse disabled by user setting", tag = TAG)
             return@withContext
@@ -342,7 +342,7 @@ open class VivoGamingOptimizer @Inject constructor(
     // =========================================================================
 
     open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
@@ -393,7 +393,7 @@ open class VivoGamingOptimizer @Inject constructor(
         revertCmds.add("content delete --uri content://settings/secure --where \"name = 'sdk_game_scene'\"")
         revertCmds.add("content delete --uri content://settings/global --where \"name = 'speed_mode_apps'\"")
 
-        val exitCode = shizukuManager.executeCommandWithExitCode(revertCmds.joinToString("; "))
+        val exitCode = privilegeManager.execExit(revertCmds.joinToString("; "))
         val success = (exitCode == 0)
 
         activeGamePackage = null
@@ -412,14 +412,14 @@ open class VivoGamingOptimizer @Inject constructor(
     // =========================================================================
 
     private suspend fun querySetting(table: String, key: String): String? {
-        val res = shizukuManager.executeCommandWithResult("settings get $table $key")
+        val res = privilegeManager.exec("settings get $table $key")
         val out = res?.output?.trim().orEmpty()
         return if (out.isBlank() || out == "null") null else out
     }
 
     private suspend fun queryProcessPid(packageName: String): Int {
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return 0
-        val res = shizukuManager.executeCommandWithResult("pidof $safePkg")
+        val res = privilegeManager.exec("pidof $safePkg")
         val out = res?.output?.trim().orEmpty()
         return out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }

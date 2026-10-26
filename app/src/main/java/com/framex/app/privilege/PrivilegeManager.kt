@@ -1,58 +1,143 @@
 package com.framex.app.privilege
 
+import com.framex.app.privilege.root.RootBackend
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.utils.FrameXLog
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Result of asking to change the privilege mode. */
+enum class SwitchResult { SWITCHED, BLOCKED_GAMING_ACTIVE, BLOCKED_RECOVERY_PENDING }
+
+/**
+ * The only entry point for privileged work. The selected mode is authoritative: a command
+ * goes to that backend or fails, it is never retried through the other one.
+ */
 @Singleton
+@OptIn(ExperimentalCoroutinesApi::class)
 class PrivilegeManager @Inject constructor(
-    private val settingsRepository: SettingsRepository,
-    private val rootCommandRunner: RootCommandRunner,
-    val shizukuManager: ShizukuManager
+    private val settings: SettingsRepository,
+    private val shizuku: ShizukuBackend,
+    private val root: RootBackend
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val switchLock = Mutex()
+
     private val _currentMode = MutableStateFlow(PrivilegeMode.NONE)
     val currentMode: StateFlow<PrivilegeMode> = _currentMode.asStateFlow()
 
-    init {
-        val saved = settingsRepository.appPrefs.getPrivilegeMode()
-        _currentMode.value = saved
+    private val _capabilities = MutableStateFlow<PrivilegeCapabilities?>(null)
+    val capabilities: StateFlow<PrivilegeCapabilities?> = _capabilities.asStateFlow()
+
+    val backendState: StateFlow<BackendState> = _currentMode
+        .flatMapLatest { backendFor(it)?.state ?: MutableStateFlow(BackendState.Idle) }
+        .stateIn(scope, SharingStarted.Eagerly, BackendState.Idle)
+
+    val isReady: StateFlow<Boolean> = backendState
+        .map { it is BackendState.Connected }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Loads the saved mode and starts only that backend. Call once from Application. */
+    fun start() {
+        scope.launch {
+            settings.awaitSettingsLoaded()
+            activate(settings.appPrefs.getPrivilegeMode())
+        }
     }
 
-    suspend fun checkRootAccess(): Boolean = withContext(Dispatchers.IO) {
-        rootCommandRunner.isRootAvailable()
+    suspend fun switchMode(target: PrivilegeMode): SwitchResult = switchLock.withLock {
+        if (target == _currentMode.value) return SwitchResult.SWITCHED
+        settings.awaitSettingsLoaded()
+        if (settings.isGamingModeActive()) return SwitchResult.BLOCKED_GAMING_ACTIVE
+        if (settings.needsThermalOverrideRecovery()) return SwitchResult.BLOCKED_RECOVERY_PENDING
+        settings.appPrefs.setPrivilegeMode(target)
+        activate(target)
+        SwitchResult.SWITCHED
     }
 
-    fun setMode(mode: PrivilegeMode) {
-        _currentMode.value = mode
-        settingsRepository.appPrefs.setPrivilegeMode(mode)
+    fun refresh() {
+        backendFor(_currentMode.value)?.refresh()
     }
 
-    suspend fun executeCommand(command: String, timeoutMs: Long = 5000L): ShellExecutionResult = withContext(Dispatchers.IO) {
-        if (_currentMode.value == PrivilegeMode.ROOT) {
-            rootCommandRunner.execute(command, timeoutMs)
-        } else {
-            val result = shizukuManager.executeCommandWithResult(command)
-            if (result != null) {
-                ShellExecutionResult(result.exitCode, result.output)
-            } else {
-                ShellExecutionResult(-1, "Privilege provider unavailable or command failed")
+    suspend fun requestAccess() {
+        backendFor(_currentMode.value)?.requestAccess()
+        if (isReady.value) probeCapabilities()
+    }
+
+    suspend fun exec(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): PrivilegedOutcome =
+        backendFor(_currentMode.value)?.exec(command, timeoutMs)
+            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+
+    /** Command output only; empty when the command could not run. */
+    suspend fun execText(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): String =
+        exec(command, timeoutMs).output
+
+    /** Exit status; negative values mean the command did not run to completion. */
+    suspend fun execExit(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): Int =
+        exec(command, timeoutMs).exitCode
+
+    /** Reads a file as the privileged user; empty when it cannot be read. */
+    suspend fun readSystemFile(path: String): String {
+        val outcome = exec("cat '${path.replace("'", "'\\''")}'", READ_TIMEOUT_MS)
+        return if (outcome.isSuccess) outcome.output.trim() else ""
+    }
+
+    suspend fun readCpuTelemetry(): PrivilegedOutcome =
+        backendFor(_currentMode.value)?.readCpuTelemetry()
+            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+
+    suspend fun readThermalTemperatures(): PrivilegedOutcome =
+        backendFor(_currentMode.value)?.readThermalTemperatures()
+            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+
+    suspend fun suspendPackages(packages: List<String>, suspended: Boolean): SuspendOutcome? =
+        backendFor(_currentMode.value)?.suspendPackages(packages, suspended)
+
+    suspend fun setAppOpMode(packages: List<String>, opCode: Int, mode: Int): Int =
+        backendFor(_currentMode.value)?.setAppOpMode(packages, opCode, mode) ?: 0
+
+    private suspend fun probeCapabilities() {
+        val backend = backendFor(_currentMode.value) ?: return
+        _capabilities.value = runCatching { CapabilityProbe.run(backend) }
+            .onFailure { FrameXLog.w("Capability probe failed: ${it.message}") }
+            .getOrNull()
+    }
+
+    private fun activate(target: PrivilegeMode) {
+        val previous = backendFor(_currentMode.value)
+        val next = backendFor(target)
+        if (previous !== next) previous?.stop()
+        _capabilities.value = null
+        _currentMode.value = target
+        next?.start()
+        if (next != null) {
+            scope.launch {
+                next.state.collect { if (it is BackendState.Connected) { probeCapabilities(); return@collect } }
             }
         }
     }
 
-    suspend fun readSystemFile(path: String): String = withContext(Dispatchers.IO) {
-        if (_currentMode.value == PrivilegeMode.ROOT) {
-            val res = rootCommandRunner.execute("cat $path", 2000L)
-            if (res.isSuccess) res.output else ""
-        } else {
-            val output = shizukuManager.executeCommand("cat $path")
-            output.trim()
-        }
+    private fun backendFor(mode: PrivilegeMode): PrivilegeBackend? = when (mode) {
+        PrivilegeMode.SHIZUKU -> shizuku
+        PrivilegeMode.ROOT -> root
+        PrivilegeMode.NONE -> null
+    }
+
+    private companion object {
+        const val READ_TIMEOUT_MS = 3_000L
     }
 }

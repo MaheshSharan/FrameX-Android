@@ -2,7 +2,7 @@ package com.framex.app.gaming.ledger
 
 import com.framex.app.gaming.LogStatus
 import com.framex.app.gaming.SystemAuditLogRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,7 +15,7 @@ data class CommandSpec(
 
 @Singleton
 class LedgerExecutor @Inject constructor(
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val executionLedger: ExecutionLedger,
     private val auditLogRepository: SystemAuditLogRepository
 ) {
@@ -30,13 +30,13 @@ class LedgerExecutor @Inject constructor(
         specs: List<CommandSpec>
     ): Boolean = withContext(Dispatchers.IO) {
         if (specs.isEmpty()) return@withContext true
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
             recordPermissionFailure(stage, specs)
             return@withContext false
         }
 
         val chained = buildChainedPayload(specs)
-        val result = shizukuManager.executeCommandWithResult(chained)
+        val result = privilegeManager.exec(chained)
         val parsedResults = parseBatchOutput(result?.output.orEmpty(), specs.size)
 
         processBatchResults(stage, specs, parsedResults)

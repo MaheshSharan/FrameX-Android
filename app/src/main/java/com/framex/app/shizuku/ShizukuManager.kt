@@ -218,31 +218,20 @@ class ShizukuManager @Inject constructor(
         }
     }
 
-    suspend fun executeCommandWithResult(command: String): CommandResult? {
+    suspend fun executeCommandWithResult(
+        command: String,
+        deadlineMs: Long = IPC_COMMAND_DEADLINE_MS
+    ): CommandResult? {
         if (!_isShizukuAvailable.value || !_hasPermission.value) {
             com.framex.app.utils.FrameXLog.w("executeCommandWithResult called when Shizuku is unavailable or permission is not granted")
             return null
         }
         return executeLockedWithDeadline<CommandResult?>(
             operationName = "executeCommandWithResult($command)",
-            timeoutMs = IPC_COMMAND_DEADLINE_MS,
+            timeoutMs = deadlineMs,
             defaultValue = null
         ) { runner ->
             runner.executeCommandWithResult(command)
-        }
-    }
-
-    suspend fun readProcStat(): String {
-        if (!_isShizukuAvailable.value || !_hasPermission.value) {
-            com.framex.app.utils.FrameXLog.w("readProcStat called when Shizuku is unavailable")
-            return ""
-        }
-        return executeLockedWithDeadline(
-            operationName = "readProcStat",
-            timeoutMs = IPC_TELEMETRY_DEADLINE_MS,
-            defaultValue = ""
-        ) { runner ->
-            runner.readProcStat()
         }
     }
 
@@ -271,14 +260,6 @@ class ShizukuManager @Inject constructor(
         ) { runner ->
             runner.getThermalTemperatures()
         }
-    }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun getSuspendedPackages(packageNames: List<String>): Set<String> {
-        // 'cmd package list packages -s' filters system packages, NOT suspended packages.
-        // Android does not have a single batch query flag for suspended packages in pm list packages.
-        // Returning emptySet() ensures installed OEM and Google bloatware packages are not falsely ignored.
-        return emptySet()
     }
 
     suspend fun suspendPackages(packageNames: List<String>, suspended: Boolean): SuspendResult? {

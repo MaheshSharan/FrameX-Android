@@ -2,7 +2,7 @@ package com.framex.app.metrics.monitors
 
 import com.framex.app.metrics.CpuInfoTopParser
 import com.framex.app.metrics.MetricReadStatus
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -11,7 +11,7 @@ import javax.inject.Singleton
 
 @Singleton
 class TopProcessMonitor @Inject constructor(
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) {
     data class TopProcess(
         val name: String = "",
@@ -22,12 +22,11 @@ class TopProcessMonitor @Inject constructor(
 
     val topProcess: Flow<TopProcess> = flow {
         while (true) {
-            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value
+            val shizukuReady = privilegeManager.isReady.value
 
             val result = if (shizukuReady) {
                 try {
-                    val output = shizukuManager.executeCommand("dumpsys cpuinfo")
+                    val output = privilegeManager.execText("dumpsys cpuinfo")
                     if (output.isBlank()) {
                         TopProcess(readStatus = MetricReadStatus.EmptyOutput)
                     } else {

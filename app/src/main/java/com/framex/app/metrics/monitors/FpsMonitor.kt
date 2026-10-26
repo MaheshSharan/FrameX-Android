@@ -2,7 +2,7 @@ package com.framex.app.metrics.monitors
 
 import android.content.Context
 import com.framex.app.metrics.MetricReadStatus
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
 @Singleton
 class FpsMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) {
     data class FpsState(
         val fps: Int = 0,
@@ -29,19 +29,18 @@ class FpsMonitor @Inject constructor(
         var lastKnownFps = 0
 
         while (true) {
-            val shizukuReady = shizukuManager.isShizukuAvailable.value &&
-                shizukuManager.hasPermission.value
+            val shizukuReady = privilegeManager.isReady.value
 
             if (shizukuReady) {
                 try {
                     if (!initialized) {
-                        shizukuManager.executeCommand(
+                        privilegeManager.execText(
                             "dumpsys SurfaceFlinger --timestats -clear -enable"
                         )
                         initialized = true
                         emit(FpsState(fps = lastKnownFps, readStatus = MetricReadStatus.Loading))
                     } else {
-                        val output = shizukuManager.executeCommand(
+                        val output = privilegeManager.execText(
                             "dumpsys SurfaceFlinger --timestats -dump"
                         )
 
@@ -79,7 +78,7 @@ class FpsMonitor @Inject constructor(
                         )
 
                         if (System.currentTimeMillis() % 3000L < 1000L) {
-                            shizukuManager.executeCommand(
+                            privilegeManager.execText(
                                 "dumpsys SurfaceFlinger --timestats -clear -enable"
                             )
                         }

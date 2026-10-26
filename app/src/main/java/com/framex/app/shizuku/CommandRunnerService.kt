@@ -1,6 +1,8 @@
 package com.framex.app.shizuku
 
 import android.content.Context
+import com.framex.app.privilege.scripts.PackageCommands
+import com.framex.app.privilege.scripts.ThermalScripts
 import com.framex.app.utils.FrameXLog
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -371,9 +373,9 @@ class CommandRunnerService private constructor(
      * to parse-fail on" fallback in [getThermalTemperatures].
      */
     private fun readViaDumpsys(requireValid: Boolean = true): String? {
-        val dump = executeCommand("dumpsys thermalservice")
+        val dump = executeCommand(ThermalScripts.DUMPSYS_COMMAND)
         if (!requireValid) return dump
-        return if (dump.contains("Temperature{") || dump.contains("mValue=")) dump else null
+        return if (ThermalScripts.dumpHasSensorData(dump)) dump else null
     }
 
     private data class CachedThermalPath(val typeFile: java.io.File, val tempFile: java.io.File)
@@ -474,75 +476,27 @@ class CommandRunnerService private constructor(
             }
         }
 
-        val sysfsDump = executeCommand(
-            "sh -c 'for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done; for d in /sys/class/thermal/cooling_device*; do echo \"cooling: \$(cat \$d/type 2>/dev/null) \$(cat \$d/cur_state 2>/dev/null)\"; done'"
-        )
-        val validLines = sysfsDump.lines().filter {
-            it.contains(":") && it.substringBefore(":").isNotBlank() && it.substringAfter(":").isNotBlank()
-        }
-
-        if (sysfsDump.isNotBlank() && validLines.isNotEmpty()) {
+        val sysfsDump = executeCommand(ThermalScripts.SYSFS_COMMAND)
+        if (sysfsDump.isNotBlank() && ThermalScripts.sysfsHasSensorData(sysfsDump)) {
             return sysfsDump
         }
         return null
     }
 
     override fun suspendPackages(packageNames: Array<out String>?, suspended: Boolean): SuspendResult {
-        if (packageNames.isNullOrEmpty()) {
-            return SuspendResult().apply {
-                this.failedPackages = emptyArray()
-                this.successCount = 0
-            }
-        }
-        val action = if (suspended) "suspend" else "unsuspend"
-        val validPkgs = packageNames.filter { it.isNotBlank() }
-
-        // O(1) Fast-Path: Execute all target packages in a single cmd package invocation.
-        val batchCmd = "cmd package $action --user 0 ${validPkgs.joinToString(" ")}"
-        val batchResult = executeCommandWithResult(batchCmd)
-        if (batchResult.exitCode == 0) {
-            return SuspendResult().apply {
-                this.failedPackages = emptyArray()
-                this.successCount = validPkgs.size
-            }
-        }
-
-        // Resilient fallback: If batch command encounters syntax or package issues, evaluate individually.
-        val failed = mutableListOf<String>()
-        var successCount = 0
-        for (pkg in validPkgs) {
-            val cmd = "cmd package $action --user 0 $pkg"
-            val result = executeCommandWithResult(cmd)
-            if (result.exitCode == 0) {
-                successCount++
-            } else {
-                val output = result.output.lowercase()
-                if (output.contains("unknown target package") || output.contains("does not exist") || output.contains("not found")) {
-                    com.framex.app.utils.FrameXLog.d("Skipping uninstalled package $pkg during $action", tag = "CmdRunner")
-                } else {
-                    failed.add(pkg)
-                }
-            }
+        val outcome = PackageCommands.applySuspend(packageNames.orEmpty().toList(), suspended) { command ->
+            executeBoundedProcess(command)
         }
         return SuspendResult().apply {
-            this.failedPackages = failed.toTypedArray()
-            this.successCount = successCount
+            this.failedPackages = outcome.failedPackages.toTypedArray()
+            this.successCount = outcome.successCount
         }
     }
 
     override fun setAppOpMode(packageNames: Array<out String>?, opCode: Int, mode: Int): Int {
         if (packageNames.isNullOrEmpty()) return 0
-        var count = 0
-        val modeStr = when (mode) {
-            1 -> "ignore"
-            2 -> "deny"
-            else -> "allow"
-        }
-        for (pkg in packageNames) {
-            executeCommand("cmd appops set $pkg $opCode $modeStr")
-            count++
-        }
-        return count
+        val (_, output) = executeBoundedProcess(PackageCommands.appOpBatch(packageNames.toList(), opCode, mode))
+        return PackageCommands.countAppOpSuccesses(output)
     }
 
     override fun destroy() {

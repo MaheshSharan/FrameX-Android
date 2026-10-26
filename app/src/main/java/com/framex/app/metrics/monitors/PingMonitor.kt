@@ -1,7 +1,7 @@
 package com.framex.app.metrics.monitors
 
 import com.framex.app.metrics.MetricReadStatus
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +17,7 @@ data class PingResult(
 
 @Singleton
 class PingMonitor @Inject constructor(
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) {
     companion object {
         private const val POLL_INTERVAL_MS = 2_000L
@@ -25,9 +25,9 @@ class PingMonitor @Inject constructor(
 
     val ping: Flow<PingResult> = flow {
         while (true) {
-            val output = if (shizukuManager.isShizukuAvailable.value && shizukuManager.hasPermission.value) {
+            val output = if (privilegeManager.isReady.value) {
                 try {
-                    shizukuManager.executeCommand("ping -c 1 -w 2 8.8.8.8")
+                    privilegeManager.execText("ping -c 1 -w 2 8.8.8.8")
                 } catch (e: Exception) {
                     executePing()
                 }

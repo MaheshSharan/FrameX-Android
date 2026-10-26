@@ -1,6 +1,6 @@
 package com.framex.app.gaming
 
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
 import com.framex.app.utils.ShellSanitizer
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +14,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class VivoIqooSharedTools @Inject constructor(
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val vivoSuiteGate: VivoSuiteGate
 ) {
     companion object {
@@ -49,7 +49,7 @@ class VivoIqooSharedTools @Inject constructor(
             "content insert --uri content://settings/system --bind name:s:perf_game_list --bind value:s:$escapedValue",
             "content insert --uri content://settings/global --bind name:s:game_cube_apps --bind value:s:$safePkg"
         ).joinToString("; ")
-        val exitCode = shizukuManager.executeCommandWithExitCode(payload)
+        val exitCode = privilegeManager.execExit(payload)
         FrameXLog.d("injectPerfGameList($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
@@ -70,7 +70,7 @@ class VivoIqooSharedTools @Inject constructor(
         } else {
             "content delete --uri content://settings/system/perf_game_list"
         }
-        val exitCode = shizukuManager.executeCommandWithExitCode(payload)
+        val exitCode = privilegeManager.execExit(payload)
         FrameXLog.d("removePerfGame($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
@@ -102,7 +102,7 @@ class VivoIqooSharedTools @Inject constructor(
             "content delete --uri content://settings/secure/144Game_mergelist",
             "content insert --uri content://settings/secure --bind name:s:144Game_mergelist --bind value:s:$updatedValue"
         ).joinToString("; ")
-        val exitCode = shizukuManager.executeCommandWithExitCode(payload)
+        val exitCode = privilegeManager.execExit(payload)
         FrameXLog.d("addTo144MergeList($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
@@ -122,7 +122,7 @@ class VivoIqooSharedTools @Inject constructor(
         } else {
             "content delete --uri content://settings/secure/144Game_mergelist"
         }
-        val exitCode = shizukuManager.executeCommandWithExitCode(payload)
+        val exitCode = privilegeManager.execExit(payload)
         FrameXLog.d("removeFrom144MergeList($safePkg): exitCode=$exitCode", tag = TAG)
         exitCode == 0
     }
@@ -134,7 +134,7 @@ class VivoIqooSharedTools @Inject constructor(
     suspend fun getPackageCompileFilter(packageName: String): String = withContext(Dispatchers.IO) {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
+        val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
         val line = dumpRes?.output?.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
         val match = Regex("filter=\\[?([a-zA-Z0-9_-]+)\\]?").find(line)
         match?.groupValues?.getOrNull(1) ?: if (line.isNotBlank()) line else "unknown"
@@ -144,9 +144,9 @@ class VivoIqooSharedTools @Inject constructor(
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         FrameXLog.i("Starting AOT speed compilation for $safePkg...", tag = TAG)
-        val compileRes = shizukuManager.executeCommandWithResult("pm compile -m speed -f $safePkg")
+        val compileRes = privilegeManager.exec("pm compile -m speed -f $safePkg")
         val isCompiled = compileRes?.output?.contains("Success", ignoreCase = true) == true
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
+        val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
         val filterSpeed = dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
         val success = isCompiled || filterSpeed
         FrameXLog.i("AOT speed compilation for $safePkg: success=$success (filterSpeed=$filterSpeed)", tag = TAG)
@@ -156,7 +156,7 @@ class VivoIqooSharedTools @Inject constructor(
     suspend fun isSpeedCompiled(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
-        val dumpRes = shizukuManager.executeCommandWithResult("dumpsys package $safePkg | grep filter=")
+        val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
         dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
     }
 
@@ -165,7 +165,7 @@ class VivoIqooSharedTools @Inject constructor(
     // =========================================================================
 
     private suspend fun queryContentUri(uri: String): String {
-        val result = shizukuManager.executeCommandWithResult("content query --uri $uri")
+        val result = privilegeManager.exec("content query --uri $uri")
         val output = result?.output?.trim().orEmpty()
         val valueMatch = Regex("value=([^,\\n]*)").find(output)
         val raw = valueMatch?.groupValues?.getOrNull(1)?.trim().orEmpty()
@@ -174,7 +174,7 @@ class VivoIqooSharedTools @Inject constructor(
     }
 
     private suspend fun querySecureSetting(key: String): String {
-        val result = shizukuManager.executeCommandWithResult(
+        val result = privilegeManager.exec(
             "content query --uri content://settings/secure --projection value --where \"name='$key'\""
         )
         val line = result?.output?.lines()?.firstOrNull { it.contains("value=") } ?: return ""

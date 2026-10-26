@@ -13,9 +13,3 @@ enum class PrivilegeMode(val key: String) {
         }
     }
 }
-
-data class ShellExecutionResult(
-    val exitCode: Int,
-    val output: String,
-    val isSuccess: Boolean = exitCode == 0
-)
