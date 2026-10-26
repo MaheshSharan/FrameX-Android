@@ -12,6 +12,8 @@ class CpuTuningController @Inject constructor(
     private val privilegeManager: PrivilegeManager
 ) {
     companion object {
+        private const val CPUFREQ_ROOT = "/sys/devices/system/cpu/cpufreq"
+        private val GOVERNOR_NAME = Regex("[A-Za-z0-9_.-]{1,32}")
         private const val BATCH_CPU_SCRIPT =
             "for p in /sys/devices/system/cpu/cpufreq/policy*; do " +
             "echo \"[POLICY]:\$p\"; " +
@@ -100,24 +102,34 @@ class CpuTuningController @Inject constructor(
         policies.sortedBy { it.policyId }
     }
 
+    /**
+     * Writes the value and reads it back; success means the kernel now reports exactly that
+     * value. A write that is accepted and later overridden by a system service is outside what
+     * this call can see.
+     */
+    private suspend fun writeAndVerify(path: String, value: String): Boolean {
+        val res = privilegeManager.exec("echo '$value' > '$path' && cat '$path'")
+        return res.isSuccess && res.output.trim() == value
+    }
+
     suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
-        val path = "/sys/devices/system/cpu/cpufreq/policy$policyId/scaling_max_freq"
-        val cmd = "chmod 664 $path 2>/dev/null; echo $maxFreqKHz > $path"
-        val res = privilegeManager.exec(cmd)
-        FrameXLog.i("CpuTuningController", "Set policy$policyId maxFreq=$maxFreqKHz -> success: ${res.isSuccess}")
-        res.isSuccess
+        if (policyId < 0 || maxFreqKHz <= 0L) return@withContext false
+        val path = "$CPUFREQ_ROOT/policy$policyId/scaling_max_freq"
+        val ok = writeAndVerify(path, maxFreqKHz.toString())
+        FrameXLog.i("CpuTuningController", "Set policy$policyId maxFreq=$maxFreqKHz -> verified: $ok")
+        ok
     }
 
     suspend fun setClusterGovernor(policyId: Int, governor: String): Boolean = withContext(Dispatchers.IO) {
-        val path = "/sys/devices/system/cpu/cpufreq/policy$policyId/scaling_governor"
-        val cmd = "chmod 664 $path 2>/dev/null; echo '$governor' > $path"
-        val res = privilegeManager.exec(cmd)
-        FrameXLog.i("CpuTuningController", "Set policy$policyId governor=$governor -> success: ${res.isSuccess}")
-        res.isSuccess
+        if (policyId < 0 || !GOVERNOR_NAME.matches(governor)) return@withContext false
+        val path = "$CPUFREQ_ROOT/policy$policyId/scaling_governor"
+        val ok = writeAndVerify(path, governor)
+        FrameXLog.i("CpuTuningController", "Set policy$policyId governor=$governor -> verified: $ok")
+        ok
     }
 
     suspend fun resetClusterToStock(policyId: Int): Boolean = withContext(Dispatchers.IO) {
-        val path = "/sys/devices/system/cpu/cpufreq/policy$policyId"
+        val path = "$CPUFREQ_ROOT/policy$policyId"
         val hwMax = privilegeManager.readSystemFile("$path/cpuinfo_max_freq").trim().toLongOrNull()
         if (hwMax != null && hwMax > 0) {
             setClusterMaxFreq(policyId, hwMax)

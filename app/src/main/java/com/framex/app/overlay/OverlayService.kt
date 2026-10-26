@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.app.Service
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import com.framex.app.R
 import com.framex.app.metrics.MetricsEngine
@@ -47,6 +48,25 @@ class OverlayService : Service() {
     lateinit var settingsRepository: SettingsRepository
 
     private var visibilityObserverJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    /** Held only while sampling is active; the timeout bounds it if teardown is ever missed. */
+    private fun acquireSamplingWakeLock() {
+        val lock = wakeLock ?: getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FrameX:OverlaySampling")
+            ?.apply { setReferenceCounted(false) }
+            ?.also { wakeLock = it }
+            ?: return
+        lock.acquire(WAKE_LOCK_TIMEOUT_MS)
+    }
+
+    private fun releaseSamplingWakeLock() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (e: RuntimeException) {
+            FrameXLog.w("Wake lock release failed", e)
+        }
+    }
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -56,12 +76,14 @@ class OverlayService : Service() {
                     // Keep telemetry engine running if an active session log is recording (Rule 4.1 / Plan 1.1).
                     if (!sessionLogger.isRecording.value) {
                         metricsEngine.setOverlayActive(false)
+                        releaseSamplingWakeLock()
                     }
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     overlayManager.onScreenOn()
                     if (_isRunning.value) {
                         metricsEngine.setOverlayActive(true)
+                        acquireSamplingWakeLock()
                     }
                 }
             }
@@ -98,6 +120,7 @@ class OverlayService : Service() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
+        acquireSamplingWakeLock()
         metricsEngine.setOverlayActive(true)
         overlayManager.showOverlay()
         observeOverlayVisibility()
@@ -125,6 +148,7 @@ class OverlayService : Service() {
                 overlayManager.showOverlay()
             }
             ACTION_START_LOG -> {
+                acquireSamplingWakeLock()
                 sessionLogger.startRecording()
             }
             ACTION_STOP_LOG -> {
@@ -168,6 +192,7 @@ class OverlayService : Service() {
             sessionLogger.stopRecording()
         }
         metricsEngine.setOverlayActive(false)
+        releaseSamplingWakeLock()
         overlayManager.hideOverlay()
         super.onDestroy()
     }
@@ -186,6 +211,7 @@ class OverlayService : Service() {
 
     companion object {
         const val CHANNEL_ID = "framex_overlay_channel"
+        private const val WAKE_LOCK_TIMEOUT_MS = 30L * 60L * 1000L
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.framex.app.ACTION_START"
         const val ACTION_STOP = "com.framex.app.ACTION_STOP"

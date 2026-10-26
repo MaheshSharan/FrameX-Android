@@ -12,6 +12,7 @@ class GpuTuningController @Inject constructor(
     private val privilegeManager: PrivilegeManager
 ) {
     companion object {
+        private val GOVERNOR_NAME = Regex("[A-Za-z0-9_.-]{1,32}")
         private const val BATCH_GPU_SCRIPT =
             "if [ -d /sys/class/kgsl/kgsl-3d0 ]; then " +
             "echo \"TYPE:KGSL\"; " +
@@ -157,28 +158,33 @@ class GpuTuningController @Inject constructor(
         currentGovernor = ""
     )
 
+    private suspend fun writeAndVerify(path: String, value: String): Boolean {
+        val res = privilegeManager.exec("echo '$value' > '$path' && cat '$path'")
+        return res.isSuccess && res.output.trim() == value
+    }
+
     suspend fun setGpuMaxFreq(maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
-        if (detectedBasePath.isEmpty()) return@withContext false
-        val cmd = when {
-            isMali -> "chmod 664 $detectedBasePath/max_freq 2>/dev/null; echo ${maxFreqKHz * 1000} > $detectedBasePath/max_freq"
-            isKgsl -> "chmod 664 $detectedBasePath/max_gpuclk 2>/dev/null; echo ${maxFreqKHz * 1000} > $detectedBasePath/max_gpuclk"
+        if (detectedBasePath.isEmpty() || maxFreqKHz <= 0L) return@withContext false
+        val path = when {
+            isMali -> "$detectedBasePath/max_freq"
+            isKgsl -> "$detectedBasePath/max_gpuclk"
             else -> return@withContext false
         }
-        val res = privilegeManager.exec(cmd)
-        FrameXLog.i("GpuTuningController", "Set GPU max freq to ${maxFreqKHz}KHz -> success: ${res.isSuccess}")
-        res.isSuccess
+        val ok = writeAndVerify(path, (maxFreqKHz * 1000).toString())
+        FrameXLog.i("GpuTuningController", "Set GPU max freq to ${maxFreqKHz}KHz -> verified: $ok")
+        ok
     }
 
     suspend fun setGpuGovernor(governor: String): Boolean = withContext(Dispatchers.IO) {
-        if (detectedBasePath.isEmpty()) return@withContext false
+        if (detectedBasePath.isEmpty() || !GOVERNOR_NAME.matches(governor)) return@withContext false
         val govPath = when {
             isMali -> "$detectedBasePath/governor"
             isKgsl -> "$detectedBasePath/devfreq/governor"
             else -> return@withContext false
         }
-        val cmd = "chmod 664 $govPath 2>/dev/null; echo '$governor' > $govPath"
-        val res = privilegeManager.exec(cmd)
-        FrameXLog.i("GpuTuningController", "Set GPU governor to $governor -> success: ${res.isSuccess}")
-        res.isSuccess
+        val ok = writeAndVerify(govPath, governor)
+        FrameXLog.i("GpuTuningController", "Set GPU governor to $governor -> verified: $ok")
+        ok
     }
+
 }

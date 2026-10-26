@@ -87,20 +87,7 @@ class GamingModeService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.gaming_notif_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = getString(R.string.gaming_notif_channel_desc)
-                setShowBadge(false)
-            }
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(channel)
-        }
-    }
+    private fun createNotificationChannel() = GamingChannels.ensure(this)
 
     private fun buildNotification(): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
@@ -140,7 +127,7 @@ class GamingModeService : Service() {
 
     companion object {
         private const val TAG = "GamingModeService"
-        const val CHANNEL_ID = "framex_gaming_mode_channel"
+        const val CHANNEL_ID = GamingChannels.GAMING_CHANNEL_ID
         const val NOTIFICATION_ID = 1002
         const val ACTION_STOP = "com.framex.app.gaming.ACTION_STOP"
     }

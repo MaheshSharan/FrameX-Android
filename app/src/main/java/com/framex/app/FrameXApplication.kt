@@ -17,6 +17,7 @@ class FrameXApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         com.framex.app.utils.CrashHandler.init(this)
+        com.framex.app.gaming.GamingChannels.deleteLegacy(this)
         privilegeManager.start()
         // Recover gaming mode state if the process was killed while mode was active.
         gamingModeEngine.recoverPersistedState()
