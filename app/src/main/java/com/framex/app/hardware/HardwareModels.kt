@@ -41,5 +41,8 @@ data class HardwareTuningSnapshot(
         currentGovernor = ""
     ),
     val isLoading: Boolean = false,
-    val lastError: String? = null
+    val lastError: String? = null,
+    /** False when the active backend cannot write sysfs; the screen is then read-only. */
+    val canTune: Boolean = false,
+    val hasBaseline: Boolean = false
 )

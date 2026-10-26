@@ -15,7 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.framex.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,8 +31,8 @@ fun HardwareTuningDashboardCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(cardShape)
-            .background(Color(0xFF0F1015))
-            .border(1.dp, Color(0xFF1E2028), cardShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, cardShape)
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
@@ -48,7 +49,7 @@ fun HardwareTuningDashboardCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Speed,
-                    contentDescription = "Hardware Tuning",
+                    contentDescription = stringResource(R.string.tuning_card_icon_desc),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -58,16 +59,16 @@ fun HardwareTuningDashboardCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "CPU & GPU Tuning",
+                    text = stringResource(R.string.tuning_card_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Dynamic cluster frequencies, governors & GPU clocks",
+                    text = stringResource(R.string.tuning_card_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF9E9E9E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
@@ -75,7 +76,7 @@ fun HardwareTuningDashboardCard(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFF616161),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }

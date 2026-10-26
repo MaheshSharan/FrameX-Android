@@ -1,7 +1,5 @@
 package com.framex.app.ui.screens.hardware
 
-import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,12 +11,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.framex.app.R
 import com.framex.app.hardware.CpuClusterPolicy
 import com.framex.app.hardware.GpuTuningState
 import com.framex.app.privilege.PrivilegeMode
@@ -31,20 +32,51 @@ fun HardwareTuningScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val privilegeMode by viewModel.privilegeManager.currentMode.collectAsState()
-    val context = LocalContext.current
+    val pending by viewModel.pending.collectAsState()
+    val message by viewModel.message.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val messageText = message?.let { stringResource(it.resId) }
+
+    LaunchedEffect(messageText) {
+        if (messageText != null) {
+            snackbarHostState.showSnackbar(messageText)
+            viewModel.dismissMessage()
+        }
+    }
+
+    pending?.let { change ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelPending,
+            title = { Text(stringResource(R.string.tuning_confirm_title)) },
+            text = { Text(stringResource(R.string.tuning_confirm_body, describe(change, uiState))) },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::confirmPending,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("tuning_confirm")
+                ) { Text(stringResource(R.string.tuning_confirm_apply)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = viewModel::cancelPending,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Hardware Tuning", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.tuning_screen_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshHardware() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_refresh))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -73,13 +105,27 @@ fun HardwareTuningScreen(
             ) {
                 // Mode Badge
                 item {
-                    PrivilegeBanner(mode = privilegeMode)
+                    PrivilegeBanner(mode = privilegeMode, canTune = uiState.canTune)
+                }
+
+                uiState.lastError?.let { error ->
+                    item { Text(text = error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+                }
+
+                if (uiState.hasBaseline) {
+                    item {
+                        OutlinedButton(
+                            onClick = viewModel::restoreDefaults,
+                            enabled = uiState.canTune,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("tuning_restore_defaults")
+                        ) { Text(stringResource(R.string.tuning_restore_defaults)) }
+                    }
                 }
 
                 // GPU Section
                 item {
                     Text(
-                        text = "GPU Acceleration",
+                        text = stringResource(R.string.tuning_gpu_section),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -89,15 +135,16 @@ fun HardwareTuningScreen(
                 item {
                     GpuControlCard(
                         gpu = uiState.gpu,
-                        onMaxFreqSelected = { viewModel.setGpuMaxFreq(it) },
-                        onGovernorSelected = { viewModel.setGpuGovernor(it) }
+                        enabled = uiState.canTune,
+                        onMaxFreqSelected = { viewModel.requestGpuMaxFreq(it) },
+                        onGovernorSelected = { viewModel.requestGpuGovernor(it) }
                     )
                 }
 
                 // CPU Clusters Section
                 item {
                     Text(
-                        text = "CPU Dynamic Clusters",
+                        text = stringResource(R.string.tuning_cpu_section),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -107,12 +154,10 @@ fun HardwareTuningScreen(
                 items(uiState.cpuClusters, key = { it.policyId }) { cluster ->
                     CpuClusterCard(
                         cluster = cluster,
-                        onMaxFreqSelected = { viewModel.setCpuMaxFreq(cluster.policyId, it) },
-                        onGovernorSelected = { viewModel.setCpuGovernor(cluster.policyId, it) },
-                        onResetStock = {
-                            viewModel.resetCpuCluster(cluster.policyId)
-                            Toast.makeText(context, "Cluster ${cluster.policyId} reset to stock", Toast.LENGTH_SHORT).show()
-                        }
+                        enabled = uiState.canTune,
+                        onMaxFreqSelected = { viewModel.requestCpuMaxFreq(cluster.policyId, it) },
+                        onGovernorSelected = { viewModel.requestCpuGovernor(cluster.policyId, it) },
+                        onResetStock = { viewModel.resetCpuCluster(cluster.policyId) }
                     )
                 }
             }
@@ -121,32 +166,42 @@ fun HardwareTuningScreen(
 }
 
 @Composable
-private fun PrivilegeBanner(mode: PrivilegeMode) {
-    val isRoot = mode == PrivilegeMode.ROOT
+private fun describe(change: PendingTuneChange, state: com.framex.app.hardware.HardwareTuningSnapshot): String =
+    when (change) {
+        is PendingTuneChange.CpuMaxFreq ->
+            stringResource(R.string.tuning_desc_cpu_freq, change.policyId, change.freqKHz / 1000)
+        is PendingTuneChange.CpuGovernor ->
+            stringResource(R.string.tuning_desc_cpu_gov, change.policyId, change.governor)
+        PendingTuneChange.GpuMaxFreq -> stringResource(R.string.tuning_desc_gpu_freq)
+        PendingTuneChange.GpuGovernor -> stringResource(R.string.tuning_desc_gpu_gov)
+    }
+
+@Composable
+private fun PrivilegeBanner(mode: PrivilegeMode, canTune: Boolean) {
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isRoot) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+            containerColor = if (canTune) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().testTag("tuning_banner")
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = if (isRoot) "Root Privilege Mode Active" else "Shizuku ADB Mode Active",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = if (isRoot) "Full sysfs clamp & governor write unlocked" else "Direct kernel node writes may require root access",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(
+                    when (mode) {
+                        PrivilegeMode.ROOT -> R.string.tuning_banner_root
+                        PrivilegeMode.SHIZUKU -> R.string.tuning_banner_shizuku
+                        PrivilegeMode.NONE -> R.string.tuning_banner_none
+                    }
+                ),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+            Text(
+                text = stringResource(if (canTune) R.string.tuning_banner_can_tune else R.string.tuning_banner_read_only),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -155,6 +210,7 @@ private fun PrivilegeBanner(mode: PrivilegeMode) {
 @Composable
 private fun GpuControlCard(
     gpu: GpuTuningState,
+    enabled: Boolean,
     onMaxFreqSelected: (Long) -> Unit,
     onGovernorSelected: (String) -> Unit
 ) {
@@ -172,13 +228,13 @@ private fun GpuControlCard(
 
             if (!gpu.isSupported) {
                 Text(
-                    text = "Kernel node not exposed or unsupported GPU interface",
+                    text = stringResource(R.string.tuning_gpu_unsupported),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
             } else {
                 Text(
-                    text = "Current: ${gpu.curFreqKHz / 1000} MHz | Max: ${gpu.maxFreqKHz / 1000} MHz | Gov: ${gpu.currentGovernor}",
+                    text = stringResource(R.string.tuning_gpu_status, gpu.curFreqKHz / 1000, gpu.maxFreqKHz / 1000, gpu.currentGovernor),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -191,14 +247,15 @@ private fun GpuControlCard(
                     // Freq Picker
                     ExposedDropdownMenuBox(
                         expanded = freqExpanded,
-                        onExpandedChange = { freqExpanded = !freqExpanded },
+                        onExpandedChange = { if (enabled) freqExpanded = !freqExpanded },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
                             value = "${gpu.maxFreqKHz / 1000} MHz",
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Max Clock") },
+                            enabled = enabled,
+                            label = { Text(stringResource(R.string.tuning_label_max_clock)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = freqExpanded) },
                             modifier = Modifier.menuAnchor()
                         )
@@ -221,14 +278,15 @@ private fun GpuControlCard(
                     // Gov Picker
                     ExposedDropdownMenuBox(
                         expanded = govExpanded,
-                        onExpandedChange = { govExpanded = !govExpanded },
+                        onExpandedChange = { if (enabled) govExpanded = !govExpanded },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = gpu.currentGovernor.ifEmpty { "Default" },
+                            value = gpu.currentGovernor.ifEmpty { stringResource(R.string.tuning_default_governor) },
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Governor") },
+                            enabled = enabled,
+                            label = { Text(stringResource(R.string.tuning_label_governor)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
                             modifier = Modifier.menuAnchor()
                         )
@@ -257,6 +315,7 @@ private fun GpuControlCard(
 @Composable
 private fun CpuClusterCard(
     cluster: CpuClusterPolicy,
+    enabled: Boolean,
     onMaxFreqSelected: (Long) -> Unit,
     onGovernorSelected: (String) -> Unit,
     onResetStock: () -> Unit
@@ -276,17 +335,17 @@ private fun CpuClusterCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Policy ${cluster.policyId} (Cores ${cluster.affectedCpus.joinToString(", ")})",
+                    text = stringResource(R.string.tuning_policy_title, cluster.policyId, cluster.affectedCpus.joinToString(", ")),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
-                TextButton(onClick = onResetStock) {
-                    Text("Stock", fontSize = 12.sp)
+                TextButton(onClick = onResetStock, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.tuning_stock), fontSize = 12.sp)
                 }
             }
 
             Text(
-                text = "Current: ${cluster.curFreqKHz / 1000} MHz | Max Cap: ${cluster.maxFreqKHz / 1000} MHz (Stock: ${cluster.hardwareMaxKHz / 1000} MHz)",
+                text = stringResource(R.string.tuning_cpu_status, cluster.curFreqKHz / 1000, cluster.maxFreqKHz / 1000, cluster.hardwareMaxKHz / 1000),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -300,14 +359,15 @@ private fun CpuClusterCard(
                 // Max Freq Dropdown
                 ExposedDropdownMenuBox(
                     expanded = freqExpanded,
-                    onExpandedChange = { freqExpanded = !freqExpanded },
+                    onExpandedChange = { if (enabled) freqExpanded = !freqExpanded },
                     modifier = Modifier.weight(1f)
                 ) {
                     OutlinedTextField(
                         value = "${cluster.maxFreqKHz / 1000} MHz",
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Max Freq") },
+                            enabled = enabled,
+                        label = { Text(stringResource(R.string.tuning_label_max_freq)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = freqExpanded) },
                         modifier = Modifier.menuAnchor()
                     )
@@ -330,14 +390,15 @@ private fun CpuClusterCard(
                 // Governor Dropdown
                 ExposedDropdownMenuBox(
                     expanded = govExpanded,
-                    onExpandedChange = { govExpanded = !govExpanded },
+                    onExpandedChange = { if (enabled) govExpanded = !govExpanded },
                     modifier = Modifier.weight(1f)
                 ) {
                     OutlinedTextField(
                         value = cluster.currentGovernor,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Governor") },
+                            enabled = enabled,
+                        label = { Text(stringResource(R.string.tuning_label_governor)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
                         modifier = Modifier.menuAnchor()
                     )
