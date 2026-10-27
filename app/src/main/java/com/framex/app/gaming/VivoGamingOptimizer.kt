@@ -398,14 +398,14 @@ open class VivoGamingOptimizer @Inject constructor(
 
     private suspend fun querySetting(table: String, key: String): String? {
         val res = privilegeManager.exec("settings get $table $key")
-        val out = res?.output?.trim().orEmpty()
+        val out = res.output.trim()
         return if (out.isBlank() || out == "null") null else out
     }
 
     private suspend fun queryProcessPid(packageName: String): Int {
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return 0
         val res = privilegeManager.exec("pidof $safePkg")
-        val out = res?.output?.trim().orEmpty()
+        val out = res.output.trim()
         return out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }
 

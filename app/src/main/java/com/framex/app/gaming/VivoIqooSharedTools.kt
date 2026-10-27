@@ -135,7 +135,7 @@ class VivoIqooSharedTools @Inject constructor(
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
         val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        val line = dumpRes?.output?.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
+        val line = dumpRes.output.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
         val match = Regex("filter=\\[?([a-zA-Z0-9_-]+)\\]?").find(line)
         match?.groupValues?.getOrNull(1) ?: if (line.isNotBlank()) line else "unknown"
     }
@@ -145,9 +145,9 @@ class VivoIqooSharedTools @Inject constructor(
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         FrameXLog.i("Starting AOT speed compilation for $safePkg...", tag = TAG)
         val compileRes = privilegeManager.exec("pm compile -m speed -f $safePkg")
-        val isCompiled = compileRes?.output?.contains("Success", ignoreCase = true) == true
+        val isCompiled = compileRes.output.contains("Success", ignoreCase = true) == true
         val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        val filterSpeed = dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
+        val filterSpeed = dumpRes.output.contains("filter=[speed]", ignoreCase = true) == true
         val success = isCompiled || filterSpeed
         FrameXLog.i("AOT speed compilation for $safePkg: success=$success (filterSpeed=$filterSpeed)", tag = TAG)
         success
@@ -157,7 +157,7 @@ class VivoIqooSharedTools @Inject constructor(
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
         val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        dumpRes?.output?.contains("filter=[speed]", ignoreCase = true) == true
+        dumpRes.output.contains("filter=[speed]", ignoreCase = true) == true
     }
 
     // =========================================================================
@@ -166,7 +166,7 @@ class VivoIqooSharedTools @Inject constructor(
 
     private suspend fun queryContentUri(uri: String): String {
         val result = privilegeManager.exec("content query --uri $uri")
-        val output = result?.output?.trim().orEmpty()
+        val output = result.output.trim()
         val valueMatch = Regex("value=([^,\\n]*)").find(output)
         val raw = valueMatch?.groupValues?.getOrNull(1)?.trim().orEmpty()
         FrameXLog.d("queryContentUri($uri): raw=$raw", tag = TAG)
@@ -177,7 +177,7 @@ class VivoIqooSharedTools @Inject constructor(
         val result = privilegeManager.exec(
             "content query --uri content://settings/secure --projection value --where \"name='$key'\""
         )
-        val line = result?.output?.lines()?.firstOrNull { it.contains("value=") } ?: return ""
+        val line = result.output.lines()?.firstOrNull { it.contains("value=") } ?: return ""
         val raw = Regex("value=([^,}\\s]+)").find(line)?.groupValues?.get(1)?.trim().orEmpty()
         FrameXLog.d("querySecureSetting($key): raw=$raw", tag = TAG)
         return raw

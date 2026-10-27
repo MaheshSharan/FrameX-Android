@@ -37,7 +37,7 @@ class LedgerExecutor @Inject constructor(
 
         val chained = buildChainedPayload(specs)
         val result = privilegeManager.exec(chained)
-        val parsedResults = parseBatchOutput(result?.output.orEmpty(), specs.size)
+        val parsedResults = parseBatchOutput(result.output, specs.size)
 
         processBatchResults(stage, specs, parsedResults)
     }

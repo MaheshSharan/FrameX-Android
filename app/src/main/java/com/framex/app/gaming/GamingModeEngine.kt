@@ -477,7 +477,7 @@ class GamingModeEngine @Inject constructor(
     suspend fun resolveProcessPid(packageName: String): Int = withContext(Dispatchers.IO) {
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext 0
         val res = privilegeManager.exec("pidof $safePkg")
-        val out = res?.output?.trim().orEmpty()
+        val out = res.output.trim()
         out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
     }
 

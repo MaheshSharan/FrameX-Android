@@ -5,7 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,7 +48,7 @@ fun HardwareTuningScreen(
         AlertDialog(
             onDismissRequest = viewModel::cancelPending,
             title = { Text(stringResource(R.string.tuning_confirm_title)) },
-            text = { Text(stringResource(R.string.tuning_confirm_body, describe(change, uiState))) },
+            text = { Text(stringResource(R.string.tuning_confirm_body, describe(change))) },
             confirmButton = {
                 TextButton(
                     onClick = viewModel::confirmPending,
@@ -71,7 +71,7 @@ fun HardwareTuningScreen(
                 title = { Text(stringResource(R.string.tuning_screen_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
@@ -166,7 +166,7 @@ fun HardwareTuningScreen(
 }
 
 @Composable
-private fun describe(change: PendingTuneChange, state: com.framex.app.hardware.HardwareTuningSnapshot): String =
+private fun describe(change: PendingTuneChange): String =
     when (change) {
         is PendingTuneChange.CpuMaxFreq ->
             stringResource(R.string.tuning_desc_cpu_freq, change.policyId, change.freqKHz / 1000)
