@@ -766,7 +766,7 @@ class VivoSuiteGateTest {
         val prefsData = mutableMapOf<String, Any?>()
         val prefs = createMockSharedPreferences(prefsData)
         val context = MockContext(prefs)
-        val repo = SettingsRepository(context)
+        val repo = SettingsRepository.inMemory()
 
         // Verify default-off state (Safeguards active)
         assertFalse("deepFreezeEnabled must default to false", repo.deepFreezeEnabled.first())
@@ -793,7 +793,7 @@ class VivoSuiteGateTest {
         val prefsData = mutableMapOf<String, Any?>()
         val prefs = createMockSharedPreferences(prefsData)
         val context = MockContext(prefs)
-        val repo = SettingsRepository(context)
+        val repo = SettingsRepository.inMemory()
 
         // Default empty state
         assertTrue("Launcher games must be empty by default", repo.launcherGames.value.isEmpty())
@@ -812,7 +812,7 @@ class VivoSuiteGateTest {
         val prefsData = mutableMapOf<String, Any?>()
         val prefs = createMockSharedPreferences(prefsData)
         val context = MockContext(prefs)
-        val repo = SettingsRepository(context)
+        val repo = SettingsRepository.inMemory()
 
         // Verify default-off state (Safe Mode: thermal safety preserved)
         assertFalse("disableThermalThrottling must default to false", repo.disableThermalThrottling.first())
@@ -833,7 +833,7 @@ class VivoSuiteGateTest {
         val prefsData = mutableMapOf<String, Any?>()
         val prefs = createMockSharedPreferences(prefsData)
         val context = MockContext(prefs)
-        val repo = SettingsRepository(context)
+        val repo = SettingsRepository.inMemory()
 
         // Common defaults
         assertTrue(repo.ramCachePreTrimEnabled.first())
