@@ -36,7 +36,7 @@ class LedgerExecutor @Inject constructor(
         }
 
         val chained = buildChainedPayload(specs)
-        val result = privilegeManager.exec(chained)
+        val result = privilegeManager.exec(chained, BATCH_TIMEOUT_MS)
         val parsedResults = parseBatchOutput(result.output, specs.size)
 
         processBatchResults(stage, specs, parsedResults)
@@ -160,6 +160,7 @@ class LedgerExecutor @Inject constructor(
 
     companion object {
         private const val TAG = "LedgerExecutor"
+        private const val BATCH_TIMEOUT_MS = 25_000L
         private const val MARKER_PREFIX = "__FX#"
         private val MARKER_REGEX = Regex("""__FX#(\d+):(\d+)""")
         private val FATAL_ERROR_REGEX = Regex("""(?i)(Error while accessing provider|java\.lang\.\w*Exception|SecurityException|\[ERROR\])""")

@@ -1,6 +1,7 @@
 package com.framex.app.hardware
 
 import com.framex.app.privilege.PrivilegeManager
+import com.framex.app.privilege.PrivilegeMode
 import com.framex.app.utils.FrameXLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -158,9 +159,20 @@ class GpuTuningController @Inject constructor(
         currentGovernor = ""
     )
 
-    private suspend fun writeAndVerify(path: String, value: String): Boolean {
+    private suspend fun writeOnce(path: String, value: String): Boolean {
         val res = privilegeManager.exec("echo '$value' > '$path' && cat '$path'")
         return res.isSuccess && res.output.trim() == value
+    }
+
+    /**
+     * Writes and reads back. Only under Root, a rejected write is retried once after making the
+     * node writable; the shell user cannot change modes, so Shizuku never attempts it.
+     */
+    private suspend fun writeAndVerify(path: String, value: String): Boolean {
+        if (writeOnce(path, value)) return true
+        if (privilegeManager.currentMode.value != PrivilegeMode.ROOT) return false
+        privilegeManager.exec("chmod u+w '$path'")
+        return writeOnce(path, value)
     }
 
     suspend fun setGpuMaxFreq(maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
