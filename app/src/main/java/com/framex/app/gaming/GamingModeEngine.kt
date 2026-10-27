@@ -153,6 +153,14 @@ class GamingModeEngine @Inject constructor(
     /**
      * Reconciles persisted crash-recovery records on process startup (Plan 6.2).
      */
+    init {
+        // Switching privilege backend first turns Gaming Mode off through the backend that applied it.
+        privilegeManager.registerSwitchGuard {
+            disableGamingMode()
+            !settingsRepository.isGamingModeActive()
+        }
+    }
+
     fun recoverPersistedState() {
         recoveryScope.launch {
             settingsRepository.awaitSettingsLoaded()

@@ -22,6 +22,14 @@ import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Lets the owner of applied system changes (Gaming Mode) undo them before the backend is
+ * switched. Returns true only when nothing is left applied.
+ */
+fun interface PrivilegeSwitchGuard {
+    suspend fun revertAppliedChanges(): Boolean
+}
+
 /** Result of asking to change the privilege mode. */
 enum class SwitchResult { SWITCHED, BLOCKED_GAMING_ACTIVE, BLOCKED_RECOVERY_PENDING }
 
@@ -31,12 +39,21 @@ enum class SwitchResult { SWITCHED, BLOCKED_GAMING_ACTIVE, BLOCKED_RECOVERY_PEND
  */
 @Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
-class PrivilegeManager @Inject constructor(
+class PrivilegeManager internal constructor(
     private val settings: SettingsRepository,
-    private val shizuku: ShizukuBackend,
-    private val root: RootBackend
+    private val shizuku: PrivilegeBackend,
+    private val root: PrivilegeBackend,
+    private val scope: CoroutineScope
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @Inject
+    constructor(
+        settings: SettingsRepository,
+        shizuku: ShizukuBackend,
+        root: RootBackend
+    ) : this(settings, shizuku, root, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+
+    @Volatile
+    private var switchGuard: PrivilegeSwitchGuard? = null
     private val switchLock = Mutex()
 
     private val _currentMode = MutableStateFlow(PrivilegeMode.NONE)
@@ -69,10 +86,18 @@ class PrivilegeManager @Inject constructor(
         }
     }
 
+    fun registerSwitchGuard(guard: PrivilegeSwitchGuard) {
+        switchGuard = guard
+    }
+
     suspend fun switchMode(target: PrivilegeMode): SwitchResult = switchLock.withLock {
         if (target == _currentMode.value) return SwitchResult.SWITCHED
         settings.awaitSettingsLoaded()
-        if (settings.isGamingModeActive()) return SwitchResult.BLOCKED_GAMING_ACTIVE
+        if (settings.isGamingModeActive()) {
+            // Undo on the backend that applied the changes; refuse if that does not finish.
+            val reverted = switchGuard?.revertAppliedChanges() == true
+            if (!reverted || settings.isGamingModeActive()) return SwitchResult.BLOCKED_GAMING_ACTIVE
+        }
         if (settings.needsThermalOverrideRecovery()) return SwitchResult.BLOCKED_RECOVERY_PENDING
         settings.appPrefs.setPrivilegeMode(target)
         activate(target)
@@ -84,13 +109,17 @@ class PrivilegeManager @Inject constructor(
      * recovery, which must undo changes through the backend that made them. Returns null when
      * that backend does not become ready in time.
      */
-    suspend fun <T> runWithBackend(mode: PrivilegeMode, block: suspend () -> T): T? = switchLock.withLock {
+    suspend fun <T> runWithBackend(
+        mode: PrivilegeMode,
+        timeoutMs: Long = RECOVERY_CONNECT_TIMEOUT_MS,
+        block: suspend () -> T
+    ): T? = switchLock.withLock {
         val selected = _currentMode.value
         if (mode == selected) return@withLock block()
         activate(mode)
         try {
             val backend = backendFor(mode)
-            val ready = withTimeoutOrNull(RECOVERY_CONNECT_TIMEOUT_MS) {
+            val ready = withTimeoutOrNull(timeoutMs) {
                 backend?.state?.first { it is BackendState.Connected }
                 // isReady follows the backend state asynchronously; wait until it agrees.
                 isReady.first { it }
