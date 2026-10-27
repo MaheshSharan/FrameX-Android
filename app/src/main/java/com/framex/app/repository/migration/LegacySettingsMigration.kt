@@ -10,7 +10,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.core.toMutablePreferences
 import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
 import com.framex.app.utils.FrameXLog
 

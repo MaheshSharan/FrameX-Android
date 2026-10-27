@@ -60,6 +60,7 @@ audt/*
 audt/**
 /audit/
 scripts/
+!app/src/**/scripts/
 vivo_final.md
 .agents/*
 .claude/*
