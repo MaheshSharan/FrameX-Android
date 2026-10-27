@@ -47,6 +47,9 @@ class OverlayService : Service() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var auditLogRepository: com.framex.app.gaming.SystemAuditLogRepository
+
     private var visibilityObserverJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockRefreshJob: Job? = null
@@ -136,6 +139,12 @@ class OverlayService : Service() {
         metricsEngine.setOverlayActive(true)
         overlayManager.showOverlay()
         observeOverlayVisibility()
+        auditLogRepository.addLog(
+            "Overlay: Service Started",
+            "Foreground service started",
+            com.framex.app.gaming.LogStatus.SUCCESS
+        )
+        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -206,6 +215,12 @@ class OverlayService : Service() {
         metricsEngine.setOverlayActive(false)
         releaseSamplingWakeLock()
         overlayManager.hideOverlay()
+        auditLogRepository.addLog(
+            "Overlay: Service Stopped",
+            "Foreground service stopped, wake lock released",
+            com.framex.app.gaming.LogStatus.INFO
+        )
+        com.framex.app.quicksettings.FrameXOverlayTileService.requestTileUpdate(this)
         super.onDestroy()
     }
 
