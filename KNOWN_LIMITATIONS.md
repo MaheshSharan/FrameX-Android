@@ -76,3 +76,10 @@ per-sensor HAL data at all. Battery Temp comes from a separate command
 **Detail:** FrameX writes the value and reads it back to confirm the kernel accepted it. It does not keep watching it. Vendor services (for example OEM frequency-control or performance HAL services) can rewrite `scaling_max_freq` afterward, and the app cannot prevent that. Writing the value from a terminal may behave differently because the vendor service can react to the writer.
 
 **Workaround:** None inside FrameX. Use Restore defaults to return to the original values.
+
+---
+
+## Vivo and iQOO: generic overrides still apply
+
+**Detail:** On Vivo and iQOO firmware, only the fixed performance mode is blocked, because it can lock the display. The thermal throttling override, refresh-rate lock and touch boost still apply as before. If you see display problems on these devices, turn those options off in Gaming Mode settings and open an issue with your device and ROM.
+

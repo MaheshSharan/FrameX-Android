@@ -113,7 +113,9 @@ class GamingModeEngine @Inject constructor(
     }
 
     private fun safeString(@StringRes resId: Int, fallback: String, vararg formatArgs: Any): String {
-        return runCatching { context.getString(resId, *formatArgs) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: fallback
+        return runCatching {
+            if (formatArgs.isEmpty()) context.getString(resId) else context.getString(resId, *formatArgs)
+        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: fallback
     }
 
     fun getInstalledUserApps(): List<AppInfo> =

@@ -1,0 +1,41 @@
+name: Root / Shizuku mode problem
+description: Something fails in Root mode or Shizuku mode (metrics, Gaming Mode, tuning, mode switching)
+labels: ["privilege"]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "e.g. iQOO Neo 7, Android 14 (OriginOS)"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Privilege mode selected in FrameX
+      options: [Root, Shizuku, None]
+    validations:
+      required: true
+  - type: input
+    id: root_manager
+    attributes:
+      label: Root manager and version (Root mode only)
+      placeholder: "e.g. Magisk 27.0, KernelSU 1.0.5"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: "Run `adb logcat -d | findstr /i \"RootBackend GamingModeEngine CpuTuningController GamingRecovery\"` (or `grep -i`) and paste the result."
+      render: shell
