@@ -1,6 +1,5 @@
 package com.framex.app.gaming
 
-import android.app.NotificationManager
 import android.content.Context
 import androidx.annotation.StringRes
 import com.framex.app.R
@@ -12,7 +11,6 @@ import com.framex.app.gaming.ledger.OpStatus
 import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
-import com.framex.app.privilege.PrivilegeMode
 import com.framex.app.utils.FrameXLog
 import com.framex.app.utils.ShellSanitizer
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -71,6 +69,7 @@ class GamingModeEngine @Inject constructor(
 ) {
 
     internal val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val recoveryCoordinator = GamingRecoveryCoordinator(context, privilegeManager, settingsRepository)
     private val engineMutex = Mutex()
     private var pulseJob: Job? = null
 
@@ -108,23 +107,13 @@ class GamingModeEngine @Inject constructor(
     private fun observePulseState() {
         recoveryScope.launch {
             shouldPulseMaintenance.collect { shouldPulse ->
-                if (shouldPulse) {
-                    startMaintenancePulse()
-                } else {
-                    stopMaintenancePulse()
-                }
+                if (shouldPulse) startMaintenancePulse() else stopMaintenancePulse()
             }
         }
     }
 
     private fun safeString(@StringRes resId: Int, fallback: String, vararg formatArgs: Any): String {
-        return runCatching {
-            if (formatArgs.isEmpty()) {
-                context.getString(resId)
-            } else {
-                context.getString(resId, *formatArgs)
-            }
-        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: fallback
+        return runCatching { context.getString(resId, *formatArgs) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: fallback
     }
 
     fun getInstalledUserApps(): List<AppInfo> =
@@ -163,47 +152,11 @@ class GamingModeEngine @Inject constructor(
 
     fun recoverPersistedState() {
         recoveryScope.launch {
-            settingsRepository.awaitSettingsLoaded()
-            var triedRecordedBackend = false
-            privilegeManager.isReady.collect { ready ->
-                val wasActive = settingsRepository.isGamingModeActive()
-                val hasSnapshot = settingsRepository.hasActiveGamingSnapshot()
-                val affected = settingsRepository.getGamingAffectedPackages()
-
-                if (!wasActive && !hasSnapshot && affected.isEmpty()) {
-                    return@collect
-                }
-
-                if (_isSessionActive.value) {
-                    return@collect
-                }
-
-                // Undo through the backend that applied the changes, not the one selected now.
-                val recorded = settingsRepository.getGamingAppliedVia()
-                val current = privilegeManager.currentMode.value
-                if (recorded != PrivilegeMode.NONE && recorded != current) {
-                    if (triedRecordedBackend) return@collect
-                    triedRecordedBackend = true
-                    FrameXLog.w("Recovering Gaming Mode through recorded backend ${recorded.key}", tag = TAG)
-                    val recovered = privilegeManager.runWithBackend(recorded) {
-                        disableGamingMode()
-                        genericGamingOptimizer.performLegacyCleanupIfNeeded()
-                        true
-                    }
-                    if (recovered != true || settingsRepository.isGamingModeActive()) {
-                        GamingNotificationHelper.showRecoveryNotification(context)
-                    }
-                    return@collect
-                }
-
-                if (ready) {
-                    FrameXLog.w("Recovering interrupted Gaming Mode session via the selected privilege backend", tag = TAG)
-                    disableGamingMode()
-                    genericGamingOptimizer.performLegacyCleanupIfNeeded()
-                } else {
-                    GamingNotificationHelper.showRecoveryNotification(context)
-                }
-            }
+            recoveryCoordinator.watch(
+                isSessionActive = { _isSessionActive.value },
+                disable = { disableGamingMode() },
+                legacyCleanup = { genericGamingOptimizer.performLegacyCleanupIfNeeded() }
+            )
         }
     }
 
@@ -252,7 +205,7 @@ class GamingModeEngine @Inject constructor(
 
                 val baselineApplied = genericGamingOptimizer.applyOptimizationsForGame(
                     packageName = _activeGamePackage.value,
-                    uid = resolvePackageUid(_activeGamePackage.value)
+                    uid = GamingProcessResolver.uidOf(context, _activeGamePackage.value)
                 )
                 if (!baselineApplied) {
                     settingsRepository.setGamingModeActive(false)
@@ -318,7 +271,7 @@ class GamingModeEngine @Inject constructor(
                 }
 
                 // Apply DND if granted.
-                enableDndIfPermitted()
+                GamingDnd.enable(context)
 
                 // Apply platform-specific hardware optimizations.
                 when (targetPath) {
@@ -379,23 +332,14 @@ class GamingModeEngine @Inject constructor(
 
                 var remainingSuspended = emptySet<String>()
                 if (toUnsuspend.isNotEmpty()) {
-                    val res = privilegeManager.suspendPackages(toUnsuspend.toList(), suspended = false)
-                    remainingSuspended = res?.failedPackages?.toSet() ?: toUnsuspend
-                    if (remainingSuspended.isNotEmpty()) {
-                        val stillFailing = mutableSetOf<String>()
-                        for (pkg in remainingSuspended) {
-                            val exit = privilegeManager.execExit("cmd package unsuspend --user 0 $pkg")
-                            if (exit != 0) stillFailing.add(pkg)
-                        }
-                        remainingSuspended = stillFailing
-                    }
+                    remainingSuspended = GamingSuspendPipeline.unsuspend(privilegeManager, toUnsuspend)
                     settingsRepository.setGamingAffectedPackages(remainingSuspended)
                 }
                 _suspendedPackagesCount.value = remainingSuspended.size
 
                 val platformReverted = revertPlatformOptimizations()
                 val esportsReverted = genericGamingOptimizer.revertOptimizations()
-                restoreDndIfPermitted()
+                GamingDnd.restore(context)
 
                 if (remainingSuspended.isNotEmpty() || !platformReverted || !esportsReverted) {
                     val msg = safeString(
@@ -482,17 +426,13 @@ class GamingModeEngine @Inject constructor(
         }
     }
 
-    suspend fun resolveProcessPid(packageName: String): Int = withContext(Dispatchers.IO) {
-        val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext 0
-        val res = privilegeManager.exec("pidof $safePkg")
-        val out = res.output.trim()
-        out.split("\\s+".toRegex()).firstOrNull()?.toIntOrNull() ?: 0
-    }
+    suspend fun resolveProcessPid(packageName: String): Int =
+        withContext(Dispatchers.IO) { GamingProcessResolver.pidOf(privilegeManager, packageName) }
 
     suspend fun promoteGamePid(packageName: String, pid: Int) = withContext(Dispatchers.IO) {
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext
         _activeGamePackage.value = safePkg
-        val uid = resolvePackageUid(safePkg)
+        val uid = GamingProcessResolver.uidOf(context, safePkg)
         genericGamingOptimizer.attachGame(safePkg, uid)
 
         when (settingsRepository.getGamingPlatformPath()) {
@@ -504,14 +444,6 @@ class GamingModeEngine @Inject constructor(
             }
             else -> Unit
         }
-    }
-
-    private fun resolvePackageUid(packageName: String?): Int? {
-        if (packageName.isNullOrBlank()) return null
-        return runCatching {
-            @Suppress("DEPRECATION")
-            context.packageManager.getApplicationInfo(packageName, 0).uid
-        }.getOrNull()
     }
 
     private fun startMaintenancePulse() {
@@ -534,24 +466,6 @@ class GamingModeEngine @Inject constructor(
         isPulseActive = false
         pulseJob?.cancel()
         pulseJob = null
-    }
-
-    private fun enableDndIfPermitted() {
-        runCatching {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            if (nm.isNotificationPolicyAccessGranted) {
-                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-            }
-        }
-    }
-
-    private fun restoreDndIfPermitted() {
-        runCatching {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            if (nm.isNotificationPolicyAccessGranted) {
-                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-            }
-        }
     }
 
     companion object {
