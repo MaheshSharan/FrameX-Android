@@ -29,6 +29,17 @@ jobs:
             exit 1
           fi
 
+      # ktlint and detekt are advisory until baselines are committed. To make them blocking:
+      #   ./gradlew detektBaseline ktlintGenerateBaseline   (commit the two baseline files)
+      # then delete the `continue-on-error` lines below.
+      - name: ktlint
+        run: ./gradlew ktlintCheck
+        continue-on-error: true
+
+      - name: detekt
+        run: ./gradlew detekt
+        continue-on-error: true
+
       - name: Run Android Lint
         run: ./gradlew lint
 
