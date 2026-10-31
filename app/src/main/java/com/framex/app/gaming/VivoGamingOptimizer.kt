@@ -380,7 +380,11 @@ open class VivoGamingOptimizer @Inject constructor(
 
         // Each command reports its own failure: the exit status of a "; " chain is only the last
         // command's, and a single rejected setting must not hide which one it was.
-        val script = revertCmds.mapIndexed { i, cmd -> "$cmd || echo FRAMEX_FAIL:$i" }.joinToString("\n")
+        // Every `content` call starts its own JVM (~1 s). Running them one after another took ~23 s, so
+        // they run in parallel groups; the settings are independent keys.
+        val script = revertCmds.withIndex().chunked(REVERT_PARALLELISM).joinToString("\n") { group ->
+            group.joinToString("\n") { (i, cmd) -> "{ $cmd; } || echo FRAMEX_FAIL:$i &" } + "\nwait"
+        }
         val outcome = privilegeManager.exec(script, 25_000L)
         val failed = outcome.output.lines()
             .filter { it.startsWith("FRAMEX_FAIL:") }
@@ -423,5 +427,6 @@ open class VivoGamingOptimizer @Inject constructor(
 
     companion object {
         private const val TAG = "VivoGamingOptimizer"
+        private const val REVERT_PARALLELISM = 8
     }
 }
