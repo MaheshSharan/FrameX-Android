@@ -237,6 +237,9 @@
     <string name="tuning_banner_none">No privilege mode</string>
     <string name="tuning_banner_can_tune">Frequency and governor changes are available.</string>
     <string name="tuning_banner_read_only">Read-only. Changing CPU or GPU limits needs Root access that can write to the kernel.</string>
+    <string name="tuning_unlock_nodes">Unlock frequency limits (allow writes)</string>
+    <string name="tuning_msg_unlocked">Frequency limits are writable. Applying a new limit locks it again.</string>
+    <string name="tuning_err_unlock_failed">Could not unlock the frequency limits.</string>
     <string name="tuning_restore_defaults">Restore defaults</string>
     <string name="tuning_stock">Stock</string>
     <string name="tuning_gpu_unsupported">Kernel node not exposed or unsupported GPU interface</string>

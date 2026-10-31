@@ -112,6 +112,15 @@ fun HardwareTuningScreen(
                     item { Text(text = error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
                 }
 
+                if (privilegeMode == PrivilegeMode.ROOT) {
+                    item {
+                        OutlinedButton(
+                            onClick = viewModel::unlockFrequencyNodes,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("tuning_unlock_nodes")
+                        ) { Text(stringResource(R.string.tuning_unlock_nodes)) }
+                    }
+                }
+
                 if (uiState.hasBaseline) {
                     item {
                         OutlinedButton(

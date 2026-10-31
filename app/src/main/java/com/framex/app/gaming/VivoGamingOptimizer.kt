@@ -378,15 +378,27 @@ open class VivoGamingOptimizer @Inject constructor(
         revertCmds.add("content delete --uri content://settings/secure --where \"name = 'sdk_game_scene'\"")
         revertCmds.add("content delete --uri content://settings/global --where \"name = 'speed_mode_apps'\"")
 
-        val exitCode = privilegeManager.execExit(revertCmds.joinToString("; "))
-        val success = (exitCode == 0)
+        // Each command reports its own failure: the exit status of a "; " chain is only the last
+        // command's, and a single rejected setting must not hide which one it was.
+        val script = revertCmds.mapIndexed { i, cmd -> "$cmd || echo FRAMEX_FAIL:$i" }.joinToString("\n")
+        val outcome = privilegeManager.exec(script, 25_000L)
+        val failed = outcome.output.lines()
+            .filter { it.startsWith("FRAMEX_FAIL:") }
+            .mapNotNull { it.substringAfter(':').trim().toIntOrNull() }
+        val success = outcome.isSuccess && failed.isEmpty()
+        var failureDetail = ""
+        if (!success) {
+            val names = failed.joinToString { revertCmds.getOrNull(it)?.substringAfter("name:s:")?.substringBefore(" ") ?: "#$it" }
+            failureDetail = " Failed: [$names] exit=${outcome.exitCode}"
+            FrameXLog.w("Vivo revert failed (exit=${outcome.exitCode}) commands=[$names] output=${outcome.output.take(300)}", tag = TAG)
+        }
 
         activeGamePackage = null
         activeGamePid = 0
         FrameXLog.i("Vivo & iQOO gaming optimizations reverted successfully", tag = TAG)
         addLog(
             "Gaming Mode Deactivation",
-            "Monster mode reset, VivoConsole icon 0, touch/gyro cleared & settings restored to baseline",
+            "Monster mode reset, VivoConsole icon 0, touch/gyro cleared & settings restored to baseline." + failureDetail,
             if (success) LogStatus.SUCCESS else LogStatus.FAILED
         )
         success

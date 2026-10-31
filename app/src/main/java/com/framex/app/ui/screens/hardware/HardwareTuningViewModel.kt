@@ -161,13 +161,23 @@ class HardwareTuningViewModel @Inject constructor(
     }
 
     /** Puts every value that FrameX changed back to what it was. Baselines stay if anything fails. */
+    fun unlockFrequencyNodes() {
+        viewModelScope.launch {
+            val ok = cpuTuningController.unlockMaxFreqNodes()
+            _message.value = TuningMessage(
+                if (ok) R.string.tuning_msg_unlocked else R.string.tuning_err_unlock_failed
+            )
+            refreshHardware()
+        }
+    }
+
     fun restoreDefaults() {
         if (!_uiState.value.canTune) return reject(R.string.tuning_err_read_only)
         viewModelScope.launch {
             var allRestored = true
             for (cluster in _uiState.value.cpuClusters) {
                 val baseline = baselines.cpuBaseline(cluster.policyId) ?: continue
-                val freqOk = cpuTuningController.setClusterMaxFreq(cluster.policyId, baseline.maxFreqKHz)
+                val freqOk = cpuTuningController.setClusterMaxFreq(cluster.policyId, baseline.maxFreqKHz, lock = false)
                 val govOk = baseline.governor.isBlank() ||
                     cpuTuningController.setClusterGovernor(cluster.policyId, baseline.governor)
                 if (freqOk && govOk) baselines.clearCpu(cluster.policyId) else allRestored = false

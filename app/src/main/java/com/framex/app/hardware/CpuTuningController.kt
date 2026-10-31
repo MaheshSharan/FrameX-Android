@@ -114,20 +114,28 @@ class CpuTuningController @Inject constructor(
     }
 
     /**
-     * Writes and reads back. Only under Root, a rejected write is retried once after making the
-     * node writable; the shell user cannot change modes, so Shizuku never attempts it.
+     * Writes and reads back. Under Root the node is first made writable (a previous lock or an
+     * OEM script may have set it read-only); [lock] then makes it read-only again so system
+     * services cannot lower it. The shell user cannot change modes, so Shizuku never tries.
      */
-    private suspend fun writeAndVerify(path: String, value: String): Boolean {
-        if (writeOnce(path, value)) return true
-        if (privilegeManager.currentMode.value != PrivilegeMode.ROOT) return false
-        privilegeManager.exec("chmod u+w '$path'")
-        return writeOnce(path, value)
+    private suspend fun writeAndVerify(path: String, value: String, lock: Boolean = false): Boolean {
+        val root = privilegeManager.currentMode.value == PrivilegeMode.ROOT
+        if (root) privilegeManager.exec("chmod 664 '$path'")
+        val ok = writeOnce(path, value)
+        if (root) privilegeManager.exec(if (ok && lock) "chmod 444 '$path'" else "chmod 664 '$path'")
+        return ok
     }
 
-    suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
+    /** Root only: makes every scaling_max_freq node writable again. */
+    suspend fun unlockMaxFreqNodes(): Boolean = withContext(Dispatchers.IO) {
+        if (privilegeManager.currentMode.value != PrivilegeMode.ROOT) return@withContext false
+        privilegeManager.exec("chmod 664 $CPUFREQ_ROOT/policy*/scaling_max_freq").isSuccess
+    }
+
+    suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long, lock: Boolean = true): Boolean = withContext(Dispatchers.IO) {
         if (policyId < 0 || maxFreqKHz <= 0L) return@withContext false
         val path = "$CPUFREQ_ROOT/policy$policyId/scaling_max_freq"
-        val ok = writeAndVerify(path, maxFreqKHz.toString())
+        val ok = writeAndVerify(path, maxFreqKHz.toString(), lock)
         FrameXLog.i("CpuTuningController", "Set policy$policyId maxFreq=$maxFreqKHz -> verified: $ok")
         ok
     }
@@ -144,7 +152,7 @@ class CpuTuningController @Inject constructor(
         val path = "$CPUFREQ_ROOT/policy$policyId"
         val hwMax = privilegeManager.readSystemFile("$path/cpuinfo_max_freq").trim().toLongOrNull()
         if (hwMax != null && hwMax > 0) {
-            setClusterMaxFreq(policyId, hwMax)
+            setClusterMaxFreq(policyId, hwMax, lock = false)
         } else {
             false
         }
