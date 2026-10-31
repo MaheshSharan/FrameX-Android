@@ -2,10 +2,8 @@ package com.framex.app.ui.theme
 
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -30,7 +28,6 @@ object FrameXSpacing {
     val Standard: Dp = 16.dp
     val Large: Dp = 20.dp
     val XLarge: Dp = 24.dp
-    val XXLarge: Dp = 32.dp
     val Huge: Dp = 40.dp
     val MaxContentWidth: Dp = 640.dp
 }
@@ -47,9 +44,7 @@ object FrameXShapes {
 object FrameXBorders {
     val SubtleStroke: Color = Color.White.copy(alpha = 0.05f)
     val CardStroke: Color = Color.White.copy(alpha = 0.08f)
-    val FocusedStroke: Color = Color.White.copy(alpha = 0.15f)
     val ActiveBorderWidth: Dp = 1.dp
-    val HighlightBorderWidth: Dp = 1.5.dp
 }
 
 object FrameXMotion {
@@ -58,8 +53,6 @@ object FrameXMotion {
     const val DurationSlow: Int = 500
 
     val StandardEasing: Easing = FastOutSlowInEasing
-    val DecelerateEasing: Easing = LinearOutSlowInEasing
-    val EmphasizedEasing: Easing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
 
     @Composable
     fun rememberReduceMotion(): Boolean {
@@ -77,26 +70,6 @@ object FrameXMotion {
 
     fun <T> pressScaleSpring(reduceMotion: Boolean = false): AnimationSpec<T> =
         if (reduceMotion) snap() else spring(stiffness = Spring.StiffnessMediumLow)
-
-    fun <T> bouncySpring(reduceMotion: Boolean = false): AnimationSpec<T> =
-        if (reduceMotion) {
-            snap()
-        } else {
-            spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        }
-
-    fun <T> responsiveSpring(reduceMotion: Boolean = false): AnimationSpec<T> =
-        if (reduceMotion) {
-            snap()
-        } else {
-            spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-        }
 }
 
 object FrameXAccessibility {

@@ -3,11 +3,9 @@ package com.framex.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 val PrimaryRed = Color(0xFFE6193C)
-val PrimaryDarkRed = Color(0xFFB3122F)
 
 val BackgroundLight = Color(0xFFF8F6F6)
 val BackgroundDark = Color(0xFF0F0F0F)
-val AboutBackgroundDark = Color(0xFF0C0D12)
 val SurfaceDark = Color(0xFF1A1A1A)
 val SurfaceLight = Color(0xFF2A2A2A)
 
