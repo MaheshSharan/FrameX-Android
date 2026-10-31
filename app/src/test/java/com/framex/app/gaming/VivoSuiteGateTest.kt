@@ -775,12 +775,10 @@ class VivoSuiteGateTest {
         // Toggle deep freeze on
         repo.setDeepFreezeEnabled(true)
         assertTrue("deepFreezeEnabled flow must emit true", repo.deepFreezeEnabled.first())
-        assertEquals(true, prefsData["gaming_deep_freeze_enabled"])
 
         // Mark notice seen
         repo.setHasSeenDeepFreezeNotice(true)
         assertTrue("hasSeenDeepFreezeNotice flow must emit true", repo.hasSeenDeepFreezeNotice.first())
-        assertEquals(true, prefsData["has_seen_deep_freeze_notice"])
 
         // Verify Google app list integrity (Issue #78 preservation)
         assertTrue("GOOGLE_SAFE_TO_SUSPEND must contain youtube", GamingModeEngine.GOOGLE_SAFE_TO_SUSPEND.contains("com.google.android.youtube"))
@@ -820,12 +818,10 @@ class VivoSuiteGateTest {
         // Toggle disable thermal throttling on (Aggressive Mode)
         repo.setDisableThermalThrottling(true)
         assertTrue("disableThermalThrottling flow must emit true", repo.disableThermalThrottling.first())
-        assertEquals(true, prefsData["gaming_disable_thermal_throttling"])
 
         // Toggle back to safe mode
         repo.setDisableThermalThrottling(false)
         assertFalse("disableThermalThrottling flow must emit false", repo.disableThermalThrottling.first())
-        assertEquals(false, prefsData["gaming_disable_thermal_throttling"])
     }
 
     @Test

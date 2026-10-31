@@ -76,7 +76,7 @@ class SettingsRepository @Inject constructor(
     fun setDeepFreezeEnabled(enabled: Boolean) = gaming.setDeepFreezeEnabled(enabled)
     fun setHasSeenDeepFreezeNotice(seen: Boolean) = gaming.setHasSeenDeepFreezeNotice(seen)
     fun setVivoOptEnabled(enabled: Boolean) = gaming.setVivoOptEnabled(enabled)
-    fun getGamingPlatformPath(): GamingPlatformPath = gaming.getGamingPlatformPath()
+    fun getGamingPlatformPath(): GamingPlatformPath? = gaming.getGamingPlatformPath()
     fun setGamingPlatformPath(path: GamingPlatformPath?) = gaming.setGamingPlatformPath(path)
     fun isGamingModeActive(): Boolean = gaming.isGamingModeActive()
     fun setGamingModeActive(active: Boolean) = gaming.setGamingModeActive(active)

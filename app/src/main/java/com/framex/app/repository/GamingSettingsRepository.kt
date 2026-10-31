@@ -101,16 +101,17 @@ class GamingSettingsRepository @Inject constructor(
         store.putBoolean("vivo_opt_enabled", enabled)
     }
 
-    fun getGamingPlatformPath(): GamingPlatformPath {
+    /** Null when no session path was recorded; crash recovery then decides from the hardware. */
+    fun getGamingPlatformPath(): GamingPlatformPath? {
         return store.getString("gaming_platform_path", null)?.let {
             runCatching { GamingPlatformPath.valueOf(it) }.getOrNull()
-        } ?: GamingPlatformPath.NONE
+        }
     }
 
     fun setGamingPlatformPath(path: GamingPlatformPath?) {
         val resolved = path ?: GamingPlatformPath.NONE
         _gamingPlatformPath.value = resolved
-        if (path == null || path == GamingPlatformPath.NONE) {
+        if (path == null) {
             store.remove("gaming_platform_path")
         } else {
             store.putString("gaming_platform_path", path.name)
