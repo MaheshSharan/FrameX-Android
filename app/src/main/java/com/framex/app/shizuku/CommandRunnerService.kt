@@ -218,7 +218,7 @@ class CommandRunnerService private constructor(
             resolvedThermalStrategy = null
         }
 
-        readViaReflection()?.let {
+        ReflectionThermalReader.read()?.let {
             resolvedThermalStrategy = ThermalReadStrategy.REFLECTION
             return appendThermalStatusProperty(it)
         }
