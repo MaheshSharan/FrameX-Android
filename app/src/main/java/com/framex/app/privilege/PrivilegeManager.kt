@@ -143,9 +143,18 @@ class PrivilegeManager internal constructor(
         if (isReady.value) probeCapabilities()
     }
 
-    suspend fun exec(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): PrivilegedOutcome =
-        backendFor(_currentMode.value)?.exec(command, timeoutMs)
+    suspend fun exec(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): PrivilegedOutcome {
+        val mode = _currentMode.value
+        val started = System.nanoTime()
+        val outcome = backendFor(mode)?.exec(command, timeoutMs)
             ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+        val ms = (System.nanoTime() - started) / 1_000_000
+        FrameXLog.d(
+            "exec mode=$mode ${ms}ms exit=${outcome.exitCode} (${outcome::class.simpleName}) cmd=${command.replace('\n', ' ').take(160)}",
+            tag = "PrivExec"
+        )
+        return outcome
+    }
 
     /** Command output only; empty when the command could not run. */
     suspend fun execText(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): String =

@@ -383,12 +383,25 @@ open class VivoGamingOptimizer @Inject constructor(
         // Every `content` call starts its own JVM (~1 s). Running them one after another took ~23 s, so
         // they run in parallel groups; the settings are independent keys.
         val script = revertCmds.withIndex().chunked(REVERT_PARALLELISM).joinToString("\n") { group ->
-            group.joinToString("\n") { (i, cmd) -> "{ $cmd; } || echo FRAMEX_FAIL:$i &" } + "\nwait"
+            group.joinToString("\n") { (i, cmd) ->
+                "{ t=\$(date +%s%N); { $cmd; } || echo FRAMEX_FAIL:$i; " +
+                    "echo FRAMEX_T:$i:\$(( (\$(date +%s%N) - t) / 1000000 )); } &"
+            } + "\nwait"
         }
         val outcome = privilegeManager.exec(script, 25_000L)
         val failed = outcome.output.lines()
             .filter { it.startsWith("FRAMEX_FAIL:") }
             .mapNotNull { it.substringAfter(':').trim().toIntOrNull() }
+        val timings = outcome.output.lines().filter { it.startsWith("FRAMEX_T:") }.mapNotNull {
+            val parts = it.removePrefix("FRAMEX_T:").split(':')
+            val idx = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+            val ms = parts.getOrNull(1)?.trim()?.toLongOrNull() ?: return@mapNotNull null
+            idx to ms
+        }
+        timings.sortedBy { it.first }.forEach { (i, ms) ->
+            FrameXLog.i("revert cmd #$i ${ms}ms: ${revertCmds.getOrNull(i)?.take(110)}", tag = TAG)
+        }
+        FrameXLog.i("revert batch: ${revertCmds.size} cmds, exit=${outcome.exitCode}, slowest=${timings.maxOfOrNull { it.second }}ms", tag = TAG)
         val success = outcome.isSuccess && failed.isEmpty()
         var failureDetail = ""
         if (!success) {

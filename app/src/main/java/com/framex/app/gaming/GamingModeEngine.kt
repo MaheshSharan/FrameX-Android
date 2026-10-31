@@ -315,6 +315,9 @@ class GamingModeEngine @Inject constructor(
         engineMutex.withLock {
             _state.value = GamingModeState.Disabling
             stopMaintenancePulse()
+            val tStart = System.nanoTime()
+            fun phase(name: String, since: Long) =
+                FrameXLog.i("deactivate phase '$name' ${(System.nanoTime() - since) / 1_000_000}ms (total ${(System.nanoTime() - tStart) / 1_000_000}ms) mode=${privilegeManager.currentMode.value}", tag = TAG)
 
             if (!privilegeManager.awaitReady(READY_WAIT_MS)) {
                 val msg = safeString(
@@ -333,14 +336,22 @@ class GamingModeEngine @Inject constructor(
 
                 var remainingSuspended = emptySet<String>()
                 if (toUnsuspend.isNotEmpty()) {
+                    val t = System.nanoTime()
                     remainingSuspended = GamingSuspendPipeline.unsuspend(privilegeManager, toUnsuspend)
+                    phase("unsuspend ${toUnsuspend.size} pkgs", t)
                     settingsRepository.setGamingAffectedPackages(remainingSuspended)
                 }
                 _suspendedPackagesCount.value = remainingSuspended.size
 
+                var t = System.nanoTime()
                 val platformReverted = revertPlatformOptimizations()
+                phase("platform revert ok=$platformReverted", t)
+                t = System.nanoTime()
                 val esportsReverted = genericGamingOptimizer.revertOptimizations()
+                phase("generic revert ok=$esportsReverted", t)
+                t = System.nanoTime()
                 GamingDnd.restore(context)
+                phase("dnd restore", t)
 
                 if (remainingSuspended.isNotEmpty() || !platformReverted || !esportsReverted) {
                     val msg = safeString(
@@ -364,6 +375,7 @@ class GamingModeEngine @Inject constructor(
                 executionLedger.clear()
                 _state.value = GamingModeState.Idle
                 GamingNotificationHelper.dismissRecoveryNotification(context)
+                phase("deactivation complete", tStart)
             } catch (e: Exception) {
                 FrameXLog.e("disableGamingMode failed", e, tag = TAG)
                 _state.value = GamingModeState.Error(
