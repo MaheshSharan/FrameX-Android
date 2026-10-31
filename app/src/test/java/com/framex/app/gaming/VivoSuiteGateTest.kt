@@ -527,9 +527,6 @@ class VivoSuiteGateTest {
 
         val auditRepo = SystemAuditLogRepository(settingsRepo)
         val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
-        val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
-
         val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
@@ -556,9 +553,6 @@ class VivoSuiteGateTest {
 
         val auditRepo = SystemAuditLogRepository(settingsRepo)
         val privilegeManager = PrivilegeManager(settingsRepo, ShizukuBackend(ShizukuManager(auditRepo)), RootBackend())
-        val ledger = ExecutionLedger()
-        val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
-
         val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware

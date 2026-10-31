@@ -226,7 +226,7 @@ open class IqooGamingOptimizer @Inject constructor(
         val result = privilegeManager.exec(
             "content query --uri content://settings/$table --projection value --where \"name='$name'\""
         )
-        val line = result.output.lines()?.firstOrNull { it.contains("value=") } ?: return null
+        val line = result.output.lines().firstOrNull { it.contains("value=") } ?: return null
         return Regex("value=([^,}\\s]+)").find(line)?.groupValues?.get(1)?.trim()
     }
 

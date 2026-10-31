@@ -130,7 +130,7 @@ class VivoIqooSharedTools @Inject constructor(
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
         val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        val line = dumpRes.output.lines()?.firstOrNull { it.contains("filter=") }?.trim().orEmpty()
+        val line = dumpRes.output.lines().firstOrNull { it.contains("filter=") }?.trim().orEmpty()
         val match = Regex("filter=\\[?([a-zA-Z0-9_-]+)\\]?").find(line)
         match?.groupValues?.getOrNull(1) ?: if (line.isNotBlank()) line else "unknown"
     }
@@ -172,7 +172,7 @@ class VivoIqooSharedTools @Inject constructor(
         val result = privilegeManager.exec(
             "content query --uri content://settings/secure --projection value --where \"name='$key'\""
         )
-        val line = result.output.lines()?.firstOrNull { it.contains("value=") } ?: return ""
+        val line = result.output.lines().firstOrNull { it.contains("value=") } ?: return ""
         val raw = Regex("value=([^,}\\s]+)").find(line)?.groupValues?.get(1)?.trim().orEmpty()
         FrameXLog.d("querySecureSetting($key): raw=$raw", tag = TAG)
         return raw
