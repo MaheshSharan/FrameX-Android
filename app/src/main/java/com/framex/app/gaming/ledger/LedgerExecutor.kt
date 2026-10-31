@@ -21,6 +21,13 @@ class LedgerExecutor @Inject constructor(
 ) {
 
     /**
+     * Keys ("table:name") this session actually attempted to write. Empty when the ledger was
+     * lost (for example after a crash), in which case callers must undo everything they know.
+     */
+    fun touchedKeys(): Set<String> =
+        executionLedger.ops.value.filter { it.status != OpStatus.SKIPPED }.map { it.key }.toSet()
+
+    /**
      * Executes a list of commands in ONE batched IPC call, detects individual command exit codes
      * and stderr error messages, upserts each command into ExecutionLedger, and optionally emits
      * to SystemAuditLog if enabled.

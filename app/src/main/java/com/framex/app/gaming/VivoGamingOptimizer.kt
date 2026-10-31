@@ -374,9 +374,30 @@ open class VivoGamingOptimizer @Inject constructor(
         revertCmds.add("content insert --uri content://settings/system --bind name:s:game_scene_more_fps --bind value:s:0")
 
         // 8. O(1) Batched Deletes across System, Secure, and Global tables (replaces 10 individual JVM spawns with 3)
-        revertCmds.add("content delete --uri content://settings/system --where \"name IN ('vivo_game_click_delay_promotion','vivo_game_touch_delay_promotion','vivo_game_gyro_promotion','vivo_game_gyro_dealy_promotion','vivo_game_gyro_anti_shake_promotion','sdk_game_target_fps','sdk_game_scene')\"")
-        revertCmds.add("content delete --uri content://settings/secure --where \"name = 'sdk_game_scene'\"")
-        revertCmds.add("content delete --uri content://settings/global --where \"name = 'speed_mode_apps'\"")
+        // Only undo what this session wrote. Stages that were skipped (for example Monster Mode off,
+        // no game handshake) never changed these keys, so writing "baseline" values to them would
+        // be a change of its own. An empty ledger (lost after a crash) means undo everything.
+        val touched = ledgerExecutor.touchedKeys()
+        val toRevert = if (touched.isEmpty()) revertCmds.toList()
+        else revertCmds.filter { com.framex.app.gaming.ledger.CommandLabelParser.parse(it).key in touched }
+        revertCmds.clear()
+        revertCmds.addAll(toRevert)
+
+        val deletes = mapOf(
+            "system" to listOf(
+                "vivo_game_click_delay_promotion", "vivo_game_touch_delay_promotion", "vivo_game_gyro_promotion",
+                "vivo_game_gyro_dealy_promotion", "vivo_game_gyro_anti_shake_promotion", "sdk_game_target_fps", "sdk_game_scene"
+            ),
+            "secure" to listOf("sdk_game_scene"),
+            "global" to listOf("speed_mode_apps")
+        )
+        for ((table, names) in deletes) {
+            val owned = names.filter { touched.isEmpty() || "$table:$it" in touched }
+            if (owned.isNotEmpty()) {
+                revertCmds.add("content delete --uri content://settings/$table --where \"name IN (${owned.joinToString(",") { "'$it'" }})\"")
+            }
+        }
+        FrameXLog.i("revert plan: ${revertCmds.size} of ${touched.size.takeIf { it > 0 } ?: "all"} touched keys", tag = TAG)
 
         // Each command reports its own failure: the exit status of a "; " chain is only the last
         // command's, and a single rejected setting must not hide which one it was.
