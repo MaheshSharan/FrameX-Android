@@ -78,8 +78,8 @@ open class VivoGamingOptimizer @Inject constructor(
         onProgress: (suspend (Float, String) -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (!privilegeManager.isReady.value) {
-            FrameXLog.w("Shizuku unavailable, skipping Vivo gaming optimizations", tag = TAG)
-            addLog("Gaming Mode Activation", "Shizuku not ready or permission missing", LogStatus.FAILED)
+            FrameXLog.w("Privileged access unavailable, skipping Vivo gaming optimizations", tag = TAG)
+            addLog("Gaming Mode Activation", "Privileged access not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
 
@@ -334,7 +334,7 @@ open class VivoGamingOptimizer @Inject constructor(
 
     open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
         if (!privilegeManager.isReady.value) {
-            addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
+            addLog("Gaming Mode Deactivation", "Privileged access not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
         FrameXLog.i("Reverting Vivo & iQOO gaming optimizations to baseline...", tag = TAG)

@@ -12,7 +12,7 @@ import com.framex.app.R
 import com.framex.app.utils.FrameXLog
 
 /**
- * Builds and manages the Gaming Mode crash-recovery notification when Shizuku is unavailable
+ * Builds and manages the Gaming Mode crash-recovery notification when the privileged backend is unavailable
  * on startup while suspended packages or system overrides still require restoration (Plan 4.4).
  */
 object GamingNotificationHelper {

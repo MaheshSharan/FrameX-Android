@@ -530,16 +530,6 @@ class VivoSuiteGateTest {
         val ledger = ExecutionLedger()
         val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
 
-        val optimizer = VivoGamingOptimizer(
-            context = mockContext,
-            privilegeManager = privilegeManager,
-            settingsRepository = settingsRepo,
-            ledgerExecutor = ledgerExecutor,
-            auditLogRepository = auditRepo,
-            vivoSuiteGate = gate,
-            deviceDiagnosticManager = vivoManager
-        )
-
         val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
@@ -569,15 +559,6 @@ class VivoSuiteGateTest {
         val ledger = ExecutionLedger()
         val ledgerExecutor = LedgerExecutor(privilegeManager, ledger, auditRepo)
 
-        val optimizer = VivoGamingOptimizer(
-            context = mockContext,
-            privilegeManager = privilegeManager,
-            settingsRepository = settingsRepo,
-            ledgerExecutor = ledgerExecutor,
-            auditLogRepository = auditRepo,
-            vivoSuiteGate = gate,
-            deviceDiagnosticManager = nonVivoManager
-        )
         val sharedTools = VivoIqooSharedTools(privilegeManager, gate)
 
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware
@@ -763,9 +744,6 @@ class VivoSuiteGateTest {
 
     @Test
     fun deepFreezeSettings_defaultToFalseAndPersistState() = runBlocking {
-        val prefsData = mutableMapOf<String, Any?>()
-        val prefs = createMockSharedPreferences(prefsData)
-        val context = MockContext(prefs)
         val repo = SettingsRepository.inMemory()
 
         // Verify default-off state (Safeguards active)
@@ -788,9 +766,6 @@ class VivoSuiteGateTest {
 
     @Test
     fun launcherGames_emptyByDefaultAndSynchronousRead() = runBlocking {
-        val prefsData = mutableMapOf<String, Any?>()
-        val prefs = createMockSharedPreferences(prefsData)
-        val context = MockContext(prefs)
         val repo = SettingsRepository.inMemory()
 
         // Default empty state
@@ -807,9 +782,6 @@ class VivoSuiteGateTest {
 
     @Test
     fun disableThermalThrottling_defaultsToFalseAndPersistsState() = runBlocking {
-        val prefsData = mutableMapOf<String, Any?>()
-        val prefs = createMockSharedPreferences(prefsData)
-        val context = MockContext(prefs)
         val repo = SettingsRepository.inMemory()
 
         // Verify default-off state (Safe Mode: thermal safety preserved)
@@ -826,9 +798,6 @@ class VivoSuiteGateTest {
 
     @Test
     fun granularExecutionSettings_defaultsAndPersistence() = runBlocking {
-        val prefsData = mutableMapOf<String, Any?>()
-        val prefs = createMockSharedPreferences(prefsData)
-        val context = MockContext(prefs)
         val repo = SettingsRepository.inMemory()
 
         // Common defaults

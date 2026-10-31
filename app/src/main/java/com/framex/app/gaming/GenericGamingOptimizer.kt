@@ -30,7 +30,7 @@ class GenericGamingOptimizer @Inject constructor(
      * Bypasses dangerous display and thermal overrides if the device is Vivo/iQOO.
      */
     suspend fun applyOptimizationsForGame(packageName: String?, uid: Int?): Boolean {
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
 
         val snapshot = captureSnapshot(packageName, uid) ?: run {
             FrameXLog.e("Snapshot capture failed, aborting optimizations", tag = TAG)
@@ -57,7 +57,7 @@ class GenericGamingOptimizer @Inject constructor(
      * protecting the user's baseline display/touch settings against overwrite data loss.
      */
     suspend fun attachGame(packageName: String, uid: Int?): Boolean {
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
         val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return false
 
         val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
@@ -77,7 +77,7 @@ class GenericGamingOptimizer @Inject constructor(
      * Reverts all modified settings using the saved snapshot baseline.
      */
     suspend fun revertOptimizations(): Boolean {
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
         FrameXLog.i("Reverting Esports Optimizations...", tag = TAG)
 
         recoverThermalOverrideIfNeeded()
@@ -112,7 +112,7 @@ class GenericGamingOptimizer @Inject constructor(
      */
     suspend fun resetToDeviceDefaults(forceReset: Boolean = false): Boolean {
         if (!forceReset && !settingsRepository.needsLegacySettingsCleanup()) return true
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
 
         FrameXLog.i("User-triggered device defaults reset", tag = TAG)
 
@@ -143,7 +143,7 @@ class GenericGamingOptimizer @Inject constructor(
 
     suspend fun recoverThermalOverrideIfNeeded(): Boolean {
         if (!settingsRepository.needsThermalOverrideRecovery()) return true
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
 
         val result = privilegeManager.exec("cmd thermalservice reset")
         if (!result.isSuccess) {
@@ -158,7 +158,7 @@ class GenericGamingOptimizer @Inject constructor(
 
     suspend fun performLegacyCleanupIfNeeded(): Boolean {
         if (!settingsRepository.needsLegacySettingsCleanup()) return true
-        if (!isShizukuReady()) return false
+        if (!isPrivilegeReady()) return false
 
         FrameXLog.i("Performing one-time legacy settings cleanup", tag = TAG)
         val allSucceeded = executeCommandList(LEGACY_CLEANUP_COMMANDS)
@@ -183,7 +183,7 @@ class GenericGamingOptimizer @Inject constructor(
     // =========================================================================
 
     suspend fun applySelectedGenericOptimizations(packageName: String?, uid: Int?) {
-        if (!isShizukuReady()) return
+        if (!isPrivilegeReady()) return
         applyPerformanceGovernor()
         applyDisplayRefreshRate()
         applyTouchResponseLatency()
@@ -436,7 +436,7 @@ class GenericGamingOptimizer @Inject constructor(
         executeCommandList(LEGACY_RESET_COMMANDS)
     }
 
-    private fun isShizukuReady(): Boolean =
+    private fun isPrivilegeReady(): Boolean =
         privilegeManager.isReady.value
 
     private companion object {

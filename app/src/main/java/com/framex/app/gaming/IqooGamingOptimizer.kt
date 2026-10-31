@@ -51,7 +51,7 @@ open class IqooGamingOptimizer @Inject constructor(
         onProgress: (suspend (Float, String) -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (!privilegeManager.isReady.value) {
-            auditLogRepository.addLog("Gaming Mode Activation", "Shizuku not ready or permission missing", LogStatus.FAILED)
+            auditLogRepository.addLog("Gaming Mode Activation", "Privileged access not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
 
@@ -164,7 +164,7 @@ open class IqooGamingOptimizer @Inject constructor(
 
     open suspend fun revertOptimizations(): Boolean = withContext(Dispatchers.IO) {
         if (!privilegeManager.isReady.value) {
-            auditLogRepository.addLog("Gaming Mode Deactivation", "Shizuku not ready or permission missing", LogStatus.FAILED)
+            auditLogRepository.addLog("Gaming Mode Deactivation", "Privileged access not ready or permission missing", LogStatus.FAILED)
             return@withContext false
         }
 
