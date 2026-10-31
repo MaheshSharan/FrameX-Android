@@ -84,6 +84,8 @@ class SettingsRepository @Inject constructor(
     fun setGamingAppliedVia(mode: com.framex.app.privilege.PrivilegeMode?) = gaming.setAppliedVia(mode)
     fun getGamingAffectedPackages(): Set<String> = gaming.getGamingAffectedPackages()
     fun setGamingAffectedPackages(packages: Set<String>) = gaming.setGamingAffectedPackages(packages)
+    fun getGamingBaselines(): Map<String, String> = gaming.getGamingBaselines()
+    fun setGamingBaselines(baselines: Map<String, String>) = gaming.setGamingBaselines(baselines)
     fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) =
         gaming.saveGamingOptimizationSnapshot(snapshot)
     fun loadGamingOptimizationSnapshot(): GamingOptimizationSnapshot? =

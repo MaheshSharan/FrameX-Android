@@ -155,6 +155,24 @@ class GamingSettingsRepository @Inject constructor(
         }
     }
 
+    /** Vendor-command baselines as `id -> value`; see [com.framex.app.gaming.catalog.BaselineStore]. */
+    fun getGamingBaselines(): Map<String, String> =
+        store.getStringSet(KEY_GAMING_BASELINES, emptySet()).mapNotNull { line ->
+            val split = line.indexOf(BASELINE_SEPARATOR)
+            if (split <= 0) null else line.substring(0, split) to line.substring(split + 1)
+        }.toMap()
+
+    fun setGamingBaselines(baselines: Map<String, String>) {
+        if (baselines.isEmpty()) {
+            store.remove(KEY_GAMING_BASELINES)
+        } else {
+            store.putStringSet(
+                KEY_GAMING_BASELINES,
+                baselines.map { (id, value) -> "$id$BASELINE_SEPARATOR$value" }.toSet()
+            )
+        }
+    }
+
     fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) {
         store.putString(KEY_GAMING_SNAPSHOT_JSON, snapshot.toJson())
     }
@@ -215,5 +233,7 @@ class GamingSettingsRepository @Inject constructor(
 
     companion object {
         private const val KEY_GAMING_SNAPSHOT_JSON = "gaming_optimization_snapshot_json"
+        private const val KEY_GAMING_BASELINES = "gaming_command_baselines"
+        private const val BASELINE_SEPARATOR = '\u0001'
     }
 }
