@@ -62,28 +62,6 @@ enum class ThermalSeverity(
     companion object {
         fun fromStatus(status: Int): ThermalSeverity =
             entries.firstOrNull { it.statusLevel == status } ?: NONE
-
-        /**
-         * Resolves effective system thermal severity from Android framework status.
-         * Sensor temperature advisory levels are maintained separately in [SensorTemperatureAdvisory].
-         */
-        fun resolveEffective(
-            status: Int,
-            cpuTempC: Float = 0f,
-            skinTempC: Float = 0f,
-            isThrottling: Boolean = false
-        ): ThermalSeverity {
-            val isErroneousHighStatus = status >= 3 && cpuTempC > 0f && cpuTempC < 45f && skinTempC < 38f
-            if (status > 0 && !isErroneousHighStatus) return fromStatus(status)
-            if (isThrottling) return SEVERE
-            val advisory = SensorTemperatureAdvisory.fromTemperatures(cpuTempC, skinTempC)
-            return when (advisory) {
-                SensorTemperatureAdvisory.EXTREME -> CRITICAL
-                SensorTemperatureAdvisory.HIGH -> SEVERE
-                SensorTemperatureAdvisory.ELEVATED -> MODERATE
-                SensorTemperatureAdvisory.NOMINAL -> NONE
-            }
-        }
     }
 }
 

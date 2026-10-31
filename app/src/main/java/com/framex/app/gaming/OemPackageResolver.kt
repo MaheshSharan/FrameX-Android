@@ -29,8 +29,6 @@ class OemPackageResolver @Inject constructor(
     private val vivoSuiteGate: VivoSuiteGate
 ) {
 
-    fun isVivoSuiteActive(): Boolean = vivoSuiteGate.isVivoSuiteEnabled
-
     fun getInstalledUserApps(context: Context): List<AppInfo> {
         return try {
             val pm = context.packageManager

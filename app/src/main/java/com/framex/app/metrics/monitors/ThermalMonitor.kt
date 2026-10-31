@@ -44,13 +44,6 @@ class ThermalMonitor @Inject constructor(
                 6 -> "System Shutdown"
                 else -> "Unknown"
             }
-
-        val pressureLabel: String
-            get() = when (status) {
-                0 -> if (isThrottling) "Throttled" else "Stable"
-                1, 2 -> "Rising"
-                else -> "Elevated"
-            }
     }
 
     val thermalState: Flow<ThermalState> = flow {

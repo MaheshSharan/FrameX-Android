@@ -84,11 +84,6 @@ class VivoIqooSharedTools @Inject constructor(
         querySecureSetting("144Game_mergelist")
     }
 
-    suspend fun get144MergeList(): List<String> = withContext(Dispatchers.IO) {
-        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext emptyList()
-        getRaw144MergeList().split(",").map { it.trim() }.filter { it.isNotBlank() }
-    }
-
     suspend fun addTo144MergeList(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false

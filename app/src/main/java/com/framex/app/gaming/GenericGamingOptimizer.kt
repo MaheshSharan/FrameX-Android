@@ -170,25 +170,9 @@ class GenericGamingOptimizer @Inject constructor(
         return allSucceeded
     }
 
-    fun calculateFramePacingDeltaMs(actualFps: Int): Float {
-        if (actualFps <= 0) return 0f
-        val activeHz = deviceDiagnosticManager.getMaxHardwareRefreshRate()
-        val targetFrameTimeMs = 1000f / activeHz
-        val actualFrameTimeMs = 1000f / actualFps.toFloat()
-        return abs(actualFrameTimeMs - targetFrameTimeMs)
-    }
-
     // =========================================================================
     // Granular Optimization Steps (IDE & GitHub Symbol Navigation)
     // =========================================================================
-
-    suspend fun applySelectedGenericOptimizations(packageName: String?, uid: Int?) {
-        if (!isPrivilegeReady()) return
-        applyPerformanceGovernor()
-        applyDisplayRefreshRate()
-        applyTouchResponseLatency()
-        applyNetworkAndDozeExemptions(packageName, uid)
-    }
 
     private suspend fun applyMemoryAndThermalOptimizations() {
         val memSpecs = listOf(

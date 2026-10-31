@@ -42,14 +42,8 @@ open class VivoGamingOptimizer @Inject constructor(
     private var activeGamePackage: String? = null
     private var activeGamePid: Int = 0
 
-    val auditLogs: StateFlow<List<SystemAuditLog>> = auditLogRepository.logs
-
     private fun addLog(action: String, details: String, status: LogStatus) {
         auditLogRepository.addLog(action, details, status)
-    }
-
-    fun clearAuditLogs() {
-        auditLogRepository.clear()
     }
 
     // Captured baseline snapshot to ensure safe rollback

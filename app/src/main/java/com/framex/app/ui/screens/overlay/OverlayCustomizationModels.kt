@@ -13,8 +13,6 @@ val MODULE_ROW_HEIGHT = 84.dp
 /** Vertical gap below each module row. */
 val MODULE_ROW_SPACING = 12.dp
 
-val OVERLAY_MODES = listOf("Minimal", "Compact", "Expanded")
-
 @Immutable
 data class ModuleRowState(
     val id: MetricModuleId,

@@ -109,7 +109,6 @@ class MetricsEngine @Inject constructor(
     // Tracks whether the floating overlay window is actively visible on screen.
     // Prevents polling overlay modules when the overlay service is stopped/hidden.
     private val _isOverlayActive = MutableStateFlow(false)
-    val isOverlayActive: StateFlow<Boolean> = _isOverlayActive.asStateFlow()
 
     private val _screenOverrideRequests = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
@@ -121,13 +120,6 @@ class MetricsEngine @Inject constructor(
     fun resetSessionTimer() {
         sessionStartTimeMs = SystemClock.elapsedRealtime()
         _metricsState.value = _metricsState.value.copy(sessionElapsedSec = 0L)
-    }
-
-    fun clearSnapshotHistory() {
-        synchronized(ringLock) {
-            snapshotRing.clear()
-            _snapshotHistory.value = emptyList()
-        }
     }
 
     private fun getCurrentFormattedTime(): String {

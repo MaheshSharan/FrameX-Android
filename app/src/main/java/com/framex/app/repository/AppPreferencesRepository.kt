@@ -48,39 +48,6 @@ class AppPreferencesRepository @Inject constructor(
         store.putLong("last_seen_version_code", versionCode)
     }
 
-    fun isFeatureDiscoveryCompleted(version: Int): Boolean {
-        return store.getBoolean(
-            key = "feature_discovery_completed_v$version",
-            default = false
-        )
-    }
-
-    fun setFeatureDiscoveryCompleted(version: Int, completed: Boolean) {
-        store.putBoolean(
-            key = "feature_discovery_completed_v$version",
-            value = completed
-        )
-    }
-
-    fun isFeatureDiscoverySkipped(version: Int): Boolean {
-        return store.getBoolean(
-            key = "feature_discovery_skipped_v$version",
-            default = false
-        )
-    }
-
-    fun setFeatureDiscoverySkipped(version: Int, skipped: Boolean) {
-        store.putBoolean(
-            key = "feature_discovery_skipped_v$version",
-            value = skipped
-        )
-    }
-
-    fun resetFeatureDiscovery(version: Int) {
-        setFeatureDiscoveryCompleted(version, false)
-        setFeatureDiscoverySkipped(version, false)
-    }
-
     fun isFeatureDiscoveryGloballyDismissed(): Boolean {
         return store.getBoolean("globally_dismissed", default = false)
     }
@@ -95,10 +62,6 @@ class AppPreferencesRepository @Inject constructor(
 
     fun setFeatureDiscoveryScreenCompleted(screenIdName: String, completed: Boolean) {
         store.putBoolean("completed_${screenIdName.lowercase()}", completed)
-    }
-
-    fun resetAllFeatureDiscovery() {
-        setFeatureDiscoveryGloballyDismissed(false)
     }
 
     fun getPrivilegeMode(): com.framex.app.privilege.PrivilegeMode {

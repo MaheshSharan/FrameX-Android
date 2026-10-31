@@ -21,9 +21,6 @@ class OnboardingViewModel @Inject constructor(
     private val _selectedMode = MutableStateFlow(privilegeManager.currentMode.value)
     val selectedMode: StateFlow<PrivilegeMode> = _selectedMode.asStateFlow()
 
-    private val _rootRequestFailed = MutableStateFlow(false)
-    val rootRequestFailed: StateFlow<Boolean> = _rootRequestFailed.asStateFlow()
-
     fun selectPrivilege(mode: PrivilegeMode, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             if (mode == PrivilegeMode.ROOT) {
@@ -33,17 +30,14 @@ class OnboardingViewModel @Inject constructor(
                 val hasRoot = privilegeManager.isReady.value
                 if (hasRoot) {
                     _selectedMode.value = PrivilegeMode.ROOT
-                    _rootRequestFailed.value = false
                     onResult(true)
                 } else {
                     privilegeManager.switchMode(previous)
-                    _rootRequestFailed.value = true
                     onResult(false)
                 }
             } else {
                 _selectedMode.value = mode
                 privilegeManager.switchMode(mode)
-                _rootRequestFailed.value = false
                 onResult(true)
             }
         }
