@@ -237,9 +237,15 @@
     <string name="tuning_banner_none">No privilege mode</string>
     <string name="tuning_banner_can_tune">Frequency and governor changes are available.</string>
     <string name="tuning_banner_read_only">Read-only. Changing CPU or GPU limits needs Root access that can write to the kernel.</string>
-    <string name="tuning_unlock_nodes">Unlock frequency limits (allow writes)</string>
-    <string name="tuning_msg_unlocked">Frequency limits are writable. Applying a new limit locks it again.</string>
+    <string name="tuning_unlock_nodes">Unlock to edit</string>
+    <string name="tuning_msg_unlocked">Unlocked. You can change values now.</string>
     <string name="tuning_err_unlock_failed">Could not unlock the frequency limits.</string>
+    <string name="tuning_apply">Apply changes</string>
+    <string name="tuning_discard">Discard</string>
+    <string name="tuning_locked_note">Locked. Frequencies and governors are read-only until you unlock.</string>
+    <string name="tuning_msg_applied_locked">Applied and locked. System services can no longer change these values.</string>
+    <string name="tuning_msg_applied_unlocked">Applied. Locking needs Root.</string>
+    <string name="tuning_status_locked">Locked</string>
     <string name="tuning_restore_defaults">Restore defaults</string>
     <string name="tuning_stock">Stock</string>
     <string name="tuning_gpu_unsupported">Kernel node not exposed or unsupported GPU interface</string>
@@ -285,10 +291,10 @@
 
     <!-- Gaming Mode Engine Status & Messages -->
     <string name="gaming_toast_hardware_rolled_back">Hardware optimizations rolled back</string>
-    <string name="gaming_err_shizuku_unavailable">Shizuku not available or permission not granted</string>
+    <string name="gaming_err_shizuku_unavailable">Privileged access is not available. Check the selected mode.</string>
     <string name="gaming_err_revert_vivo_failed">Failed to revert prior Vivo optimizations</string>
     <string name="gaming_err_snapshot_failed">Failed to capture system settings snapshot</string>
-    <string name="gaming_err_deactivate_shizuku">Deactivation incomplete: Shizuku service unavailable. Tap to retry.</string>
+    <string name="gaming_err_deactivate_shizuku">Deactivation incomplete: Privileged service unavailable. Tap to retry.</string>
     <string name="gaming_err_deactivate_partial">Deactivation incomplete: %1$d apps still suspended. Tap to retry.</string>
     <string name="gaming_status_preparing">Preparing…</string>
     <string name="gaming_status_initializing">Initializing…</string>

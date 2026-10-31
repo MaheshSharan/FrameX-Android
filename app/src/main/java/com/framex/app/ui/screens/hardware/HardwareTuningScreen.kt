@@ -32,7 +32,7 @@ fun HardwareTuningScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val privilegeMode by viewModel.privilegeManager.currentMode.collectAsState()
-    val pending by viewModel.pending.collectAsState()
+    val draft by viewModel.draft.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val messageText = message?.let { stringResource(it.resId) }
@@ -44,28 +44,27 @@ fun HardwareTuningScreen(
         }
     }
 
-    pending?.let { change ->
-        AlertDialog(
-            onDismissRequest = viewModel::cancelPending,
-            title = { Text(stringResource(R.string.tuning_confirm_title)) },
-            text = { Text(stringResource(R.string.tuning_confirm_body, describe(change))) },
-            confirmButton = {
-                TextButton(
-                    onClick = viewModel::confirmPending,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("tuning_confirm")
-                ) { Text(stringResource(R.string.tuning_confirm_apply)) }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = viewModel::cancelPending,
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text(stringResource(R.string.action_cancel)) }
-            }
-        )
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (!draft.isEmpty && !uiState.locked) {
+                Surface(tonalElevation = 3.dp) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = viewModel::discardDraft,
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("tuning_discard")
+                        ) { Text(stringResource(R.string.tuning_discard)) }
+                        Button(
+                            onClick = viewModel::applyDraft,
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("tuning_apply")
+                        ) { Text(stringResource(R.string.tuning_apply)) }
+                    }
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.tuning_screen_title), fontWeight = FontWeight.Bold) },
@@ -112,9 +111,12 @@ fun HardwareTuningScreen(
                     item { Text(text = error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
                 }
 
-                if (privilegeMode == PrivilegeMode.ROOT) {
+                if (privilegeMode == PrivilegeMode.ROOT && uiState.locked) {
                     item {
-                        OutlinedButton(
+                        Text(stringResource(R.string.tuning_locked_note), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    item {
+                        Button(
                             onClick = viewModel::unlockFrequencyNodes,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("tuning_unlock_nodes")
                         ) { Text(stringResource(R.string.tuning_unlock_nodes)) }
@@ -144,9 +146,11 @@ fun HardwareTuningScreen(
                 item {
                     GpuControlCard(
                         gpu = uiState.gpu,
-                        enabled = uiState.canTune,
-                        onMaxFreqSelected = { viewModel.requestGpuMaxFreq(it) },
-                        onGovernorSelected = { viewModel.requestGpuGovernor(it) }
+                        enabled = uiState.canTune && !uiState.locked,
+                        draftFreqKHz = draft.gpuFreqKHz,
+                        draftGovernor = draft.gpuGovernor,
+                        onMaxFreqSelected = { viewModel.selectGpuMaxFreq(it) },
+                        onGovernorSelected = { viewModel.selectGpuGovernor(it) }
                     )
                 }
 
@@ -163,9 +167,11 @@ fun HardwareTuningScreen(
                 items(uiState.cpuClusters, key = { it.policyId }) { cluster ->
                     CpuClusterCard(
                         cluster = cluster,
-                        enabled = uiState.canTune,
-                        onMaxFreqSelected = { viewModel.requestCpuMaxFreq(cluster.policyId, it) },
-                        onGovernorSelected = { viewModel.requestCpuGovernor(cluster.policyId, it) },
+                        enabled = uiState.canTune && !uiState.locked,
+                        draftFreqKHz = draft.cpuFreqKHz[cluster.policyId],
+                        draftGovernor = draft.cpuGovernor[cluster.policyId],
+                        onMaxFreqSelected = { viewModel.selectCpuMaxFreq(cluster.policyId, it) },
+                        onGovernorSelected = { viewModel.selectCpuGovernor(cluster.policyId, it) },
                         onResetStock = { viewModel.resetCpuCluster(cluster.policyId) }
                     )
                 }
@@ -173,17 +179,6 @@ fun HardwareTuningScreen(
         }
     }
 }
-
-@Composable
-private fun describe(change: PendingTuneChange): String =
-    when (change) {
-        is PendingTuneChange.CpuMaxFreq ->
-            stringResource(R.string.tuning_desc_cpu_freq, change.policyId, change.freqKHz / 1000)
-        is PendingTuneChange.CpuGovernor ->
-            stringResource(R.string.tuning_desc_cpu_gov, change.policyId, change.governor)
-        PendingTuneChange.GpuMaxFreq -> stringResource(R.string.tuning_desc_gpu_freq)
-        PendingTuneChange.GpuGovernor -> stringResource(R.string.tuning_desc_gpu_gov)
-    }
 
 @Composable
 private fun PrivilegeBanner(mode: PrivilegeMode, canTune: Boolean) {
@@ -220,6 +215,8 @@ private fun PrivilegeBanner(mode: PrivilegeMode, canTune: Boolean) {
 private fun GpuControlCard(
     gpu: GpuTuningState,
     enabled: Boolean,
+    draftFreqKHz: Long?,
+    draftGovernor: String?,
     onMaxFreqSelected: (Long) -> Unit,
     onGovernorSelected: (String) -> Unit
 ) {
@@ -228,7 +225,9 @@ private fun GpuControlCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 1f else 0.45f)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -260,7 +259,7 @@ private fun GpuControlCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = "${gpu.maxFreqKHz / 1000} MHz",
+                            value = "${(draftFreqKHz ?: gpu.maxFreqKHz) / 1000} MHz",
                             onValueChange = {},
                             readOnly = true,
                             enabled = enabled,
@@ -291,7 +290,7 @@ private fun GpuControlCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = gpu.currentGovernor.ifEmpty { stringResource(R.string.tuning_default_governor) },
+                            value = (draftGovernor ?: gpu.currentGovernor).ifEmpty { stringResource(R.string.tuning_default_governor) },
                             onValueChange = {},
                             readOnly = true,
                             enabled = enabled,
@@ -325,6 +324,8 @@ private fun GpuControlCard(
 private fun CpuClusterCard(
     cluster: CpuClusterPolicy,
     enabled: Boolean,
+    draftFreqKHz: Long?,
+    draftGovernor: String?,
     onMaxFreqSelected: (Long) -> Unit,
     onGovernorSelected: (String) -> Unit,
     onResetStock: () -> Unit
@@ -334,7 +335,9 @@ private fun CpuClusterCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 1f else 0.45f)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -372,7 +375,7 @@ private fun CpuClusterCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     OutlinedTextField(
-                        value = "${cluster.maxFreqKHz / 1000} MHz",
+                        value = "${(draftFreqKHz ?: cluster.maxFreqKHz) / 1000} MHz",
                         onValueChange = {},
                         readOnly = true,
                             enabled = enabled,
@@ -403,7 +406,7 @@ private fun CpuClusterCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     OutlinedTextField(
-                        value = cluster.currentGovernor,
+                        value = draftGovernor ?: cluster.currentGovernor,
                         onValueChange = {},
                         readOnly = true,
                             enabled = enabled,

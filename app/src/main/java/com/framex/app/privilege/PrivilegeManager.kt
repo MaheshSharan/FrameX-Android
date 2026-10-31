@@ -130,6 +130,10 @@ class PrivilegeManager internal constructor(
         }
     }
 
+    /** Waits briefly for the selected backend, e.g. while the root shell restarts after a timeout. */
+    suspend fun awaitReady(timeoutMs: Long): Boolean =
+        isReady.value || kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { isReady.first { it } } == true
+
     fun refresh() {
         backendFor(_currentMode.value)?.refresh()
     }

@@ -169,7 +169,7 @@ class GamingModeEngine @Inject constructor(
             _state.value = GamingModeState.Error(
                 safeString(
                     R.string.gaming_err_shizuku_unavailable,
-                    "Shizuku not available or permission not granted"
+                    "Privileged access is not available"
                 )
             )
             return@withContext
@@ -316,11 +316,10 @@ class GamingModeEngine @Inject constructor(
             _state.value = GamingModeState.Disabling
             stopMaintenancePulse()
 
-            val isShizukuReady = privilegeManager.isReady.value
-            if (!isShizukuReady) {
+            if (!privilegeManager.awaitReady(READY_WAIT_MS)) {
                 val msg = safeString(
                     R.string.gaming_err_deactivate_shizuku,
-                    "Deactivation incomplete: Shizuku service unavailable. Tap to retry."
+                    "Deactivation incomplete: Privileged service unavailable. Tap to retry."
                 )
                 _state.value = GamingModeState.Error(msg)
                 GamingNotificationHelper.showRecoveryNotification(context)
@@ -370,7 +369,7 @@ class GamingModeEngine @Inject constructor(
                 _state.value = GamingModeState.Error(
                     safeString(
                         R.string.gaming_err_deactivate_shizuku,
-                        "Deactivation incomplete: Shizuku service unavailable. Tap to retry."
+                        "Deactivation incomplete: Privileged service unavailable. Tap to retry."
                     )
                 )
             }
@@ -472,6 +471,7 @@ class GamingModeEngine @Inject constructor(
 
     companion object {
         private const val TAG = "GamingModeEngine"
+        private const val READY_WAIT_MS = 8_000L
         private const val MAINTENANCE_PULSE_INTERVAL_MS = 120_000L
         const val RECOVERY_NOTIFICATION_ID = GamingNotificationHelper.RECOVERY_NOTIFICATION_ID
 

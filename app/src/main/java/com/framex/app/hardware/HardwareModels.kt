@@ -44,5 +44,7 @@ data class HardwareTuningSnapshot(
     val lastError: String? = null,
     /** False when the active backend cannot write sysfs; the screen is then read-only. */
     val canTune: Boolean = false,
-    val hasBaseline: Boolean = false
+    val hasBaseline: Boolean = false,
+    /** Root only: every frequency and governor node is read-only until the person unlocks. */
+    val locked: Boolean = false
 )

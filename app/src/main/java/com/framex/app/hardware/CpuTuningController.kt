@@ -126,13 +126,29 @@ class CpuTuningController @Inject constructor(
         return ok
     }
 
-    /** Root only: makes every scaling_max_freq node writable again. */
-    suspend fun unlockMaxFreqNodes(): Boolean = withContext(Dispatchers.IO) {
-        if (privilegeManager.currentMode.value != PrivilegeMode.ROOT) return@withContext false
-        privilegeManager.exec("chmod 664 $CPUFREQ_ROOT/policy*/scaling_max_freq").isSuccess
+    private val lockTargets =
+        "$CPUFREQ_ROOT/policy*/scaling_max_freq $CPUFREQ_ROOT/policy*/scaling_governor"
+
+    /** Root only: makes frequency and governor nodes read-only so system services cannot change them. */
+    suspend fun lockAll(): Boolean = withContext(Dispatchers.IO) {
+        privilegeManager.currentMode.value == PrivilegeMode.ROOT &&
+            privilegeManager.exec("chmod 444 $lockTargets").isSuccess
     }
 
-    suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long, lock: Boolean = true): Boolean = withContext(Dispatchers.IO) {
+    /** Root only: makes the nodes writable again. */
+    suspend fun unlockAll(): Boolean = withContext(Dispatchers.IO) {
+        privilegeManager.currentMode.value == PrivilegeMode.ROOT &&
+            privilegeManager.exec("chmod 664 $lockTargets").isSuccess
+    }
+
+    /** True when every frequency and governor node has no owner write bit. */
+    suspend fun isLocked(): Boolean = withContext(Dispatchers.IO) {
+        val modes = privilegeManager.exec("stat -c %a $lockTargets 2>/dev/null")
+        modes.isSuccess && modes.output.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            .let { l -> l.isNotEmpty() && l.all { it.length >= 3 && (it[it.length - 3] - '0') < 6 } }
+    }
+
+    suspend fun setClusterMaxFreq(policyId: Int, maxFreqKHz: Long, lock: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         if (policyId < 0 || maxFreqKHz <= 0L) return@withContext false
         val path = "$CPUFREQ_ROOT/policy$policyId/scaling_max_freq"
         val ok = writeAndVerify(path, maxFreqKHz.toString(), lock)

@@ -168,11 +168,40 @@ class GpuTuningController @Inject constructor(
      * Writes and reads back. Only under Root, a rejected write is retried once after making the
      * node writable; the shell user cannot change modes, so Shizuku never attempts it.
      */
+    /** Root makes the node writable first (a lock or OEM script may have set it read-only). */
     private suspend fun writeAndVerify(path: String, value: String): Boolean {
-        if (writeOnce(path, value)) return true
-        if (privilegeManager.currentMode.value != PrivilegeMode.ROOT) return false
-        privilegeManager.exec("chmod u+w '$path'")
-        return writeOnce(path, value)
+        val root = privilegeManager.currentMode.value == PrivilegeMode.ROOT
+        if (root) privilegeManager.exec("chmod 664 '$path'")
+        val ok = writeOnce(path, value)
+        if (root && !ok) privilegeManager.exec("chmod 664 '$path'")
+        return ok
+    }
+
+    private fun nodePaths(): List<String> = when {
+        detectedBasePath.isEmpty() -> emptyList()
+        isMali -> listOf("$detectedBasePath/max_freq", "$detectedBasePath/governor")
+        isKgsl -> listOf("$detectedBasePath/max_gpuclk", "$detectedBasePath/devfreq/governor")
+        else -> emptyList()
+    }
+
+    suspend fun lockAll(): Boolean = withContext(Dispatchers.IO) {
+        val paths = nodePaths()
+        paths.isNotEmpty() && privilegeManager.currentMode.value == PrivilegeMode.ROOT &&
+            privilegeManager.exec("chmod 444 ${paths.joinToString(" ") { "'$it'" }}").isSuccess
+    }
+
+    suspend fun unlockAll(): Boolean = withContext(Dispatchers.IO) {
+        val paths = nodePaths()
+        paths.isNotEmpty() && privilegeManager.currentMode.value == PrivilegeMode.ROOT &&
+            privilegeManager.exec("chmod 664 ${paths.joinToString(" ") { "'$it'" }}").isSuccess
+    }
+
+    suspend fun isLocked(): Boolean = withContext(Dispatchers.IO) {
+        val paths = nodePaths()
+        if (paths.isEmpty()) return@withContext true
+        val modes = privilegeManager.exec("stat -c %a ${paths.joinToString(" ") { "'$it'" }} 2>/dev/null")
+        modes.isSuccess && modes.output.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            .let { l -> l.isNotEmpty() && l.all { it.length >= 3 && (it[it.length - 3] - '0') < 6 } }
     }
 
     suspend fun setGpuMaxFreq(maxFreqKHz: Long): Boolean = withContext(Dispatchers.IO) {
