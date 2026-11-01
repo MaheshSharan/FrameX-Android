@@ -29,11 +29,14 @@ class ExecutionToggleDescriptorsTest {
         }
     }
 
+    /** The Vivo 144Hz card edits the game merge list, not a settings key, so it has no catalog entry. */
+    private val notSettingsWrites = setOf(Platform.VIVO to Toggle.FPS_144_UNLOCK)
+
     @Test
     fun everyCardDrivesAtLeastOneCatalogCommand() {
         tabs.forEach { (platform, tab) ->
             val inCatalog = GamingCommandCatalog.forPlatform(platform).map { it.toggle }.toSet()
-            (tab.toggles + tab.dividerToggles).forEach {
+            (tab.toggles + tab.dividerToggles).filter { (platform to it.toggle) !in notSettingsWrites }.forEach {
                 assertTrue("${it.title} has no command on $platform", it.toggle in inCatalog)
             }
         }
