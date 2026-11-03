@@ -58,33 +58,9 @@ class PrivilegeManagerTest {
     }
 
     @Test
-    fun switchMode_isRefusedWhileGamingModeIsActiveAndCannotBeReverted() = runBlocking {
+    fun switchMode_isRefusedWhileGamingModeIsActive() = runBlocking {
         val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
         settings.setGamingModeActive(true)
-
-        assertEquals(SwitchResult.BLOCKED_GAMING_ACTIVE, manager.switchMode(PrivilegeMode.ROOT))
-        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
-    }
-
-    @Test
-    fun switchMode_revertsGamingModeFirstThenSwitches() = runBlocking {
-        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
-        settings.setGamingModeActive(true)
-        manager.registerSwitchGuard {
-            settings.setGamingModeActive(false)
-            true
-        }
-
-        assertEquals(SwitchResult.SWITCHED, manager.switchMode(PrivilegeMode.ROOT))
-        assertEquals(PrivilegeMode.ROOT, manager.currentMode.value)
-        assertEquals(PrivilegeMode.ROOT, settings.appPrefs.getPrivilegeMode())
-    }
-
-    @Test
-    fun switchMode_isRefusedWhenTheGuardCannotRevert() = runBlocking {
-        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
-        settings.setGamingModeActive(true)
-        manager.registerSwitchGuard { false }
 
         assertEquals(SwitchResult.BLOCKED_GAMING_ACTIVE, manager.switchMode(PrivilegeMode.ROOT))
         assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
