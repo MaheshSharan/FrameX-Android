@@ -9,6 +9,7 @@ import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +30,11 @@ class DashboardViewModel @Inject constructor(
     private val _whatsNewInfo = MutableStateFlow<WhatsNewInfo?>(null)
 
     init {
-        checkWhatsNew()
+        // Onboarding state must be loaded before it decides whether to show What's New.
+        viewModelScope.launch {
+            settingsRepository.awaitSettingsLoaded()
+            checkWhatsNew()
+        }
         metricsEngine.setScreenOverrideModules(setOf("fps"), requesterKey = "dashboard_screen")
     }
 

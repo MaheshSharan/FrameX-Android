@@ -9,10 +9,20 @@ import com.framex.app.gaming.ledger.Stage
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.utils.FrameXLog
+import com.framex.app.utils.ShellSanitizer
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
 
+/**
+ * Device-agnostic Gaming Mode tweaks (process priorities, doze and network exemptions, governor,
+ * refresh rate, touch latency).
+ *
+ * This is deliberately not part of the vendor command catalog. The catalog models one settings
+ * key per entry with a persisted baseline, while these tweaks mix settings keys, `cmd`/`dumpsys`
+ * calls and per-package state. Their rollback therefore comes from one [GamingOptimizationSnapshot]
+ * captured before the first write, and revert replays only what that snapshot recorded.
+ */
 @Singleton
 class GenericGamingOptimizer @Inject constructor(
     private val privilegeManager: PrivilegeManager,
@@ -58,7 +68,7 @@ class GenericGamingOptimizer @Inject constructor(
      */
     suspend fun attachGame(packageName: String, uid: Int?): Boolean {
         if (!isPrivilegeReady()) return false
-        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName) ?: return false
+        val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return false
 
         val currentSnapshot = settingsRepository.loadGamingOptimizationSnapshot()
         if (currentSnapshot != null) {
@@ -203,7 +213,7 @@ class GenericGamingOptimizer @Inject constructor(
 
     private suspend fun applyProcessPriorities(packageName: String?) {
         if (!settingsRepository.cpuPriorityLock.value) return
-        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        val safePkg = ShellSanitizer.sanitizePackageName(packageName)
         val targetPkg = safePkg ?: "<no active game>"
         val specs = listOf(
             CommandSpec("cmd activity set-bg-restriction-level --user 0 $targetPkg unrestricted", OpPriority.PRIMARY),
@@ -220,7 +230,7 @@ class GenericGamingOptimizer @Inject constructor(
 
     private suspend fun applyNetworkAndDozeExemptions(packageName: String?, uid: Int?) {
         if (!settingsRepository.networkFirewall.value) return
-        val safePkg = com.framex.app.utils.ShellSanitizer.sanitizePackageName(packageName)
+        val safePkg = ShellSanitizer.sanitizePackageName(packageName)
         val targetUid = uid?.toString() ?: "<no active game>"
         val targetPkg = safePkg ?: "<no active game>"
         val specs = listOf(

@@ -144,14 +144,6 @@ class GamingModeEngine @Inject constructor(
     /**
      * Reconciles persisted crash-recovery records on process startup (Plan 6.2).
      */
-    init {
-        // Switching privilege backend first turns Gaming Mode off through the backend that applied it.
-        privilegeManager.registerSwitchGuard {
-            disableGamingMode()
-            !settingsRepository.isGamingModeActive()
-        }
-    }
-
     fun recoverPersistedState() {
         recoveryScope.launch {
             recoveryCoordinator.watch(
@@ -166,142 +158,12 @@ class GamingModeEngine @Inject constructor(
         whitelist: Set<String> = settingsRepository.gamingModeWhitelist.value
     ) = withContext(Dispatchers.IO) {
         if (!privilegeManager.isReady.value) {
-            _state.value = GamingModeState.Error(
-                safeString(
-                    R.string.gaming_err_shizuku_unavailable,
-                    "Privileged access is not available"
-                )
-            )
+            fail(R.string.gaming_err_shizuku_unavailable, "Privileged access is not available")
             return@withContext
         }
-
         engineMutex.withLock {
             try {
-                executionLedger.clear()
-                _state.value = GamingModeState.Enabling(
-                    0.10f,
-                    safeString(R.string.gaming_status_preparing, "Preparing…")
-                )
-
-                val targetPath = vivoSuiteGate.resolveCurrentPlatformPath()
-                if (!cleanupStaleVivoPath(targetPath)) {
-                    _state.value = GamingModeState.Error(
-                        safeString(
-                            R.string.gaming_err_revert_vivo_failed,
-                            "Failed to revert prior Vivo optimizations"
-                        )
-                    )
-                    return@withLock
-                }
-
-                // Write durable recovery record BEFORE applying mutations (Rule 2.8 / Plan 6.2).
-                settingsRepository.setGamingPlatformPath(targetPath)
-                settingsRepository.setGamingModeActive(true)
-                settingsRepository.setGamingAppliedVia(privilegeManager.currentMode.value)
-                settingsRepository.flushRecoveryWrites()
-
-                _state.value = GamingModeState.Enabling(
-                    0.25f,
-                    safeString(R.string.gaming_status_initializing, "Initializing…")
-                )
-
-                val baselineApplied = genericGamingOptimizer.applyOptimizationsForGame(
-                    packageName = _activeGamePackage.value,
-                    uid = GamingProcessResolver.uidOf(context, _activeGamePackage.value)
-                )
-                if (!baselineApplied) {
-                    settingsRepository.setGamingModeActive(false)
-                    _state.value = GamingModeState.Error(
-                        safeString(
-                            R.string.gaming_err_snapshot_failed,
-                            "Failed to capture system settings snapshot"
-                        )
-                    )
-                    return@withLock
-                }
-
-                // Suspend background apps and record in snapshot & preferences.
-                _state.value = GamingModeState.Enabling(
-                    0.45f,
-                    safeString(R.string.gaming_status_suspending_bg, "Suspending Background Apps…")
-                )
-                val candidates = oemPackageResolver.resolvePackagesToSuspend(
-                    context = context,
-                    whitelist = whitelist,
-                    launcherGames = settingsRepository.launcherGames.value,
-                    deepFreezeEnabled = settingsRepository.deepFreezeEnabled.value
-                )
-                if (candidates.isNotEmpty()) {
-                    _state.value = GamingModeState.Enabling(
-                        0.50f,
-                        safeString(
-                            R.string.gaming_status_suspending_count,
-                            "Suspending ${candidates.size} background apps…",
-                            candidates.size
-                        )
-                    )
-                    val persistedAffected = settingsRepository.getGamingAffectedPackages().toMutableSet()
-                    persistedAffected.addAll(candidates)
-                    settingsRepository.setGamingAffectedPackages(persistedAffected)
-                    settingsRepository.flushRecoveryWrites()
-
-                    val suspendRes = privilegeManager.suspendPackages(candidates, suspended = true)
-                    val failedSet = suspendRes?.failedPackages?.toSet() ?: emptySet()
-                    val verifiedSuspended = if (suspendRes != null) {
-                        candidates.filter { it !in failedSet }.toSet()
-                    } else {
-                        emptySet()
-                    }
-                    settingsRepository.setGamingAffectedPackages(verifiedSuspended)
-                    _suspendedPackagesCount.value = verifiedSuspended.size
-
-                    settingsRepository.loadGamingOptimizationSnapshot()?.let { snap ->
-                        settingsRepository.saveGamingOptimizationSnapshot(
-                            snap.copy(affectedPackages = verifiedSuspended)
-                        )
-                    }
-
-                    ledgerExecutor.recordManual(
-                        stage = Stage.APPS,
-                        key = "suspended_apps",
-                        displayValue = "${verifiedSuspended.size} suspended",
-                        status = if (verifiedSuspended.isNotEmpty() || candidates.isEmpty()) OpStatus.APPLIED else OpStatus.FAILED,
-                        priority = OpPriority.PRIMARY
-                    )
-                } else {
-                    _suspendedPackagesCount.value = 0
-                }
-
-                // Apply DND if granted.
-                GamingDnd.enable(context)
-
-                // Apply platform-specific hardware optimizations.
-                when (targetPath) {
-                    GamingPlatformPath.VIVO -> {
-                        vivoGamingOptimizer.applyOptimizations(
-                            packageName = _activeGamePackage.value,
-                            pid = 0
-                        ) { progress, text ->
-                            _state.value = GamingModeState.Enabling(progress, text)
-                        }
-                    }
-                    GamingPlatformPath.IQOO -> {
-                        iqooGamingOptimizer.applyOptimizations(
-                            packageName = _activeGamePackage.value,
-                            pid = 0
-                        ) { progress, text ->
-                            _state.value = GamingModeState.Enabling(progress, text)
-                        }
-                    }
-                    GamingPlatformPath.GENERIC, GamingPlatformPath.NONE -> Unit
-                }
-
-                _isSessionActive.value = true
-                _isActive.value = true
-                isPulseActive = vivoSuiteGate.isVivoSuiteEnabled &&
-                    (targetPath == GamingPlatformPath.VIVO || targetPath == GamingPlatformPath.IQOO)
-                _state.value = GamingModeState.Active
-                GamingNotificationHelper.dismissRecoveryNotification(context)
+                runActivation(whitelist)
             } catch (e: Exception) {
                 FrameXLog.e("enableGamingMode failed", e, tag = TAG)
                 _state.value = GamingModeState.Error(
@@ -311,81 +173,203 @@ class GamingModeEngine @Inject constructor(
         }
     }
 
+    private fun fail(@StringRes resId: Int, fallback: String) {
+        _state.value = GamingModeState.Error(safeString(resId, fallback))
+    }
+
+    private fun enabling(progress: Float, @StringRes resId: Int, fallback: String) {
+        _state.value = GamingModeState.Enabling(progress, safeString(resId, fallback))
+    }
+
+    /** Activation steps in order. Each failure sets the error state and stops here. */
+    private suspend fun runActivation(whitelist: Set<String>) {
+        executionLedger.clear()
+        enabling(0.10f, R.string.gaming_status_preparing, "Preparing…")
+
+        val targetPath = vivoSuiteGate.resolveCurrentPlatformPath()
+        if (!cleanupStaleVivoPath(targetPath)) {
+            fail(R.string.gaming_err_revert_vivo_failed, "Failed to revert prior Vivo optimizations")
+            return
+        }
+        persistRecoveryRecord(targetPath)
+
+        enabling(0.25f, R.string.gaming_status_initializing, "Initializing…")
+        if (!applyBaselineOptimizations()) return
+
+        enabling(0.45f, R.string.gaming_status_suspending_bg, "Suspending Background Apps…")
+        suspendBackgroundApps(whitelist)
+        GamingDnd.enable(context)
+        applyPlatformOptimizations(targetPath)
+
+        _isSessionActive.value = true
+        _isActive.value = true
+        isPulseActive = vivoSuiteGate.isVivoSuiteEnabled &&
+            (targetPath == GamingPlatformPath.VIVO || targetPath == GamingPlatformPath.IQOO)
+        _state.value = GamingModeState.Active
+        GamingNotificationHelper.dismissRecoveryNotification(context)
+    }
+
+    /** Durable recovery record, written BEFORE any mutation (Rule 2.8 / Plan 6.2). */
+    private suspend fun persistRecoveryRecord(targetPath: GamingPlatformPath) {
+        settingsRepository.setGamingPlatformPath(targetPath)
+        settingsRepository.setGamingModeActive(true)
+        settingsRepository.setGamingAppliedVia(privilegeManager.currentMode.value)
+        settingsRepository.flushRecoveryWrites()
+    }
+
+    /** Captures the snapshot and applies the generic tweaks. Returns false after reporting failure. */
+    private suspend fun applyBaselineOptimizations(): Boolean {
+        val applied = genericGamingOptimizer.applyOptimizationsForGame(
+            packageName = _activeGamePackage.value,
+            uid = GamingProcessResolver.uidOf(context, _activeGamePackage.value)
+        )
+        if (!applied) {
+            settingsRepository.setGamingModeActive(false)
+            fail(R.string.gaming_err_snapshot_failed, "Failed to capture system settings snapshot")
+        }
+        return applied
+    }
+
+    /** Suspends background apps, persisting the candidate set first so a crash can undo it. */
+    private suspend fun suspendBackgroundApps(whitelist: Set<String>) {
+        val candidates = oemPackageResolver.resolvePackagesToSuspend(
+            context = context,
+            whitelist = whitelist,
+            launcherGames = settingsRepository.launcherGames.value,
+            deepFreezeEnabled = settingsRepository.deepFreezeEnabled.value
+        )
+        if (candidates.isEmpty()) {
+            _suspendedPackagesCount.value = 0
+            return
+        }
+        _state.value = GamingModeState.Enabling(
+            0.50f,
+            safeString(
+                R.string.gaming_status_suspending_count,
+                "Suspending ${candidates.size} background apps…",
+                candidates.size
+            )
+        )
+        settingsRepository.setGamingAffectedPackages(
+            settingsRepository.getGamingAffectedPackages() + candidates
+        )
+        settingsRepository.flushRecoveryWrites()
+
+        val result = privilegeManager.suspendPackages(candidates, suspended = true)
+        val failed = result?.failedPackages?.toSet() ?: emptySet()
+        val verified = if (result != null) candidates.filter { it !in failed }.toSet() else emptySet()
+        settingsRepository.setGamingAffectedPackages(verified)
+        _suspendedPackagesCount.value = verified.size
+        settingsRepository.loadGamingOptimizationSnapshot()?.let { snap ->
+            settingsRepository.saveGamingOptimizationSnapshot(snap.copy(affectedPackages = verified))
+        }
+        ledgerExecutor.recordManual(
+            stage = Stage.APPS,
+            key = "suspended_apps",
+            displayValue = "${verified.size} suspended",
+            status = if (verified.isNotEmpty()) OpStatus.APPLIED else OpStatus.FAILED,
+            priority = OpPriority.PRIMARY
+        )
+    }
+
+    private suspend fun applyPlatformOptimizations(path: GamingPlatformPath) {
+        val onProgress: (Float, String) -> Unit = { progress, text ->
+            _state.value = GamingModeState.Enabling(progress, text)
+        }
+        when (path) {
+            GamingPlatformPath.VIVO ->
+                vivoGamingOptimizer.applyOptimizations(_activeGamePackage.value, 0, onProgress)
+            GamingPlatformPath.IQOO ->
+                iqooGamingOptimizer.applyOptimizations(_activeGamePackage.value, 0, onProgress)
+            GamingPlatformPath.GENERIC, GamingPlatformPath.NONE -> Unit
+        }
+    }
+
     suspend fun disableGamingMode() = withContext(Dispatchers.IO) {
         engineMutex.withLock {
             _state.value = GamingModeState.Disabling
             stopMaintenancePulse()
-            val tStart = System.nanoTime()
-            fun phase(name: String, since: Long) =
-                FrameXLog.i("deactivate phase '$name' ${(System.nanoTime() - since) / 1_000_000}ms (total ${(System.nanoTime() - tStart) / 1_000_000}ms) mode=${privilegeManager.currentMode.value}", tag = TAG)
-
             if (!privilegeManager.awaitReady(READY_WAIT_MS)) {
-                val msg = safeString(
-                    R.string.gaming_err_deactivate_shizuku,
-                    "Deactivation incomplete: Privileged service unavailable. Tap to retry."
-                )
-                _state.value = GamingModeState.Error(msg)
-                GamingNotificationHelper.showRecoveryNotification(context)
+                reportDeactivationUnavailable()
                 return@withLock
             }
-
             try {
-                val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
-                val toUnsuspend = (snapshot?.affectedPackages ?: emptySet()) +
-                    settingsRepository.getGamingAffectedPackages()
-
-                var remainingSuspended = emptySet<String>()
-                if (toUnsuspend.isNotEmpty()) {
-                    val t = System.nanoTime()
-                    remainingSuspended = GamingSuspendPipeline.unsuspend(privilegeManager, toUnsuspend)
-                    phase("unsuspend ${toUnsuspend.size} pkgs", t)
-                    settingsRepository.setGamingAffectedPackages(remainingSuspended)
-                }
-                _suspendedPackagesCount.value = remainingSuspended.size
-
-                var t = System.nanoTime()
-                val platformReverted = revertPlatformOptimizations()
-                phase("platform revert ok=$platformReverted", t)
-                t = System.nanoTime()
-                val esportsReverted = genericGamingOptimizer.revertOptimizations()
-                phase("generic revert ok=$esportsReverted", t)
-                t = System.nanoTime()
-                GamingDnd.restore(context)
-                phase("dnd restore", t)
-
-                if (remainingSuspended.isNotEmpty() || !platformReverted || !esportsReverted) {
-                    val msg = safeString(
-                        R.string.gaming_err_deactivate_partial,
-                        "Deactivation incomplete: ${remainingSuspended.size} apps still suspended. Tap to retry.",
-                        remainingSuspended.size
-                    )
-                    _state.value = GamingModeState.Error(msg)
-                    GamingNotificationHelper.showRecoveryNotification(context)
-                    return@withLock
-                }
-
-                settingsRepository.setGamingPlatformPath(null)
-                settingsRepository.setGamingModeActive(false)
-                settingsRepository.setGamingAppliedVia(null)
-                settingsRepository.clearGamingOptimizationSnapshot()
-                _activeGamePackage.value = null
-                _isSessionActive.value = false
-                _isActive.value = false
-                isPulseActive = false
-                executionLedger.clear()
-                _state.value = GamingModeState.Idle
-                GamingNotificationHelper.dismissRecoveryNotification(context)
-                phase("deactivation complete", tStart)
+                runDeactivation()
             } catch (e: Exception) {
                 FrameXLog.e("disableGamingMode failed", e, tag = TAG)
-                _state.value = GamingModeState.Error(
-                    safeString(
-                        R.string.gaming_err_deactivate_shizuku,
-                        "Deactivation incomplete: Privileged service unavailable. Tap to retry."
-                    )
-                )
+                _state.value = GamingModeState.Error(deactivationUnavailableMessage())
             }
         }
+    }
+
+    private fun deactivationUnavailableMessage(): String = safeString(
+        R.string.gaming_err_deactivate_shizuku,
+        "Deactivation incomplete: Privileged service unavailable. Tap to retry."
+    )
+
+    private fun reportDeactivationUnavailable() {
+        _state.value = GamingModeState.Error(deactivationUnavailableMessage())
+        GamingNotificationHelper.showRecoveryNotification(context)
+    }
+
+    /** Undoes every change through the selected backend, timing each phase. */
+    private suspend fun runDeactivation() {
+        val tStart = System.nanoTime()
+        val timer = DeactivationTimer(tStart, privilegeManager.currentMode.value)
+        val remainingSuspended = unsuspendTrackedPackages(timer)
+
+        var t = System.nanoTime()
+        val platformReverted = revertPlatformOptimizations()
+        timer.log("platform revert ok=$platformReverted", t)
+        t = System.nanoTime()
+        val genericReverted = genericGamingOptimizer.revertOptimizations()
+        timer.log("generic revert ok=$genericReverted", t)
+        t = System.nanoTime()
+        GamingDnd.restore(context)
+        timer.log("dnd restore", t)
+
+        if (remainingSuspended.isNotEmpty() || !platformReverted || !genericReverted) {
+            _state.value = GamingModeState.Error(
+                safeString(
+                    R.string.gaming_err_deactivate_partial,
+                    "Deactivation incomplete: ${remainingSuspended.size} apps still suspended. Tap to retry.",
+                    remainingSuspended.size
+                )
+            )
+            GamingNotificationHelper.showRecoveryNotification(context)
+            return
+        }
+        clearSessionState()
+        timer.log("deactivation complete", tStart)
+    }
+
+    private suspend fun unsuspendTrackedPackages(timer: DeactivationTimer): Set<String> {
+        val snapshot = settingsRepository.loadGamingOptimizationSnapshot()
+        val toUnsuspend = (snapshot?.affectedPackages ?: emptySet()) +
+            settingsRepository.getGamingAffectedPackages()
+        var remaining = emptySet<String>()
+        if (toUnsuspend.isNotEmpty()) {
+            val t = System.nanoTime()
+            remaining = GamingSuspendPipeline.unsuspend(privilegeManager, toUnsuspend)
+            timer.log("unsuspend ${toUnsuspend.size} pkgs", t)
+            settingsRepository.setGamingAffectedPackages(remaining)
+        }
+        _suspendedPackagesCount.value = remaining.size
+        return remaining
+    }
+
+    private suspend fun clearSessionState() {
+        settingsRepository.setGamingPlatformPath(null)
+        settingsRepository.setGamingModeActive(false)
+        settingsRepository.setGamingAppliedVia(null)
+        settingsRepository.clearGamingOptimizationSnapshot()
+        _activeGamePackage.value = null
+        _isSessionActive.value = false
+        _isActive.value = false
+        isPulseActive = false
+        executionLedger.clear()
+        _state.value = GamingModeState.Idle
+        GamingNotificationHelper.dismissRecoveryNotification(context)
     }
 
     suspend fun revertPlatformOptimizations(): Boolean {

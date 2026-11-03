@@ -212,7 +212,7 @@ class GpuTuningController @Inject constructor(
             else -> return@withContext false
         }
         val ok = writeAndVerify(path, (maxFreqKHz * 1000).toString())
-        FrameXLog.i("GpuTuningController", "Set GPU max freq to ${maxFreqKHz}KHz -> verified: $ok")
+        FrameXLog.i("Set GPU max freq to ${maxFreqKHz}KHz -> verified: $ok", tag = "GpuTuningController")
         ok
     }
 
@@ -224,7 +224,7 @@ class GpuTuningController @Inject constructor(
             else -> return@withContext false
         }
         val ok = writeAndVerify(govPath, governor)
-        FrameXLog.i("GpuTuningController", "Set GPU governor to $governor -> verified: $ok")
+        FrameXLog.i("Set GPU governor to $governor -> verified: $ok", tag = "GpuTuningController")
         ok
     }
 

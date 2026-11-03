@@ -152,7 +152,7 @@ class CpuTuningController @Inject constructor(
         if (policyId < 0 || maxFreqKHz <= 0L) return@withContext false
         val path = "$CPUFREQ_ROOT/policy$policyId/scaling_max_freq"
         val ok = writeAndVerify(path, maxFreqKHz.toString(), lock)
-        FrameXLog.i("CpuTuningController", "Set policy$policyId maxFreq=$maxFreqKHz -> verified: $ok")
+        FrameXLog.i("Set policy$policyId maxFreq=$maxFreqKHz -> verified: $ok", tag = "CpuTuningController")
         ok
     }
 
@@ -160,7 +160,7 @@ class CpuTuningController @Inject constructor(
         if (policyId < 0 || !GOVERNOR_NAME.matches(governor)) return@withContext false
         val path = "$CPUFREQ_ROOT/policy$policyId/scaling_governor"
         val ok = writeAndVerify(path, governor)
-        FrameXLog.i("CpuTuningController", "Set policy$policyId governor=$governor -> verified: $ok")
+        FrameXLog.i("Set policy$policyId governor=$governor -> verified: $ok", tag = "CpuTuningController")
         ok
     }
 
