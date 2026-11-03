@@ -29,6 +29,9 @@ jobs:
             exit 1
           fi
 
+      - name: Size limits (functions 60 lines, files 500 lines)
+        run: python3 config/check_size_limits.py
+
       - name: Run Android Lint
         run: ./gradlew lint
 

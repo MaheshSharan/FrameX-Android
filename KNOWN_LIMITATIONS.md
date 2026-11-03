@@ -83,3 +83,20 @@ per-sensor HAL data at all. Battery Temp comes from a separate command
 
 **Detail:** On Vivo and iQOO firmware, only the fixed performance mode is blocked, because it can lock the display. The thermal throttling override, refresh-rate lock and touch boost still apply as before. If you see display problems on these devices, turn those options off in Gaming Mode settings and open an issue with your device and ROM.
 
+---
+
+## Gaming Mode: one setting rejected by the ROM
+
+**Symptom:** One Vivo or iQOO setting is refused by the device while the others apply.
+
+**Behavior:** FrameX does not roll back the rest of the session for a single refused key,
+because some ROMs refuse individual keys and would otherwise lose the whole suite. Every key
+that was enabled is still captured first and restored when Gaming Mode turns off.
+
+## Root tuning lock
+
+**Symptom:** After you apply CPU or GPU values in Root mode the section is greyed out.
+
+**Behavior:** This is intended. The nodes are made read-only (`chmod 444`) so system services
+cannot undo your values. Press **Unlock to edit** to change them again. Shizuku mode cannot
+change file modes, so it never locks.
