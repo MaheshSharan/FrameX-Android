@@ -50,7 +50,6 @@ object FrameXBorders {
 object FrameXMotion {
     const val DurationFast: Int = 150
     const val DurationMedium: Int = 300
-    const val DurationSlow: Int = 500
 
     val StandardEasing: Easing = FastOutSlowInEasing
 

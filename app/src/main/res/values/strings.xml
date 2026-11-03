@@ -10,24 +10,15 @@
     <string name="quick_tile_overlay">FrameX Overlay</string>
     <string name="quick_tile_overlay_active">Active</string>
     <string name="quick_tile_overlay_inactive">Inactive</string>
-    <string name="quick_tile_add_prompt">Add FrameX Overlay Tile</string>
 
     <!-- Common UI Labels & Actions -->
     <string name="action_start">Start</string>
-    <string name="action_stop">Stop</string>
-    <string name="action_apply">Apply</string>
     <string name="action_applied">Applied</string>
     <string name="action_apply_changes">Apply Changes</string>
-    <string name="action_save">Save</string>
-    <string name="action_reset">Reset</string>
-    <string name="action_close">Close</string>
-    <string name="action_cancel">Cancel</string>
-    <string name="action_done">Done</string>
     <string name="action_next">Next</string>
     <string name="action_skip">Skip</string>
     <string name="action_back">Back</string>
     <string name="action_refresh">Refresh</string>
-    <string name="action_settings">Settings</string>
     <string name="action_grant">Grant</string>
     <string name="action_granted">Granted</string>
     <string name="action_move_up">Move item up</string>
@@ -37,26 +28,19 @@
     <string name="cd_app_logo">FrameX Logo</string>
     <string name="cd_settings_button">Settings Button</string>
     <string name="cd_drag_handle">Drag to reorder</string>
-    <string name="cd_status_dot">Status Indicator</string>
     <string name="cd_sparkline_chart">Live Frame Rate History Graph</string>
 
     <!-- Dashboard -->
     <string name="dashboard_title">FrameX</string>
-    <string name="dashboard_subtitle">Real-time performance overlay</string>
     <string name="dashboard_overlay_status">OVERLAY STATUS</string>
     <string name="dashboard_status_active">Monitoring Active</string>
     <string name="dashboard_status_ready">Ready to Monitor</string>
     <string name="dashboard_badge_active">ACTIVE</string>
     <string name="dashboard_badge_inactive">INACTIVE</string>
-    <string name="dashboard_frame_rate">FRAME RATE</string>
     <string name="dashboard_fps_unit">FPS</string>
-    <string name="dashboard_avg_fps">AVG</string>
-    <string name="dashboard_one_percent_low">1% LOW</string>
-    <string name="dashboard_frametime">FRAMETIME</string>
     <string name="dashboard_start_overlay">Start Overlay</string>
     <string name="dashboard_stop_overlay">Stop Overlay</string>
     <string name="dashboard_complete_setup">Complete Setup First</string>
-    <string name="dashboard_missing_prefix">Missing: </string>
     <string name="dashboard_quick_access">QUICK ACCESS</string>
     <string name="dashboard_metrics_title">Metrics</string>
     <string name="dashboard_metrics_desc">Telemetry</string>
@@ -74,7 +58,6 @@
     <string name="dashboard_hero_desc_active">Overlay is currently active and gathering telemetry metrics.</string>
     <string name="dashboard_live_metrics">LIVE METRICS</string>
     <string name="dashboard_realtime">Real-time</string>
-    <string name="dashboard_customize">Customize</string>
     <string name="dashboard_tools">TOOLS</string>
     <string name="dashboard_session_logs_title">Session logs</string>
     <string name="dashboard_session_logs_desc">View and export gameplay logs</string>
@@ -168,9 +151,6 @@
     <string name="overlay_order_reset_toast">Order reset to default</string>
     <string name="overlay_saved_toast">Overlay configuration saved!</string>
     <string name="overlay_preview_label">PREVIEW</string>
-    <string name="overlay_mode_minimal">Minimal</string>
-    <string name="overlay_mode_compact">Compact</string>
-    <string name="overlay_mode_expanded">Expanded</string>
     <string name="overlay_mode_minimal_desc">Values only in a slim inline bar</string>
     <string name="overlay_mode_compact_desc">Balanced labels and metrics</string>
     <string name="overlay_mode_expanded_desc">Full vertical telemetry list</string>
@@ -214,7 +194,6 @@
     <string name="appearance_value_color_accent">Accent</string>
     <string name="appearance_value_color_silver">Silver</string>
     <string name="appearance_value_color_auto">Auto (Dynamic FPS)</string>
-    <string name="appearance_value_color_auto_desc">Auto Value Color: Dynamically colors metrics (Green, Yellow, Red) based on live FPS performance</string>
 
     <!-- Sub-screen Titles and Actions -->
     <string name="about_legal_title">About &amp; Legal</string>
@@ -245,7 +224,6 @@
     <string name="tuning_locked_note">Locked. Frequencies and governors are read-only until you unlock.</string>
     <string name="tuning_msg_applied_locked">Applied and locked. System services can no longer change these values.</string>
     <string name="tuning_msg_applied_unlocked">Applied. Locking needs Root.</string>
-    <string name="tuning_status_locked">Locked</string>
     <string name="tuning_restore_defaults">Restore defaults</string>
     <string name="tuning_stock">Stock</string>
     <string name="tuning_gpu_unsupported">Kernel node not exposed or unsupported GPU interface</string>
@@ -256,15 +234,7 @@
     <string name="tuning_policy_title">Policy %1$d (cores %2$s)</string>
     <string name="tuning_gpu_status">Current: %1$d MHz | Max: %2$d MHz | Governor: %3$s</string>
     <string name="tuning_cpu_status">Current: %1$d MHz | Cap: %2$d MHz (stock: %3$d MHz)</string>
-    <string name="tuning_confirm_title">Apply this change?</string>
-    <string name="tuning_confirm_body">%1$s\n\nThe system may override it later. Use Restore defaults to undo.</string>
-    <string name="tuning_confirm_apply">Apply</string>
-    <string name="tuning_desc_cpu_freq">Set the maximum frequency of CPU policy %1$d to %2$d MHz.</string>
-    <string name="tuning_desc_cpu_gov">Set the governor of CPU policy %1$d to %2$s.</string>
-    <string name="tuning_desc_gpu_freq">Change the GPU maximum clock.</string>
-    <string name="tuning_desc_gpu_gov">Change the GPU governor.</string>
     <string name="tuning_err_read_only">Tuning needs Root access that can write to the kernel.</string>
-    <string name="tuning_err_invalid_value">That value is not offered by this device.</string>
     <string name="tuning_err_verify_failed">The kernel did not keep that value.</string>
     <string name="tuning_err_restore_partial">Some values could not be restored. They are kept so you can retry.</string>
     <string name="tuning_msg_restored">Original values restored.</string>
@@ -298,10 +268,8 @@
     <string name="gaming_err_deactivate_partial">Deactivation incomplete: %1$d apps still suspended. Tap to retry.</string>
     <string name="gaming_status_preparing">Preparing…</string>
     <string name="gaming_status_initializing">Initializing…</string>
-    <string name="gaming_status_purging_ram">Purging RAM Cache…</string>
     <string name="gaming_status_suspending_bg">Suspending Background Apps…</string>
     <string name="gaming_status_suspending_count">Suspending %1$d background apps…</string>
-    <string name="gaming_status_purging_bg_cache">Purging background cache…</string>
 
     <!-- Performance Screen Toasts & Banners -->
     <string name="perf_toast_add_one_game">Kindly add a minimum of one game in game launcher</string>
@@ -320,11 +288,6 @@
     <string name="perf_toast_144_single_remove_err">Failed to remove from 144Hz Merge List</string>
     <string name="perf_toast_aot_compiled">AOT compiled %1$d app(s) to speed filter ✓</string>
     <string name="perf_toast_aot_compile_err">AOT compilation failed for one or more apps</string>
-    <string name="perf_banner_ram_boosted">Boosted! Freed %1$d MB, stopped %2$d apps</string>
-    <string name="perf_banner_ping_ok">Latency check complete: %1$d ms</string>
-    <string name="perf_banner_ping_fail">Latency check failed: network unreachable</string>
-    <string name="perf_banner_reset_ok">Device settings reset to OS defaults</string>
-    <string name="perf_banner_reset_partial">Device reset partially completed</string>
     <string name="perf_toast_open_shizuku_err">Unable to open Shizuku app</string>
     <string name="perf_toast_open_write_settings_err">Unable to open Write Settings</string>
     <string name="perf_toast_open_dnd_err">Unable to open DND settings</string>
@@ -335,19 +298,4 @@
     <string name="cd_gauge_summary">%1$s gauge, current %2$s</string>
 
     <!-- Additional Service & Performance Toast Strings -->
-    <string name="overlay_channel_name">FrameX Overlay Service</string>
-    <string name="gaming_mode_channel_name">FrameX Gaming Mode</string>
-    <string name="gaming_mode_notif_title">Gaming Mode Active</string>
-    <string name="gaming_mode_notif_text">Background apps suspended · DND enabled</string>
-    <string name="gaming_mode_action_deactivate">Deactivate</string>
-    <string name="gaming_recovery_channel_name">System State Recovery</string>
-    <string name="perf_toast_boosted_apps_cleared">Boosted! %1$d background apps cleared.</string>
-    <string name="perf_toast_launching_env_clean">Launching\u2026 (Background environment already clean)</string>
-    <string name="perf_toast_launching_grant_shizuku">Launching game (Grant Shizuku for RAM Boost)</string>
-    <string name="perf_toast_unable_to_launch_app">Unable to launch application.</string>
-    <string name="perf_toast_failed_to_launch_game">Failed to launch game.</string>
-    <string name="perf_toast_app_disabled_in_background">%1$s disabled in background.</string>
-    <string name="perf_toast_grant_shizuku_disable_system">Grant Shizuku permission to disable system apps.</string>
-    <string name="perf_toast_app_restored">Restored %1$s.</string>
-    <string name="perf_toast_grant_shizuku_restore_system">Grant Shizuku permission to restore system apps.</string>
 </resources>

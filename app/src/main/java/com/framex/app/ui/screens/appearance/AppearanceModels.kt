@@ -73,10 +73,7 @@ data class AppearanceUiState(
     val mode: String = "compact",
     val enabledModules: Set<String> = emptySet(),
     val enabledModuleIcons: Set<String> = emptySet(),
-    val moduleOrder: List<String> = emptyList(),
-
-    // Indicates whether settings are currently being saved
-    val isSaving: Boolean = false
+    val moduleOrder: List<String> = emptyList()
 ) {
     val hasChanges: Boolean
         get() = opacity != savedOpacity ||

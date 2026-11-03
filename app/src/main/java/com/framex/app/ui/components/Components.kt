@@ -4,11 +4,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
@@ -70,19 +68,6 @@ fun WovenNetBackground(
     )
 }
 
-/**
- * Dedicated horizontal full-width list action tile with tactile press response.
- */
-@Composable
-fun ActionRowTile(
-    title: String,
-    subtitle: String,
-    iconContainerColor: Color,
-    iconContentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showChevron: Boolean = true,
-    testTag: String = "action_row_tile_${title.lowercase().replace(' ', '_')}",
     icon: @Composable () -> Unit
 ) {
     val reduceMotion = FrameXMotion.rememberReduceMotion()
@@ -164,19 +149,6 @@ fun ActionRowTile(
     }
 }
 
-/**
- * Dedicated vertical grid action tile with tactile press response.
- */
-@Composable
-fun ActionGridCard(
-    title: String,
-    subtitle: String,
-    iconContainerColor: Color,
-    iconContentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    statusTag: (@Composable () -> Unit)? = null,
-    testTag: String = "action_grid_card_${title.lowercase().replace(' ', '_')}",
     icon: @Composable () -> Unit
 ) {
     val reduceMotion = FrameXMotion.rememberReduceMotion()

@@ -2,8 +2,6 @@ package com.framex.app.device
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import javax.inject.Inject
@@ -13,30 +11,8 @@ import javax.inject.Singleton
 open class DeviceDiagnosticManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val cachedProps = mutableMapOf<String, String>()
-
-    suspend fun loadProperties(): Map<String, String> = withContext(Dispatchers.IO) {
-        if (cachedProps.isNotEmpty()) return@withContext cachedProps
-
-        val keys = runCatching {
-            context.assets.open("getprop_keys.txt").bufferedReader().useLines { lines ->
-                lines.map { it.trim() }
-                    .filter { it.isNotEmpty() && !it.startsWith("#") }
-                    .toList()
-            }
-        }.getOrDefault(emptyList())
-
-        keys.forEach { key ->
-            val value = readSystemProperty(key)
-            if (value.isNotBlank()) {
-                cachedProps[key] = value
-            }
-        }
-        cachedProps
-    }
-
     fun getProperty(key: String): String? {
-        return cachedProps[key] ?: readSystemProperty(key).ifBlank { null }
+        return readSystemProperty(key).ifBlank { null }
     }
 
     open fun isVivoOnly(): Boolean {

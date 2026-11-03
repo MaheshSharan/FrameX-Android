@@ -30,11 +30,6 @@ class VivoIqooSharedTools @Inject constructor(
         queryContentUri("content://settings/system/perf_game_list")
     }
 
-    suspend fun getPerfGameList(): List<String> = withContext(Dispatchers.IO) {
-        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext emptyList()
-        getRawPerfGameList().split(":").map { it.trim() }.filter { it.isNotBlank() }
-    }
-
     suspend fun injectPerfGameList(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
@@ -126,15 +121,6 @@ class VivoIqooSharedTools @Inject constructor(
     // AOT Compilation & Package Filter Inspection
     // =========================================================================
 
-    suspend fun getPackageCompileFilter(packageName: String): String = withContext(Dispatchers.IO) {
-        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext ""
-        val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext "unknown"
-        val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        val line = dumpRes.output.lines().firstOrNull { it.contains("filter=") }?.trim().orEmpty()
-        val match = Regex("filter=\\[?([a-zA-Z0-9_-]+)\\]?").find(line)
-        match?.groupValues?.getOrNull(1) ?: if (line.isNotBlank()) line else "unknown"
-    }
-
     suspend fun compileSpeedAot(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
         val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
@@ -146,13 +132,6 @@ class VivoIqooSharedTools @Inject constructor(
         val success = isCompiled || filterSpeed
         FrameXLog.i("AOT speed compilation for $safePkg: success=$success (filterSpeed=$filterSpeed)", tag = TAG)
         success
-    }
-
-    suspend fun isSpeedCompiled(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        if (!vivoSuiteGate.isVivoSuiteEnabled) return@withContext false
-        val safePkg = ShellSanitizer.sanitizePackageName(packageName) ?: return@withContext false
-        val dumpRes = privilegeManager.exec("dumpsys package $safePkg | grep filter=")
-        dumpRes.output.contains("filter=[speed]", ignoreCase = true) == true
     }
 
     // =========================================================================

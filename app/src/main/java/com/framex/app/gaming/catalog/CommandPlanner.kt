@@ -1,6 +1,5 @@
 package com.framex.app.gaming.catalog
 
-import com.framex.app.gaming.ledger.Stage
 
 /** Reads the Execution Center switches. The pulse master switch is folded in by the reader. */
 fun interface ToggleState {
@@ -19,9 +18,6 @@ data class CommandPlan(
     fun activation(): List<CommandEntry> = enabled.filter { it.phase == Phase.ACTIVATION }
 
     fun pulse(): List<CommandEntry> = enabled.filter { it.phase == Phase.PULSE }
-
-    fun byStage(entries: List<CommandEntry>): Map<Stage, List<CommandEntry>> =
-        entries.groupBy { it.stage }
 }
 
 /**

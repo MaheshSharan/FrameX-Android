@@ -548,11 +548,8 @@ class VivoSuiteGateTest {
 
         // Optimization methods are gated by isVivoSuiteEnabled and return disabled values immediately
         assertFalse("injectPerfGameList must return false when suite disabled", sharedTools.injectPerfGameList("com.example.game"))
-        assertEquals("getPerfGameList must return emptyList when suite disabled", emptyList<String>(), sharedTools.getPerfGameList())
         assertEquals("getRawPerfGameList must return empty string when suite disabled", "", sharedTools.getRawPerfGameList())
-        assertEquals("getPackageCompileFilter must return empty string when suite disabled", "", sharedTools.getPackageCompileFilter("com.example.game"))
         assertFalse("compileSpeedAot must return false when suite disabled", sharedTools.compileSpeedAot("com.example.game"))
-        assertFalse("isSpeedCompiled must return false when suite disabled", sharedTools.isSpeedCompiled("com.example.game"))
     }
 
     @Test
@@ -575,11 +572,8 @@ class VivoSuiteGateTest {
         // All methods (both optimizations and cleanup) are disabled on non-Vivo hardware
         assertFalse(sharedTools.injectPerfGameList("com.example.game"))
         assertFalse("removePerfGame must return false on non-Vivo hardware", sharedTools.removePerfGame("com.example.game"))
-        assertEquals(emptyList<String>(), sharedTools.getPerfGameList())
         assertEquals("", sharedTools.getRawPerfGameList())
-        assertEquals("", sharedTools.getPackageCompileFilter("com.example.game"))
         assertFalse(sharedTools.compileSpeedAot("com.example.game"))
-        assertFalse(sharedTools.isSpeedCompiled("com.example.game"))
     }
 
     private data class EngineTestRig(

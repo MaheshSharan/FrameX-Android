@@ -2,7 +2,7 @@ package com.framex.app.metrics
 
 /**
  * Pure parser for the busiest process line in `dumpsys cpuinfo` output.
- * Same package-level style as [CpuStatParser] — no Android deps.
+ * Pure parser with no Android dependencies.
  */
 object CpuInfoTopParser {
 

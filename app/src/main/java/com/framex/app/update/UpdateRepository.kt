@@ -159,7 +159,7 @@ class UpdateRepository @Inject constructor(
                 return@withContext Result.failure(Exception("No APK asset attached to the latest release"))
             }
 
-            val isAvailable = isVersionHigher(tagName, BuildConfig.VERSION_NAME)
+            val isAvailable = VersionCompare.isHigher(tagName, BuildConfig.VERSION_NAME)
             Result.success(
                 AppUpdateInfo(
                     versionName = tagName,
@@ -272,23 +272,5 @@ class UpdateRepository @Inject constructor(
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun isVersionHigher(remoteVersion: String, currentVersion: String): Boolean {
-        try {
-            val remoteParts = remoteVersion.split('.').mapNotNull { it.takeWhile { char -> char.isDigit() }.toIntOrNull() }
-            val currentParts = currentVersion.split('.').mapNotNull { it.takeWhile { char -> char.isDigit() }.toIntOrNull() }
-
-            val maxLength = maxOf(remoteParts.size, currentParts.size)
-            for (i in 0 until maxLength) {
-                val remote = remoteParts.getOrElse(i) { 0 }
-                val current = currentParts.getOrElse(i) { 0 }
-                if (remote > current) return true
-                if (remote < current) return false
-            }
-        } catch (e: Exception) {
-            return remoteVersion != currentVersion
-        }
-        return false
     }
 }

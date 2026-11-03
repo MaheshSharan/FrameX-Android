@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.6.0
+## 1.6.0-beta
 
 ### Added
 - **Root mode.** Choose Shizuku, Root or None in Permissions. The selected mode is the only one used; FrameX never falls back from one to the other. Root uses one persistent shell (Magisk and KernelSU supported).
@@ -18,6 +18,8 @@
 - The overlay holds a partial wake lock only while it is sampling and releases it on screen-off, stop and teardown.
 - The overlay restarts after a reboot and after an app update.
 - The phantom-process guard moved out of the Vivo/iQOO code path and applies on Android 12 and later; its original value is restored when Gaming Mode ends.
+
+- The update check now offers `1.6.0` to `1.6.0-beta` users, and `-beta` tags are published as GitHub pre-releases.
 
 ### Fixed
 - Turning Gaming Mode off in Root mode could report that the privileged service was unavailable, and could take about 25 seconds. It now waits for the backend and restores in parallel groups.
