@@ -23,3 +23,30 @@ data class DevicePlatformInfo(
     val osVersion: String = "Android",
     val displayRefreshHz: Int = 60
 )
+
+/**
+ * Complete 8-KPI session summary matrix + thermal excursion metrics matching the per-app profiler report.
+ */
+@Immutable
+data class SessionKpiSummary(
+    val sampleCount: Int = 0,
+    val durationSec: Int = 0,
+    val maxFps: Float = 0f,
+    val minFps: Float = 0f,
+    val avgFps: Float = 0f,
+    val jitterPercent: Float = 0f,
+    val onePercentLowFps: Float = 0f,
+    val avgSocTempC: Float = 0f,
+    val maxSocTempC: Float = 0f,
+    val minSocTempC: Float = 0f,
+    val highTempDurationSec: Int = 0,
+    val maxBatteryTempC: Float = 0f,
+    val avgPowerWatts: Float = 0f,
+    val maxPowerWatts: Float = 0f,
+    val minPowerWatts: Float = 0f,
+    val maxFrameTimeMs: Int = 0
+) {
+    companion object {
+        const val HIGH_SOC_TEMP_THRESHOLD_C = 75f
+    }
+}

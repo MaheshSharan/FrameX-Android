@@ -95,7 +95,7 @@ class UpdateRepository @Inject constructor(
         updatesDir.listFiles { file -> file.name.startsWith("FrameX_v") && file.name.endsWith(".apk") }
             ?.forEach { file ->
                 val fileVersion = file.name.removePrefix("FrameX_v").removeSuffix(".apk")
-                if (!isVersionHigher(fileVersion, currentVersion)) {
+                if (!VersionCompare.isHigher(fileVersion, currentVersion)) {
                     file.delete()
                 }
             }

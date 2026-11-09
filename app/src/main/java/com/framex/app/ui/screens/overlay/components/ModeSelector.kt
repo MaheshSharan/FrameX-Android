@@ -8,7 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.ViewStream
 import androidx.compose.material3.Icon
@@ -39,7 +39,7 @@ private data class ModeCardItem(
 
 private val MODE_ITEMS = listOf(
     ModeCardItem("Minimal", Icons.Outlined.ViewStream, R.string.overlay_mode_minimal_desc),
-    ModeCardItem("Compact", Icons.Outlined.FormatListBulleted, R.string.overlay_mode_compact_desc),
+    ModeCardItem("Compact", Icons.AutoMirrored.Outlined.FormatListBulleted, R.string.overlay_mode_compact_desc),
     ModeCardItem("Expanded", Icons.Outlined.GridView, R.string.overlay_mode_expanded_desc)
 )
 

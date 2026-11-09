@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.DeviceThermostat
-import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -186,7 +186,7 @@ fun ThermalDiagnosticsScreen(
                 Spacer(modifier = Modifier.height(FrameXSpacing.XLarge))
 
                 ThermalSectionHeader(
-                    icon = Icons.Outlined.ShowChart,
+                    icon = Icons.AutoMirrored.Outlined.ShowChart,
                     title = "TELEMETRY TIMELINES"
                 )
                 Spacer(modifier = Modifier.height(10.dp))

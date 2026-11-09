@@ -240,12 +240,12 @@ internal fun MetricChartCard(
                         val series = seriesList[sIdx]
                         val linePath = strokePaths[sIdx].apply { reset() }
                         val areaPath = fillPaths[sIdx].apply { reset() }
-                        val maxVal = series.maxScale.coerceAtLeast(1f)
+                        val seriesMax = series.maxScale.coerceAtLeast(1f)
 
                         for (i in 0 until count) {
-                            val raw = series.selector(snapshots[i]).coerceIn(0f, maxVal)
+                            val raw = series.selector(snapshots[i]).coerceIn(0f, seriesMax)
                             val x = leftGutter + i * stepX
-                            val y = plotBottom - (raw / maxVal) * plotH
+                            val y = plotBottom - (raw / seriesMax) * plotH
                             if (i == 0) {
                                 linePath.moveTo(x, y)
                                 if (series.fillArea) {
