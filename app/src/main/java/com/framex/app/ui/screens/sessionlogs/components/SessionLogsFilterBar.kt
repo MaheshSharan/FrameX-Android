@@ -2,17 +2,13 @@ package com.framex.app.ui.screens.sessionlogs.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,17 +16,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.gaming.LogStatus
 import com.framex.app.ui.screens.sessionlogs.SessionLogFilter
+import com.framex.app.ui.screens.sessionlogs.color
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.StatusEmerald
+import com.framex.app.ui.theme.StatusRed
 
 private val ChipShape = RoundedCornerShape(8.dp)
 
 /**
- * Filter bar presenting category chips and quick actions for Export and Clear.
+ * Horizontally scrollable category chips for the audit log stream.
  */
 @Composable
 fun SessionLogsFilterBar(
@@ -40,32 +42,17 @@ fun SessionLogsFilterBar(
     failedCount: Int,
     infoCount: Int,
     onSelectFilter: (SessionLogFilter) -> Unit,
-    onCopyAll: () -> Unit,
-    onClearClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FilterChipsRow(
-            selectedFilter = selectedFilter,
-            totalCount = totalCount,
-            successCount = successCount,
-            failedCount = failedCount,
-            infoCount = infoCount,
-            onSelectFilter = onSelectFilter,
-            modifier = Modifier.weight(1f)
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        FilterActionButtons(
-            onCopyAll = onCopyAll,
-            onClearClick = onClearClick
-        )
-    }
+    FilterChipsRow(
+        selectedFilter = selectedFilter,
+        totalCount = totalCount,
+        successCount = successCount,
+        failedCount = failedCount,
+        infoCount = infoCount,
+        onSelectFilter = onSelectFilter,
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -102,43 +89,9 @@ private fun FilterChipsRow(
             FilterPillChip(
                 label = filterLabel,
                 count = count,
+                accent = filter.accent(),
                 isSelected = isSelected,
                 onClick = { onSelectFilter(filter) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun FilterActionButtons(
-    onCopyAll: () -> Unit,
-    onClearClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        IconButton(
-            onClick = onCopyAll,
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ContentCopy,
-                contentDescription = stringResource(R.string.session_logs_copy_all),
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        IconButton(
-            onClick = onClearClick,
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.DeleteOutline,
-                contentDescription = stringResource(R.string.session_logs_clear_logs),
-                tint = Color(0xFFF87171),
-                modifier = Modifier.size(18.dp)
             )
         }
     }
@@ -148,19 +101,21 @@ private fun FilterActionButtons(
 private fun FilterPillChip(
     label: String,
     count: Int,
+    accent: Color,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f)
-    val border = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.06f)
-    val textCol = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF94A3B8)
+    val bg = if (isSelected) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f)
+    val border = if (isSelected) accent.copy(alpha = 0.85f) else FrameXBorders.CardStroke
+    val textCol = if (isSelected) accent else Color(0xFF94A3B8)
 
     Box(
         modifier = Modifier
+            .minimumInteractiveComponentSize()
             .clip(ChipShape)
             .background(bg)
             .border(1.dp, border, ChipShape)
-            .clickable(onClick = onClick)
+            .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Row(
@@ -182,4 +137,12 @@ private fun FilterPillChip(
             )
         }
     }
+}
+
+@Composable
+private fun SessionLogFilter.accent(): Color = when (this) {
+    SessionLogFilter.ALL -> MaterialTheme.colorScheme.primary
+    SessionLogFilter.SUCCESS -> StatusEmerald
+    SessionLogFilter.FAILED -> StatusRed
+    SessionLogFilter.INFO -> LogStatus.INFO.color
 }

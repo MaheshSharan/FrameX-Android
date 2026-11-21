@@ -23,13 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,7 +147,7 @@ fun RequirementsSection(
             border = BorderStroke(FrameXBorders.ActiveBorderWidth, FrameXBorders.CardStroke)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(FrameXSpacing.Large)) {
-                RequirementsSummary(allReady, activeCount, items.size, accentGreen, warningAmber)
+                RequirementsSummary(allReady, activeCount, items.size, accentGreen, warningAmber, onOpenSystemStatus)
                 Spacer(modifier = Modifier.height(18.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                 Spacer(modifier = Modifier.height(16.dp))
@@ -182,12 +183,6 @@ fun RequirementsSection(
                     }
                 }
 
-                TextButton(
-                    onClick = onOpenSystemStatus,
-                    modifier = Modifier.align(Alignment.End).defaultMinSize(minHeight = 48.dp)
-                ) {
-                    Text(stringResource(R.string.perf_open_system_status))
-                }
             }
         }
     }
@@ -199,7 +194,8 @@ private fun RequirementsSummary(
     activeCount: Int,
     total: Int,
     accentGreen: Color,
-    warningAmber: Color
+    warningAmber: Color,
+    onOpenSystemStatus: () -> Unit
 ) {
     val tint = if (allReady) accentGreen else warningAmber
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -218,7 +214,7 @@ private fun RequirementsSummary(
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(if (allReady) R.string.perf_req_ready else R.string.perf_req_incomplete),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -233,6 +229,14 @@ private fun RequirementsSummary(
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
+            )
+        }
+        // Granting lives on System Status, so the card links there instead of prompting itself.
+        IconButton(onClick = onOpenSystemStatus) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = stringResource(R.string.perf_open_system_status),
+                tint = Color.White.copy(alpha = 0.7f)
             )
         }
     }

@@ -80,6 +80,7 @@
     <string name="session_logs_clear_action">Clear All</string>
     <string name="session_logs_cancel_action">Cancel</string>
     <string name="session_logs_copy_all">Export</string>
+    <string name="session_logs_copy_entry">Copy log details</string>
     <string name="session_logs_copied_toast">Session audit logs copied to clipboard</string>
     <string name="session_logs_entry_copied_toast">Log entry copied to clipboard</string>
     <string name="session_logs_filter_all">All</string>
@@ -92,6 +93,9 @@
 
     <!-- Splash Screen -->
     <string name="splash_performance_suite">PERFORMANCE SUITE</string>
+    <string name="about_current_version">Current version</string>
+    <string name="about_check_updates">Check for updates</string>
+    <string name="about_checking_updates">Checking…</string>
     <string name="splash_checking_updates">Checking for updates…</string>
     <string name="splash_no_updates_found">No updates found</string>
     <string name="splash_launching_framex">Launching FrameX…</string>

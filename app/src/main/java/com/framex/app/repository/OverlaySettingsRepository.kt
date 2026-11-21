@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.framex.app.metrics.DEFAULT_ENABLED_METRIC_MODULES
 import com.framex.app.metrics.DEFAULT_METRIC_MODULE_ORDER
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +18,8 @@ class OverlaySettingsRepository @Inject constructor(
     private val store: FrameXPreferenceStore
 ) {
     private val defaultOrderKeys: List<String> = DEFAULT_METRIC_MODULE_ORDER.map { it.storageKey }
-    private val defaultEnabledModules = setOf("fps", "cpu", "ram", "temp", "battery_level")
+    private val defaultEnabledModules: Set<String> =
+        DEFAULT_ENABLED_METRIC_MODULES.map { it.storageKey }.toSet()
 
     private val _overlayMode = MutableStateFlow(store.getString("overlay_mode", "Compact") ?: "Compact")
     val overlayMode: StateFlow<String> = _overlayMode.asStateFlow()

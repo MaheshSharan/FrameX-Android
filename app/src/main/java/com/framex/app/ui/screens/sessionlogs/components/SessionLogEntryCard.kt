@@ -13,10 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.framex.app.R
 import com.framex.app.gaming.LogStatus
 import com.framex.app.gaming.SystemAuditLog
 import com.framex.app.ui.screens.sessionlogs.SessionLogsUtils
@@ -37,6 +39,7 @@ fun SessionLogEntryCard(
     onCopy: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val copyLabel = stringResource(R.string.session_logs_copy_entry)
     val formattedTime = remember(log.timestamp) {
         SessionLogsUtils.formatTimestamp(log.timestamp)
     }
@@ -48,7 +51,7 @@ fun SessionLogEntryCard(
             .background(Color(0xFF0D0E13))
             .border(1.dp, Color.White.copy(alpha = 0.06f), LogCardShape)
             .clickable(
-                onClickLabel = "Copy log details",
+                onClickLabel = copyLabel,
                 onClick = onCopy
             )
             .padding(12.dp)

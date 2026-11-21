@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +24,7 @@ fun PerformanceRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val listState = rememberLazyListState()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -45,6 +47,8 @@ fun PerformanceRoute(
                     }
                     Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
                 }
+                PerformanceUiEffect.ScrollToGameLauncher ->
+                    listState.animateScrollToItem(GAME_LAUNCHER_ITEM_INDEX)
             }
         }
     }
@@ -56,6 +60,7 @@ fun PerformanceRoute(
         setGameConfigBoostRam = viewModel::setGameConfigBoostRam,
         onNavigateToPermissions = onNavigateToPermissions,
         onNavigateBack = onNavigateBack,
-        modifier = modifier
+        modifier = modifier,
+        listState = listState
     )
 }

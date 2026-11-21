@@ -260,6 +260,7 @@ class PerformanceViewModel @Inject constructor(
     fun enableGamingMode() {
         if (settingsRepository.launcherGames.value.isEmpty()) {
             _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
+            _effectChannel.trySend(PerformanceUiEffect.ScrollToGameLauncher)
             return
         }
         viewModelScope.launch {

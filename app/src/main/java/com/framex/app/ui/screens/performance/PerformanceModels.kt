@@ -91,6 +91,9 @@ sealed interface PerformanceUiEffect {
         @androidx.annotation.StringRes val messageResId: Int,
         val formatArgs: List<Any> = emptyList()
     ) : PerformanceUiEffect
+
+    /** Brings the Game Launcher section into view, e.g. when activation needs a game first. */
+    data object ScrollToGameLauncher : PerformanceUiEffect
 }
 
 data class SystemSettingsGroup(
