@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -56,6 +57,8 @@ class AppearanceViewModel @Inject constructor(
 
     private val _draftState = MutableStateFlow<DraftAppearance?>(null)
 
+    private val _previewBackgroundIndex = MutableStateFlow(0)
+
     private val _effectChannel = Channel<AppearanceUiEffect>(Channel.BUFFERED)
     val effect = _effectChannel.receiveAsFlow()
 
@@ -91,8 +94,9 @@ class AppearanceViewModel @Inject constructor(
         appearanceStream,
         containerStream,
         modulesStream,
-        _draftState
-    ) { app, cont, mods, draft ->
+        _draftState,
+        _previewBackgroundIndex
+    ) { app, cont, mods, draft, previewBg ->
         AppearanceUiState(
             savedOpacity = app.opacity,
             savedTextSize = app.textSize,
@@ -117,7 +121,8 @@ class AppearanceViewModel @Inject constructor(
             mode = mods.mode,
             enabledModules = mods.enabledModules,
             enabledModuleIcons = mods.enabledModuleIcons,
-            moduleOrder = mods.moduleOrder
+            moduleOrder = mods.moduleOrder,
+            previewBackgroundIndex = previewBg
         )
     }.stateIn(
         scope = viewModelScope,
@@ -151,6 +156,9 @@ class AppearanceViewModel @Inject constructor(
             is AppearanceUiEvent.SetBorderColorIndex -> updateDraft { it.copy(borderColorIndex = event.index) }
             is AppearanceUiEvent.SetTextColorIndex -> updateDraft { it.copy(textColorIndex = event.index) }
             is AppearanceUiEvent.SetCpuHotWarning -> updateDraft { it.copy(cpuHotWarning = event.enabled) }
+            AppearanceUiEvent.CyclePreviewBackground -> _previewBackgroundIndex.update {
+                (it + 1) % PreviewBackground.entries.size
+            }
             AppearanceUiEvent.ResetChanges -> _draftState.value = null
             AppearanceUiEvent.SaveChanges -> saveCurrentDraft()
         }

@@ -1,6 +1,7 @@
 package com.framex.app.ui.screens.appearance
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -11,6 +12,26 @@ enum class BackgroundOption(val color: Color, val labelRes: Int) {
     NAVY(Color(0xFF0D1117), com.framex.app.R.string.appearance_bg_navy),
     CHARCOAL(Color(0xFF1C1C1E), com.framex.app.R.string.appearance_bg_charcoal),
     CLEAR(Color.Transparent, com.framex.app.R.string.appearance_bg_clear)
+}
+
+/**
+ * Backdrops behind the preview card so overlay opacity can be judged against
+ * dark, light, and busy in-game scenes. Selection is transient, never persisted.
+ */
+enum class PreviewBackground(val brush: Brush, val labelRes: Int) {
+    DARK(Brush.linearGradient(listOf(Color(0xFF1E2024), Color(0xFF1E2024))), com.framex.app.R.string.appearance_preview_bg_dark),
+    LIGHT(Brush.linearGradient(listOf(Color(0xFFF2F2F2), Color(0xFFF2F2F2))), com.framex.app.R.string.appearance_preview_bg_light),
+    SUNSET(Brush.linearGradient(listOf(Color(0xFFFF9A3C), Color(0xFFD6336C), Color(0xFF3B1C6B))), com.framex.app.R.string.appearance_preview_bg_sunset),
+    FOREST(Brush.linearGradient(listOf(Color(0xFF9BD97B), Color(0xFF2E7D32), Color(0xFF0B2E13))), com.framex.app.R.string.appearance_preview_bg_forest),
+    BUSY(
+        Brush.horizontalGradient(
+            0.0f to Color(0xFFE53935), 0.25f to Color(0xFFE53935),
+            0.25f to Color(0xFFFDD835), 0.5f to Color(0xFFFDD835),
+            0.5f to Color(0xFF1E88E5), 0.75f to Color(0xFF1E88E5),
+            0.75f to Color(0xFF43A047), 1.0f to Color(0xFF43A047)
+        ),
+        com.framex.app.R.string.appearance_preview_bg_busy
+    )
 }
 
 /**
@@ -73,7 +94,10 @@ data class AppearanceUiState(
     val mode: String = "compact",
     val enabledModules: Set<String> = emptySet(),
     val enabledModuleIcons: Set<String> = emptySet(),
-    val moduleOrder: List<String> = emptyList()
+    val moduleOrder: List<String> = emptyList(),
+
+    // Preview-only backdrop index into PreviewBackground; not persisted.
+    val previewBackgroundIndex: Int = 0
 ) {
     val hasChanges: Boolean
         get() = opacity != savedOpacity ||
@@ -100,6 +124,7 @@ sealed interface AppearanceUiEvent {
     data class SetBorderColorIndex(val index: Int) : AppearanceUiEvent
     data class SetTextColorIndex(val index: Int) : AppearanceUiEvent
     data class SetCpuHotWarning(val enabled: Boolean) : AppearanceUiEvent
+    data object CyclePreviewBackground : AppearanceUiEvent
     data object SaveChanges : AppearanceUiEvent
     data object ResetChanges : AppearanceUiEvent
 }
