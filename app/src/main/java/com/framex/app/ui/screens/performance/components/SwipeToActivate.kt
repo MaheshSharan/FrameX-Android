@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.framex.app.ui.theme.FrameXMotion
 import kotlinx.coroutines.delay
 
 @Composable
@@ -48,6 +49,7 @@ fun SwipeToActivate(
     resultText: String = "DONE",
     onActivated: () -> Unit
 ) {
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val trackWidthDp = 300.dp
     val thumbSizeDp = 52.dp
@@ -83,35 +85,46 @@ fun SwipeToActivate(
     }
     val animatedOffset by animateFloatAsState(
         targetValue = targetOffset,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = if (reduceMotion) {
+            snap()
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
         label = "swipeOffset"
     )
 
-    // Smooth particle time ticker for active track twinkle
-    val infiniteTransition = rememberInfiniteTransition(label = "particleTimeline")
-    val tickerTime by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "particleClock"
-    )
-
-    val idleBounce by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (!isCompleted && !isBusy && !showResult && dragOffset < 1f) 3f else 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "idleBounce"
-    )
-    val idleBounceActive = !isCompleted && !isBusy && !showResult && dragOffset < 1f
+    val idleBounceActive = !reduceMotion && !isCompleted && !isBusy && !showResult && dragOffset < 1f
+    val tickerTime: Float
+    val idleBounce: Float
+    if (reduceMotion) {
+        tickerTime = 0f
+        idleBounce = 0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "particleTimeline")
+        val animatedTicker by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(12000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "particleClock"
+        )
+        val animatedBounce by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = if (idleBounceActive) 3f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "idleBounce"
+        )
+        tickerTime = animatedTicker
+        idleBounce = animatedBounce
+    }
 
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val progress = remember(animatedOffset, maxDrag) {

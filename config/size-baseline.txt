@@ -1,0 +1,16 @@
+file ui/screens/performance/PerformanceViewModel.kt
+fun hardware/CpuTuningController.kt probeCpuClusters
+fun metrics/CpuTopologyParser.kt buildSnapshot
+fun metrics/CpuTopologyParser.kt parseTelemetryPayload
+fun metrics/CpuTopologyParser.kt readLocalFallback
+fun metrics/MetricsEngine.kt updateActiveCollectors
+fun metrics/ThermalServiceParser.kt parse
+fun metrics/ThermalServiceParser.kt parseFallbackZones
+fun overlay/OverlayManager.kt showOverlay
+fun shizuku/CommandRunnerService.kt readCpuTelemetry
+fun shizuku/CommandRunnerService.kt readViaSysfs
+fun shizuku/ShizukuManager.kt connectUserService
+fun ui/screens/overlay/OverlayCustomizationViewModel.kt onEvent
+fun ui/screens/thermal/ThermalKpiCalculator.kt computeSessionKpiSummary
+fun update/UpdateRepository.kt checkForUpdates
+fun update/UpdateRepository.kt downloadUpdateApk

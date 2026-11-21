@@ -27,14 +27,6 @@ object SliderEffects {
                 )
             }
 
-            // Memory Boost: Fallback
-            val MemoryBoost = SliderPalette(
-                startColor = Color(0xFF0284C7),
-                midColor = Color(0xFF0070F3),
-                endColor = Color(0xFF00E5FF),
-                thumbColor = Color(0xFF00E5FF)
-            )
-
             // Network Ping: Emerald / Mint
             val NetworkPing = SliderPalette(
                 startColor = Color(0xFF059669),

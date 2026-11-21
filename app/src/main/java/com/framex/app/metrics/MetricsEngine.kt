@@ -1,8 +1,17 @@
 package com.framex.app.metrics
 
 import android.os.SystemClock
+import androidx.compose.runtime.Immutable
 import com.framex.app.gaming.LogStatus
 import com.framex.app.gaming.SystemAuditLogRepository
+import com.framex.app.metrics.monitors.BatteryMonitor
+import com.framex.app.metrics.monitors.CpuMonitor
+import com.framex.app.metrics.monitors.FpsMonitor
+import com.framex.app.metrics.monitors.NetworkMonitor
+import com.framex.app.metrics.monitors.PingMonitor
+import com.framex.app.metrics.monitors.RamMonitor
+import com.framex.app.metrics.monitors.ThermalMonitor
+import com.framex.app.metrics.monitors.TopProcessMonitor
 import com.framex.app.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +29,7 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Immutable
 data class MetricsState(
     val fps: Int = 0,
     val jankyFrames: Int = 0,
@@ -99,7 +109,6 @@ class MetricsEngine @Inject constructor(
     // Tracks whether the floating overlay window is actively visible on screen.
     // Prevents polling overlay modules when the overlay service is stopped/hidden.
     private val _isOverlayActive = MutableStateFlow(false)
-    val isOverlayActive: StateFlow<Boolean> = _isOverlayActive.asStateFlow()
 
     private val _screenOverrideRequests = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val screenOverrideModules = MutableStateFlow<Set<String>>(emptySet())
@@ -111,13 +120,6 @@ class MetricsEngine @Inject constructor(
     fun resetSessionTimer() {
         sessionStartTimeMs = SystemClock.elapsedRealtime()
         _metricsState.value = _metricsState.value.copy(sessionElapsedSec = 0L)
-    }
-
-    fun clearSnapshotHistory() {
-        synchronized(ringLock) {
-            snapshotRing.clear()
-            _snapshotHistory.value = emptyList()
-        }
     }
 
     private fun getCurrentFormattedTime(): String {

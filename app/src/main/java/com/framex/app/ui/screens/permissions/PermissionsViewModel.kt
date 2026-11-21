@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.framex.app.R
 import com.framex.app.repository.SystemPermissionRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
+import com.framex.app.privilege.PrivilegeMode
+import com.framex.app.privilege.SwitchResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,12 +15,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class PermissionsViewModel @Inject constructor(
     private val systemPermissionRepository: SystemPermissionRepository,
-    private val shizukuManager: ShizukuManager
+    private val privilegeManager: PrivilegeManager
 ) : ViewModel() {
 
     private val _effectChannel = Channel<PermissionsUiEffect>(Channel.BUFFERED)
@@ -27,11 +30,13 @@ class PermissionsViewModel @Inject constructor(
     private val systemPermissionsState = MutableStateFlow(systemPermissionRepository.getPermissionsSnapshot())
 
     val uiState: StateFlow<PermissionsUiState> = combine(
-        shizukuManager.isShizukuAvailable,
-        shizukuManager.hasPermission,
+        privilegeManager.isAvailable,
+        privilegeManager.isReady,
+        privilegeManager.currentMode,
         systemPermissionsState
-    ) { isAvailable, hasPermission, sysState ->
+    ) { isAvailable, hasPermission, mode, sysState ->
         PermissionsUiState(
+            selectedMode = mode,
             isShizukuAvailable = isAvailable,
             hasShizukuPermission = hasPermission,
             hasOverlayPermission = sysState.hasOverlayPermission,
@@ -50,6 +55,7 @@ class PermissionsViewModel @Inject constructor(
         when (event) {
             PermissionsUiEvent.LaunchShizukuApp -> launchShizukuApp()
             PermissionsUiEvent.RequestShizukuPermission -> requestShizukuPermission()
+            is PermissionsUiEvent.SelectMode -> selectMode(event.mode)
             is PermissionsUiEvent.RequestPermission -> requestPermission(event.id)
             PermissionsUiEvent.RefreshPermissions -> refreshPermissions()
             is PermissionsUiEvent.UpdateNotificationPermission -> updateNotificationPermission(event.granted)
@@ -64,9 +70,25 @@ class PermissionsViewModel @Inject constructor(
         }
     }
 
+    private fun selectMode(mode: PrivilegeMode) {
+        viewModelScope.launch {
+            when (privilegeManager.switchMode(mode)) {
+                SwitchResult.SWITCHED -> if (mode == PrivilegeMode.ROOT) privilegeManager.requestAccess()
+                SwitchResult.BLOCKED_GAMING_ACTIVE ->
+                    _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_mode_blocked_gaming))
+                SwitchResult.BLOCKED_RECOVERY_PENDING ->
+                    _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_mode_blocked_recovery))
+            }
+        }
+    }
+
     private fun requestShizukuPermission() {
-        if (shizukuManager.isShizukuAvailable.value) {
-            shizukuManager.requestPermission()
+        if (privilegeManager.currentMode.value == PrivilegeMode.ROOT) {
+            viewModelScope.launch { privilegeManager.requestAccess() }
+            return
+        }
+        if (privilegeManager.isAvailable.value) {
+            viewModelScope.launch { privilegeManager.requestAccess() }
         } else {
             _effectChannel.trySend(PermissionsUiEffect.ShowToast(R.string.perm_start_shizuku_first))
         }
@@ -84,7 +106,7 @@ class PermissionsViewModel @Inject constructor(
     }
 
     fun refreshPermissions() {
-        shizukuManager.refreshState()
+        privilegeManager.refresh()
         systemPermissionsState.value = systemPermissionRepository.getPermissionsSnapshot()
     }
 

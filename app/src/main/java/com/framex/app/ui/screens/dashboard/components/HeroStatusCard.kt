@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
@@ -39,7 +40,7 @@ import com.framex.app.ui.screens.dashboard.DashboardUiState
 import com.framex.app.ui.screens.dashboard.OverlayActionState
 import com.framex.app.ui.theme.FrameXMotion
 import com.framex.app.ui.theme.FrameXShapes
-import androidx.compose.ui.text.style.TextOverflow
+import com.framex.app.ui.theme.StatusGreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -85,8 +86,9 @@ fun HeroStatusCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
     val accentColor = MaterialTheme.colorScheme.primary
-    val emeraldColor = Color(0xFF22C55E)
+    val emeraldColor = StatusGreen
     val cardBackground = Color(0xFF0C0A0D)
 
     val heroBitmap by produceState<ImageBitmap?>(
@@ -97,16 +99,21 @@ fun HeroStatusCard(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "heroDotPulse")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FrameXMotion.StandardEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "heroDotAlpha"
-    )
+    val dotAlpha = if (reduceMotion || !uiState.isOverlayRunning) {
+        1.0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "heroDotPulse")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = FrameXMotion.StandardEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "heroDotAlpha"
+        )
+        animated
+    }
 
     val cardShape = FrameXShapes.Card
 
@@ -228,7 +235,13 @@ fun HeroStatusCard(
             // Headline Title
             AnimatedContent(
                 targetState = uiState.isOverlayRunning,
-                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+                transitionSpec = {
+                    if (reduceMotion) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                    }
+                },
                 label = "statusTitleTransition"
             ) { isRunning ->
                 Text(
@@ -271,7 +284,11 @@ fun HeroStatusCard(
                     else -> OverlayActionState.MISSING_PERMISSIONS
                 },
                 transitionSpec = {
-                    fadeIn(tween(FrameXMotion.DurationMedium)) togetherWith fadeOut(tween(FrameXMotion.DurationFast))
+                    if (reduceMotion) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        fadeIn(tween(FrameXMotion.DurationMedium)) togetherWith fadeOut(tween(FrameXMotion.DurationFast))
+                    }
                 },
                 label = "heroActionTransition"
             ) { actionState ->

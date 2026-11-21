@@ -53,46 +53,6 @@ fun getTopProcessDisplayValue(name: String?, percent: Float, readStatus: MetricR
     else -> "—"
 }
 
-fun buildStandardizedThermalChannels(
-    state: MetricsState,
-    cpuPeak: Float,
-    cpuAvg: Float,
-    cpuDelta: Float,
-    gpuPeak: Float,
-    gpuAvg: Float,
-    skinPeak: Float,
-    skinAvg: Float,
-    skinDelta: Float,
-    batteryPeak: Float,
-    batteryAvg: Float,
-    batteryDelta: Float
-): List<ThermalChannelState> {
-    fun sensorCapability(hasSensor: Boolean, tempC: Float): MetricCapability = when {
-        state.thermalReadStatus == MetricReadStatus.NoShizuku ->
-            MetricReadStatus.NoShizuku.toCapability(requiresShizuku = true)
-        state.thermalReadStatus == MetricReadStatus.Loading ->
-            MetricReadStatus.Loading.toCapability(requiresShizuku = true)
-        hasSensor && tempC > 0f ->
-            MetricReadStatus.Ok.toCapability(requiresShizuku = true)
-        else ->
-            MetricReadStatus.HardwareUnsupported.toCapability(requiresShizuku = false)
-    }
-
-    val batteryCap = if (state.batteryTempC > 0f) {
-        MetricReadStatus.Ok.toCapability(requiresShizuku = false)
-    } else {
-        MetricReadStatus.NoData.toCapability(requiresShizuku = false)
-    }
-
-    return listOf(
-        ThermalChannelState(StandardizedThermalChannel.SOC_COMPLEX, state.thermalCpuC, cpuPeak, cpuAvg, cpuDelta, sensorCapability(state.hasThermalCpu, state.thermalCpuC)),
-        ThermalChannelState(StandardizedThermalChannel.GPU, state.thermalGpuC, gpuPeak, gpuAvg, 0f, sensorCapability(state.hasThermalGpu, state.thermalGpuC)),
-        ThermalChannelState(StandardizedThermalChannel.CHASSIS_SKIN, state.thermalSkinC, skinPeak, skinAvg, skinDelta, sensorCapability(state.hasThermalSkin, state.thermalSkinC)),
-        ThermalChannelState(StandardizedThermalChannel.BATTERY, state.batteryTempC, batteryPeak, batteryAvg, batteryDelta, batteryCap),
-        ThermalChannelState(StandardizedThermalChannel.NPU, state.thermalNpuC, state.thermalNpuC, state.thermalNpuC, 0f, sensorCapability(state.hasThermalNpu, state.thermalNpuC))
-    )
-}
-
 fun formatDurationMinSec(totalSec: Int): String {
     if (totalSec <= 0) return "0s"
     val mins = totalSec / 60

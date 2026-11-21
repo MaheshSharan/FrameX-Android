@@ -29,6 +29,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.ui.theme.Amber
+import com.framex.app.ui.theme.FrameXMotion
+import com.framex.app.ui.theme.MutedBlue
+import com.framex.app.ui.theme.MutedGreen
+import com.framex.app.ui.theme.StatusAmber
+import com.framex.app.ui.theme.StatusEmerald
+import com.framex.app.ui.theme.StatusGreen
 
 /**
  * 2x2 Quick Access Grid for primary configuration destinations:
@@ -44,20 +51,26 @@ fun QuickAccessGrid(
     onNavigateToPermissions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val emeraldColor = Color(0xFF22C55E)
+    val reduceMotion = FrameXMotion.rememberReduceMotion()
+    val emeraldColor = StatusGreen
     val errorColor = MaterialTheme.colorScheme.error
 
-    // Pulsing glow animation scoped exclusively to graphicsLayer to prevent recomposition spill
-    val infiniteTransition = rememberInfiniteTransition(label = "shizukuGlowPulse")
-    val alphaGlow by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shizukuGlowAlpha"
-    )
+    // Pulsing glow animation scoped exclusively to graphicsLayer; static when reduce motion is enabled
+    val alphaGlow = if (reduceMotion || !isShizukuReady) {
+        1.0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "shizukuGlowPulse")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "shizukuGlowAlpha"
+        )
+        animated
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Section Header: Pure white icon and typography
@@ -111,8 +124,8 @@ fun QuickAccessGrid(
             QuickAccessCard(
                 title = stringResource(R.string.dashboard_theme_title),
                 subtitle = stringResource(R.string.dashboard_theme_desc),
-                iconContainerColor = Color(0xFFF59E0B).copy(alpha = 0.16f),
-                iconContentColor = Color(0xFFFBBF24),
+                iconContainerColor = StatusAmber.copy(alpha = 0.16f),
+                iconContentColor = Amber,
                 onClick = onNavigateToAppearance,
                 modifier = Modifier
                     .weight(1f)
@@ -139,8 +152,8 @@ fun QuickAccessGrid(
             QuickAccessCard(
                 title = stringResource(R.string.dashboard_performance_title),
                 subtitle = stringResource(R.string.dashboard_performance_desc),
-                iconContainerColor = Color(0xFF10B981).copy(alpha = 0.16f),
-                iconContentColor = Color(0xFF34D399),
+                iconContainerColor = StatusEmerald.copy(alpha = 0.16f),
+                iconContentColor = MutedGreen,
                 onClick = onNavigateToPerformance,
                 modifier = Modifier
                     .weight(1f)
@@ -194,7 +207,7 @@ fun QuickAccessGrid(
                     errorColor.copy(alpha = 0.16f)
                 },
                 iconContentColor = if (isShizukuReady) {
-                    Color(0xFF60A5FA)
+                    MutedBlue
                 } else {
                     errorColor
                 },
@@ -205,7 +218,7 @@ fun QuickAccessGrid(
                 icon = {
                     Text(
                         text = stringResource(R.string.dashboard_adb),
-                        color = if (isShizukuReady) Color(0xFF60A5FA) else errorColor,
+                        color = if (isShizukuReady) MutedBlue else errorColor,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 11.sp

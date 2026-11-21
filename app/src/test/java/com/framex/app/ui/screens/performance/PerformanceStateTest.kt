@@ -39,13 +39,11 @@ class PerformanceStateTest {
         )
         val session = ActiveGamingSession(
             title = "Gaming Mode Active",
-            isVivoDevice = true,
             activeGamePackage = "com.test.game",
             suspendedAppsCount = 3,
             summary = summary
         )
         assertEquals("Gaming Mode Active", session.title)
-        assertTrue(session.isVivoDevice)
         assertEquals("com.test.game", session.activeGamePackage)
         assertEquals(3, session.suspendedAppsCount)
         assertEquals(5, session.summary.totalApplied)

@@ -2,7 +2,7 @@ package com.framex.app.gaming.ledger
 
 import com.framex.app.gaming.LogStatus
 import com.framex.app.gaming.SystemAuditLogRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,7 +15,7 @@ data class CommandSpec(
 
 @Singleton
 class LedgerExecutor @Inject constructor(
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val executionLedger: ExecutionLedger,
     private val auditLogRepository: SystemAuditLogRepository
 ) {
@@ -30,14 +30,18 @@ class LedgerExecutor @Inject constructor(
         specs: List<CommandSpec>
     ): Boolean = withContext(Dispatchers.IO) {
         if (specs.isEmpty()) return@withContext true
-        if (!shizukuManager.isShizukuAvailable.value || !shizukuManager.hasPermission.value) {
+        if (!privilegeManager.isReady.value) {
+            com.framex.app.utils.FrameXLog.w(
+                "executeBatch(): privilegeManager not ready, skipping stage=$stage commands=${specs.map { it.command }}",
+                tag = TAG
+            )
             recordPermissionFailure(stage, specs)
             return@withContext false
         }
 
         val chained = buildChainedPayload(specs)
-        val result = shizukuManager.executeCommandWithResult(chained)
-        val parsedResults = parseBatchOutput(result?.output.orEmpty(), specs.size)
+        val result = privilegeManager.exec(chained, BATCH_TIMEOUT_MS)
+        val parsedResults = parseBatchOutput(result.output, specs.size)
 
         processBatchResults(stage, specs, parsedResults)
     }
@@ -76,7 +80,15 @@ class LedgerExecutor @Inject constructor(
             val cmdResult = parsedResults.getOrNull(index)
 
             val isSuccess = cmdResult != null && cmdResult.exitCode == 0 && !cmdResult.hasErrorIndicator
-            if (!isSuccess) allPassed = false
+            if (!isSuccess) {
+                allPassed = false
+                com.framex.app.utils.FrameXLog.w(
+                    "executeBatch(): command failed stage=$stage cmd='${spec.command}' " +
+                        "exitCode=${cmdResult?.exitCode} hasErrorIndicator=${cmdResult?.hasErrorIndicator} " +
+                        "output='${cmdResult?.outputChunk}'",
+                    tag = TAG
+                )
+            }
 
             val status = if (isSuccess) OpStatus.APPLIED else OpStatus.FAILED
 
@@ -160,6 +172,7 @@ class LedgerExecutor @Inject constructor(
 
     companion object {
         private const val TAG = "LedgerExecutor"
+        private const val BATCH_TIMEOUT_MS = 25_000L
         private const val MARKER_PREFIX = "__FX#"
         private val MARKER_REGEX = Regex("""__FX#(\d+):(\d+)""")
         private val FATAL_ERROR_REGEX = Regex("""(?i)(Error while accessing provider|java\.lang\.\w*Exception|SecurityException|\[ERROR\])""")

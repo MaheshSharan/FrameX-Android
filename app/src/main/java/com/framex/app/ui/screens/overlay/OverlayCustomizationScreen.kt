@@ -28,6 +28,7 @@ import com.framex.app.ui.components.ReorderableList
 import com.framex.app.ui.screens.overlay.components.ModeSelector
 import com.framex.app.ui.screens.overlay.components.ModuleRow
 import com.framex.app.ui.screens.overlay.components.OverlayPreviewCard
+import com.framex.app.ui.theme.FrameXSpacing
 import com.framex.app.ui.theme.getAccentColor
 
 /**
@@ -46,9 +47,14 @@ fun OverlayCustomizationScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
+                .fillMaxSize()
+        ) {
             // Header Bar
             FrameXTopBar(
                 title = stringResource(R.string.overlay_config_title),
@@ -109,9 +115,10 @@ fun OverlayCustomizationScreen(
                         )
                     }
 
-                    // Outlined Reset Button
+                    // Outlined Reset Button (48dp minimum touch target via minimumInteractiveComponentSize before clip)
                     Box(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surface)
                             .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
@@ -190,12 +197,14 @@ fun OverlayCustomizationScreen(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 .navigationBarsPadding()
-                .padding(24.dp)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
             FrameXApplyButton(
                 hasChanges = uiState.hasChanges,
                 accentColor = accentColor,
-                onClick = { onEvent(OverlayCustomizationUiEvent.SaveSettings) }
+                onClick = { onEvent(OverlayCustomizationUiEvent.SaveSettings) },
+                modifier = Modifier.widthIn(max = FrameXSpacing.MaxContentWidth)
             )
         }
     }

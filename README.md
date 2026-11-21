@@ -2,14 +2,14 @@
 
 ![FrameX Banner](docs/assets/banner.png)
 
-> Rootless Android performance overlay featuring live FPS metering, thermal diagnostics, and privileged gaming optimization via Shizuku.
+> Android performance overlay featuring live FPS metering, thermal diagnostics, and privileged gaming optimization. Works rootless through Shizuku, or with root through your root manager.
 
 <p align="center">
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
     <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
   </a>
-  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.27">
-    <img src="https://img.shields.io/badge/Version-1.5.27-orange?style=for-the-badge&logo=github" alt="Version"/>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.28">
+    <img src="https://img.shields.io/badge/Version-1.5.28-orange?style=for-the-badge&logo=github" alt="Version"/>
   </a>
   <a href="https://developer.android.com/about/versions/oreo">
     <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>
@@ -65,7 +65,7 @@ FrameX displays a fully customizable, low-overhead overlay on top of any applica
 ## Requirements
 
 - Android 8.0 (API 26) or higher
-- [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running
+- Either [Shizuku](https://github.com/RikkaApps/Shizuku) installed and running, or a rooted device (Magisk, KernelSU). Pick the mode in Permissions. CPU and GPU tuning needs root.
 - Activate via Wireless Debugging (no PC needed on Android 11+) or ADB
 - Works with the Sui module on rooted devices
 
@@ -129,7 +129,7 @@ cd FrameX-Android
 | Foreground service (Special Use) | Ensures Gaming Mode stays active on Android 14+ |
 | Post Notifications (Android 13+) | Display session status & quick-control notification controls |
 | QUERY_ALL_PACKAGES | Load installed games and apps for Game Launcher optimization |
-| Shizuku Privileged API | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), ART RAM heap compaction, and OriginOS Esports hardware engine |
+| Shizuku or Root (your choice) | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), ART RAM heap compaction, and OriginOS Esports hardware engine |
 
 ---
 

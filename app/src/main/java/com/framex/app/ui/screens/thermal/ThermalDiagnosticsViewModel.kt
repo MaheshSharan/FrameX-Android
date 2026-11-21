@@ -11,7 +11,7 @@ import com.framex.app.metrics.RecordableMetric
 import com.framex.app.metrics.SessionLogger
 import com.framex.app.metrics.SessionRecordingConfig
 import com.framex.app.repository.SettingsRepository
-import com.framex.app.shizuku.ShizukuManager
+import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +32,7 @@ class ThermalDiagnosticsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val metricsEngine: MetricsEngine,
     private val sessionLogger: SessionLogger,
-    private val shizukuManager: ShizukuManager,
+    private val privilegeManager: PrivilegeManager,
     private val settingsRepository: SettingsRepository,
     private val deviceDiagnosticManager: DeviceDiagnosticManager
 ) : ViewModel() {
@@ -55,10 +55,10 @@ class ThermalDiagnosticsViewModel @Inject constructor(
     val lastMetadata = sessionLogger.lastMetadata
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isShizukuAvailable = shizukuManager.isShizukuAvailable
+    val isShizukuAvailable = privilegeManager.isAvailable
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val hasShizukuPermission = shizukuManager.hasPermission
+    val hasShizukuPermission = privilegeManager.isReady
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _installedApps = MutableStateFlow<List<TargetAppOption>>(
@@ -159,11 +159,11 @@ class ThermalDiagnosticsViewModel @Inject constructor(
     }
 
     fun requestShizukuPermission() {
-        shizukuManager.requestPermission()
+        viewModelScope.launch { privilegeManager.requestAccess() }
     }
 
     fun refreshShizukuState() {
-        shizukuManager.refreshState()
+        privilegeManager.refresh()
     }
 
     fun exportSession(onReady: (File) -> Unit, onEmpty: () -> Unit) {

@@ -30,10 +30,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.privilege.PrivilegeMode
+import com.framex.app.ui.screens.permissions.components.PrivilegeModeSelector
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.testTag
 import com.framex.app.ui.components.FrameXTopBar
 import com.framex.app.ui.screens.permissions.components.PermissionRow
 import com.framex.app.ui.screens.permissions.components.PermissionSummaryHeader
 import com.framex.app.ui.screens.permissions.components.ShizukuStatusCard
+import com.framex.app.ui.theme.FrameXSpacing
 
 /**
  * Pure, stateless permissions and system status screen.
@@ -89,9 +94,14 @@ fun PermissionsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
+                .fillMaxSize()
+        ) {
             // Header Bar
             FrameXTopBar(
                 title = stringResource(R.string.perm_screen_title),
@@ -121,13 +131,31 @@ fun PermissionsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Hero Shizuku Card
-                ShizukuStatusCard(
-                    isShizukuAvailable = uiState.isShizukuAvailable,
-                    hasShizukuPermission = uiState.hasShizukuPermission,
-                    onLaunchShizuku = { onEvent(PermissionsUiEvent.LaunchShizukuApp) },
-                    onRequestPermission = { onEvent(PermissionsUiEvent.RequestShizukuPermission) }
+                PrivilegeModeSelector(
+                    selectedMode = uiState.selectedMode,
+                    isReady = uiState.isShizukuReady,
+                    onModeSelected = { onEvent(PermissionsUiEvent.SelectMode(it)) }
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.selectedMode == PrivilegeMode.SHIZUKU) {
+                    ShizukuStatusCard(
+                        isShizukuAvailable = uiState.isShizukuAvailable,
+                        hasShizukuPermission = uiState.hasShizukuPermission,
+                        onLaunchShizuku = { onEvent(PermissionsUiEvent.LaunchShizukuApp) },
+                        onRequestPermission = { onEvent(PermissionsUiEvent.RequestShizukuPermission) }
+                    )
+                } else if (uiState.selectedMode == PrivilegeMode.ROOT && !uiState.isShizukuReady) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { onEvent(PermissionsUiEvent.RequestShizukuPermission) },
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("privilege_root_retry")
+                    ) {
+                        Text(stringResource(R.string.perm_mode_root_retry))
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -196,7 +224,8 @@ fun PermissionsScreen(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 .navigationBarsPadding()
-                .padding(24.dp)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
             Button(
                 onClick = onNavigateBack,
@@ -206,6 +235,7 @@ fun PermissionsScreen(
                 ),
                 shape = CircleShape,
                 modifier = Modifier
+                    .widthIn(max = FrameXSpacing.MaxContentWidth)
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 56.dp)
             ) {

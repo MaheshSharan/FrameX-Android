@@ -21,6 +21,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Privilege layer boundary
+        run: |
+          if grep -rIl --include='*.kt' 'ShizukuManager' app/src/main \
+              | grep -v -e '/privilege/' -e '/shizuku/'; then
+            echo "ShizukuManager may only be used inside privilege/ and shizuku/" >&2
+            exit 1
+          fi
+
+      - name: Size limits (functions 60 lines, files 500 lines)
+        run: python3 config/check_size_limits.py
+
       - name: Run Android Lint
         run: ./gradlew lint
 

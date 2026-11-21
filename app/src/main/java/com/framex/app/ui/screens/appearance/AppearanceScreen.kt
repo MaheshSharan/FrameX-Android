@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -51,6 +52,7 @@ import com.framex.app.ui.screens.appearance.components.ContainerStyleCard
 import com.framex.app.ui.screens.appearance.components.OpacityCard
 import com.framex.app.ui.screens.appearance.components.ThemeCard
 import com.framex.app.ui.screens.appearance.components.TypographyCard
+import com.framex.app.ui.theme.FrameXSpacing
 import com.framex.app.ui.theme.PresetAccentColors
 
 @Composable
@@ -67,9 +69,14 @@ fun AppearanceScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
+                .fillMaxSize()
+        ) {
             // Header with statusBarsPadding
             FrameXTopBar(
                 title = stringResource(R.string.appearance_title),
@@ -142,14 +149,16 @@ fun AppearanceScreen(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            contentAlignment = Alignment.Center
         ) {
             com.framex.app.ui.components.FrameXApplyButton(
                 hasChanges = hasChanges,
                 accentColor = currentAccent,
                 onClick = { onEvent(AppearanceUiEvent.SaveChanges) },
                 applyText = stringResource(R.string.appearance_apply_changes),
-                appliedText = stringResource(R.string.appearance_applied)
+                appliedText = stringResource(R.string.appearance_applied),
+                modifier = Modifier.widthIn(max = FrameXSpacing.MaxContentWidth)
             )
         }
     }

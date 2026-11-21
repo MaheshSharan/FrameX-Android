@@ -1,8 +1,12 @@
 package com.framex.app.shizuku
 
 import android.content.Context
+import com.framex.app.privilege.scripts.PackageCommands
+import com.framex.app.privilege.scripts.ThermalScripts
+import com.framex.app.utils.FrameXLog
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 class CommandRunnerService private constructor(
@@ -33,56 +37,80 @@ class CommandRunnerService private constructor(
     @Volatile
     private var resolvedThermalStrategy: ThermalReadStrategy? = null
 
-    override fun executeCommand(command: String): String {
+    /**
+     * Executes a shell command with a strict wall-clock deadline and bounded output buffer.
+     * Prevents wedged kernel nodes or hung subshells from permanently deadlocking the
+     * single-connection Shizuku IPC mutex.
+     */
+    private fun executeBoundedProcess(
+        command: String,
+        timeoutMs: Long = COMMAND_TIMEOUT_MS
+    ): Pair<Int, String> {
+        var process: Process? = null
         return try {
-            val process = ProcessBuilder("sh", "-c", command)
+            val proc = ProcessBuilder("sh", "-c", command)
                 .redirectErrorStream(true)
                 .start()
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText().trim()
+            process = proc
+
+            val outputBuilder = StringBuilder()
+            val readerThread = Thread {
+                try {
+                    BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
+                        val buffer = CharArray(4096)
+                        var read: Int
+                        while (reader.read(buffer).also { read = it } != -1) {
+                            val remaining = MAX_OUTPUT_CHARS - outputBuilder.length
+                            if (remaining > 0) {
+                                outputBuilder.append(buffer, 0, minOf(read, remaining))
+                            } else {
+                                // Drain remaining stream without growing heap allocation.
+                                break
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Stream closed on process termination or timeout destroyForcibly.
+                }
+            }.apply {
+                name = "CmdRunner-Reader"
+                isDaemon = true
+                start()
             }
-            process.waitFor()
-            output
+
+            val completed = proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            if (!completed) {
+                proc.destroyForcibly()
+                readerThread.join(200L)
+                FrameXLog.w("Command timed out after ${timeoutMs}ms: $command", tag = TAG)
+                return COMMAND_TIMED_OUT to "Error executing command: Timed out after ${timeoutMs}ms"
+            }
+
+            readerThread.join(500L)
+            val exitCode = proc.exitValue()
+            exitCode to outputBuilder.toString().trim()
         } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
-            "Error executing command: ${e.message}"
+            process?.destroyForcibly()
+            FrameXLog.e("Error executing command: $command", e, tag = TAG)
+            COMMAND_EXECUTION_FAILED to "Error executing command: ${e.message}"
         }
+    }
+
+    override fun executeCommand(command: String): String {
+        val (_, output) = executeBoundedProcess(command)
+        return output
     }
 
     override fun executeCommandWithExitCode(command: String): Int {
-        return try {
-            val process = ProcessBuilder("sh", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText()
-            }
-            process.waitFor()
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command: $command", e)
-            COMMAND_EXECUTION_FAILED
-        }
+        val (exitCode, _) = executeBoundedProcess(command)
+        return exitCode
     }
 
     override fun executeCommandWithResult(command: String): CommandResult {
-        return try {
-            val process = ProcessBuilder("sh", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                reader.readText().trim()
-            }
-            val exitCode = process.waitFor()
-            CommandResult().apply {
-                this.output = output
-                this.exitCode = exitCode
-            }
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.e("Error executing command with result: $command", e)
-            CommandResult().apply {
-                this.output = "Error executing command: ${e.message}"
-                this.exitCode = COMMAND_EXECUTION_FAILED
-            }
+        val (exitCode, output) = executeBoundedProcess(command)
+        return CommandResult().apply {
+            this.output = output
+            this.exitCode = exitCode
         }
     }
 
@@ -190,7 +218,7 @@ class CommandRunnerService private constructor(
             resolvedThermalStrategy = null
         }
 
-        readViaReflection()?.let {
+        ReflectionThermalReader.read()?.let {
             resolvedThermalStrategy = ThermalReadStrategy.REFLECTION
             return appendThermalStatusProperty(it)
         }
@@ -234,108 +262,9 @@ class CommandRunnerService private constructor(
     }
 
     private fun readUsingStrategy(strategy: ThermalReadStrategy): String? = when (strategy) {
-        ThermalReadStrategy.REFLECTION -> readViaReflection()
+        ThermalReadStrategy.REFLECTION -> ReflectionThermalReader.read()
         ThermalReadStrategy.DUMPSYS -> readViaDumpsys()
         ThermalReadStrategy.SYSFS -> readViaSysfs()
-    }
-
-    /**
-     * Reads sensor temperatures via reflection into the hidden android.os.IThermalService
-     * Binder, matching whichever getCurrentTemperatures* overload the device's Android
-     * version exposes. Returns null (rather than an empty/invalid string) when no method
-     * yields usable sensor data, so callers can fall through to the next strategy.
-     */
-    private fun readViaReflection(): String? {
-        return try {
-            val binderClass = Class.forName("android.os.ServiceManager")
-            val getServiceMethod = binderClass.getMethod("getService", String::class.java)
-            val binder = getServiceMethod.invoke(null, "thermalservice") as? android.os.IBinder
-                ?: return null
-            val stubClass = Class.forName("android.os.IThermalService\$Stub")
-            val asInterfaceMethod = stubClass.getMethod("asInterface", android.os.IBinder::class.java)
-            val service = asInterfaceMethod.invoke(null, binder) ?: return null
-
-            val temps = invokeTemperatureGetter(service) ?: return null
-            parseTemperatureObjects(temps)
-        } catch (e: Exception) {
-            com.framex.app.utils.FrameXLog.w("readViaReflection failed: ${e.message}", null, "CmdRunner")
-            null
-        }
-    }
-
-    /**
-     * Tries every IThermalService method whose name contains "Temperature" with each of
-     * the parameter-count overloads seen across Android versions (0, 1, and 2 args),
-     * since the exact signature (getCurrentTemperatures, getCurrentTemperaturesWithType,
-     * etc.) varies by OEM and API level.
-     */
-    private fun invokeTemperatureGetter(service: Any): Array<*>? {
-        val candidateMethods = service.javaClass.methods.filter {
-            it.name.contains("Temperature", ignoreCase = true)
-        }
-        for (method in candidateMethods) {
-            val result = runCatching { invokeWithBestGuessArgs(method, service) }.getOrNull()
-            when {
-                result is Array<*> && result.isNotEmpty() -> return result
-                result is List<*> && result.isNotEmpty() -> return result.toTypedArray()
-            }
-        }
-        return null
-    }
-
-    private fun invokeWithBestGuessArgs(method: java.lang.reflect.Method, service: Any): Any? {
-        val paramTypes = method.parameterTypes
-        return when (paramTypes.size) {
-            0 -> method.invoke(service)
-            1 -> {
-                val isBoolean = paramTypes[0] == Boolean::class.javaPrimitiveType || paramTypes[0] == Boolean::class.java
-                if (isBoolean) method.invoke(service, false) else method.invoke(service, 0)
-            }
-            2 -> {
-                val (p0, p1) = paramTypes[0] to paramTypes[1]
-                when {
-                    p0 == Boolean::class.javaPrimitiveType && p1 == Int::class.javaPrimitiveType -> method.invoke(service, false, 0)
-                    p0 == Int::class.javaPrimitiveType && p1 == Boolean::class.javaPrimitiveType -> method.invoke(service, 0, false)
-                    else -> method.invoke(service, false, 0)
-                }
-            }
-            else -> null
-        }
-    }
-
-    /**
-     * Converts the array of opaque android.os.Temperature parcelables returned by
-     * IThermalService into the "Temperature{mValue=.., mType=.., mName=..}" line format
-     * ThermalMonitor's parser already understands (matching dumpsys's own output shape).
-     * Tries public getters first, falling back to declared-field reflection for OEM
-     * builds whose Temperature class lacks them.
-     */
-    private fun parseTemperatureObjects(temps: Array<*>): String? {
-        val builder = StringBuilder()
-        var hasValidData = false
-        for (temp in temps) {
-            if (temp == null) continue
-            var name = runCatching { temp.javaClass.getMethod("getName").invoke(temp) as? String }.getOrNull() ?: ""
-            var value = runCatching { (temp.javaClass.getMethod("getValue").invoke(temp) as? Number)?.toFloat() }.getOrNull() ?: 0f
-            var type = runCatching { (temp.javaClass.getMethod("getType").invoke(temp) as? Number)?.toInt() }.getOrNull() ?: 0
-
-            if (value == 0f && name.isBlank()) {
-                for (field in temp.javaClass.declaredFields) {
-                    field.isAccessible = true
-                    when (field.name.lowercase()) {
-                        "mname", "name" -> name = field.get(temp) as? String ?: ""
-                        "mvalue", "value" -> value = (field.get(temp) as? Number)?.toFloat() ?: 0f
-                        "mtype", "type" -> type = (field.get(temp) as? Number)?.toInt() ?: 0
-                    }
-                }
-            }
-
-            if (value > 0f || name.isNotBlank()) hasValidData = true
-            builder.append("Temperature{mValue=").append(value)
-                .append(", mType=").append(type)
-                .append(", mName=").append(name).append("}\n")
-        }
-        return if (hasValidData && builder.isNotEmpty()) builder.toString() else null
     }
 
     /**
@@ -345,9 +274,9 @@ class CommandRunnerService private constructor(
      * to parse-fail on" fallback in [getThermalTemperatures].
      */
     private fun readViaDumpsys(requireValid: Boolean = true): String? {
-        val dump = executeCommand("dumpsys thermalservice")
+        val dump = executeCommand(ThermalScripts.DUMPSYS_COMMAND)
         if (!requireValid) return dump
-        return if (dump.contains("Temperature{") || dump.contains("mValue=")) dump else null
+        return if (ThermalScripts.dumpHasSensorData(dump)) dump else null
     }
 
     private data class CachedThermalPath(val typeFile: java.io.File, val tempFile: java.io.File)
@@ -448,75 +377,27 @@ class CommandRunnerService private constructor(
             }
         }
 
-        val sysfsDump = executeCommand(
-            "sh -c 'for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done; for d in /sys/class/thermal/cooling_device*; do echo \"cooling: \$(cat \$d/type 2>/dev/null) \$(cat \$d/cur_state 2>/dev/null)\"; done'"
-        )
-        val validLines = sysfsDump.lines().filter {
-            it.contains(":") && it.substringBefore(":").isNotBlank() && it.substringAfter(":").isNotBlank()
-        }
-
-        if (sysfsDump.isNotBlank() && validLines.isNotEmpty()) {
+        val sysfsDump = executeCommand(ThermalScripts.SYSFS_COMMAND)
+        if (sysfsDump.isNotBlank() && ThermalScripts.sysfsHasSensorData(sysfsDump)) {
             return sysfsDump
         }
         return null
     }
 
     override fun suspendPackages(packageNames: Array<out String>?, suspended: Boolean): SuspendResult {
-        if (packageNames.isNullOrEmpty()) {
-            return SuspendResult().apply {
-                this.failedPackages = emptyArray()
-                this.successCount = 0
-            }
-        }
-        val action = if (suspended) "suspend" else "unsuspend"
-        val validPkgs = packageNames.filter { it.isNotBlank() }
-
-        // O(1) Fast-Path: Execute all target packages in a single cmd package invocation.
-        val batchCmd = "cmd package $action --user 0 ${validPkgs.joinToString(" ")}"
-        val batchResult = executeCommandWithResult(batchCmd)
-        if (batchResult.exitCode == 0) {
-            return SuspendResult().apply {
-                this.failedPackages = emptyArray()
-                this.successCount = validPkgs.size
-            }
-        }
-
-        // Resilient fallback: If batch command encounters syntax or package issues, evaluate individually.
-        val failed = mutableListOf<String>()
-        var successCount = 0
-        for (pkg in validPkgs) {
-            val cmd = "cmd package $action --user 0 $pkg"
-            val result = executeCommandWithResult(cmd)
-            if (result.exitCode == 0) {
-                successCount++
-            } else {
-                val output = result.output.lowercase()
-                if (output.contains("unknown target package") || output.contains("does not exist") || output.contains("not found")) {
-                    com.framex.app.utils.FrameXLog.d("Skipping uninstalled package $pkg during $action", tag = "CmdRunner")
-                } else {
-                    failed.add(pkg)
-                }
-            }
+        val outcome = PackageCommands.applySuspend(packageNames.orEmpty().toList(), suspended) { command ->
+            executeBoundedProcess(command)
         }
         return SuspendResult().apply {
-            this.failedPackages = failed.toTypedArray()
-            this.successCount = successCount
+            this.failedPackages = outcome.failedPackages.toTypedArray()
+            this.successCount = outcome.successCount
         }
     }
 
     override fun setAppOpMode(packageNames: Array<out String>?, opCode: Int, mode: Int): Int {
         if (packageNames.isNullOrEmpty()) return 0
-        var count = 0
-        val modeStr = when (mode) {
-            1 -> "ignore"
-            2 -> "deny"
-            else -> "allow"
-        }
-        for (pkg in packageNames) {
-            executeCommand("cmd appops set $pkg $opCode $modeStr")
-            count++
-        }
-        return count
+        val (_, output) = executeBoundedProcess(PackageCommands.appOpBatch(packageNames.toList(), opCode, mode))
+        return PackageCommands.countAppOpSuccesses(output)
     }
 
     override fun destroy() {
@@ -524,6 +405,10 @@ class CommandRunnerService private constructor(
     }
 
     private companion object {
+        const val TAG = "CmdRunner"
         const val COMMAND_EXECUTION_FAILED = -1
+        const val COMMAND_TIMED_OUT = -2
+        const val COMMAND_TIMEOUT_MS = 10_000L
+        const val MAX_OUTPUT_CHARS = 256 * 1024
     }
 }

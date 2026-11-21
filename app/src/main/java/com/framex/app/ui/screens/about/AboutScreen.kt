@@ -9,30 +9,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.framex.app.ui.components.SignatureMismatchDialog
 import com.framex.app.ui.components.UpdateDialog
-import com.framex.app.ui.components.VivoDiagnosticDialog
 import com.framex.app.ui.screens.about.components.AboutHeroCard
 import com.framex.app.ui.screens.about.components.AppUpdatesCard
 import com.framex.app.ui.screens.about.components.CrashDiagnosticsCard
 import com.framex.app.ui.screens.about.components.CreatorCard
-import com.framex.app.ui.screens.about.components.HardwareOptimizationCard
 import com.framex.app.ui.screens.about.components.LegalDialogType
 import com.framex.app.ui.screens.about.components.LegalInfoDialog
 import com.framex.app.ui.screens.about.components.LegalListCard
 import com.framex.app.ui.screens.about.components.PrivacyCommitmentCard
-
-private val DarkBackground = Color(0xFF0C0D12)
+import com.framex.app.ui.theme.FrameXSpacing
 
 /**
  * About & Legal root screen.
@@ -45,7 +44,6 @@ fun AboutScreen(
     onEvent: (AboutUiEvent) -> Unit,
     onNavigateBack: () -> Unit,
     onOpenUrl: (String) -> Unit,
-    deviceModelInfo: String,
     modifier: Modifier = Modifier
 ) {
     var activeLegalDialog by remember { mutableStateOf<LegalDialogType?>(null) }
@@ -53,10 +51,12 @@ fun AboutScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
         Column(
             modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
@@ -92,21 +92,6 @@ fun AboutScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                HardwareOptimizationCard(
-                    isVivoDevice = state.isVivoDevice,
-                    isIqooDevice = state.isIqooDevice,
-                    isVivoOptActive = state.isVivoOptActive,
-                    onToggleVivoOpt = { enabled ->
-                        if (enabled) {
-                            onEvent(AboutUiEvent.SetShowVivoDiagModal(true))
-                        } else {
-                            onEvent(AboutUiEvent.SetVivoOptEnabled(false))
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
                 ExecutionCenterSection(
                     state = state,
                     onEvent = onEvent
@@ -137,8 +122,7 @@ fun AboutScreen(
 
         AboutScreenDialogs(
             state = state,
-            onEvent = onEvent,
-            deviceModelInfo = deviceModelInfo
+            onEvent = onEvent
         )
 
         activeLegalDialog?.let { legalType ->
@@ -154,21 +138,8 @@ fun AboutScreen(
 @Composable
 private fun AboutScreenDialogs(
     state: AboutUiState,
-    onEvent: (AboutUiEvent) -> Unit,
-    deviceModelInfo: String
+    onEvent: (AboutUiEvent) -> Unit
 ) {
-    if (state.showVivoDiagModal) {
-        VivoDiagnosticDialog(
-            isVivoOrIqoo = state.isVivoDevice,
-            deviceModelInfo = deviceModelInfo,
-            onDismiss = { onEvent(AboutUiEvent.SetShowVivoDiagModal(false)) },
-            onConfirmEnable = {
-                onEvent(AboutUiEvent.SetVivoOptEnabled(true))
-                onEvent(AboutUiEvent.SetShowVivoDiagModal(false))
-            }
-        )
-    }
-
     state.updateInfoState?.let { info ->
         UpdateDialog(
             updateInfo = info,

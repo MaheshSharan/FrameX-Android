@@ -27,6 +27,7 @@ sealed class Screen(val route: String) {
     object Performance : Screen("performance")
     object ThermalDiagnostics : Screen("thermal_diagnostics")
     object SessionLogs : Screen("session_logs")
+    object HardwareTuning : Screen("hardware_tuning")
 }
 
 @Composable
@@ -57,7 +58,8 @@ fun FrameXNavGraph(
                 onNavigateToAbout = { navController.navigate(Screen.About.route) },
                 onNavigateToPerformance = { navController.navigate(Screen.Performance.route) },
                 onNavigateToThermalDiagnostics = { navController.navigate(Screen.ThermalDiagnostics.route) },
-                onNavigateToSessionLogs = { navController.navigate(Screen.SessionLogs.route) }
+                onNavigateToSessionLogs = { navController.navigate(Screen.SessionLogs.route) },
+                onNavigateToHardwareTuning = { navController.navigate(Screen.HardwareTuning.route) }
             )
         }
         composable(Screen.Appearance.route) {
@@ -80,6 +82,9 @@ fun FrameXNavGraph(
         }
         composable(Screen.SessionLogs.route) {
             SessionLogsRoute(onNavigateBack = { navController.safePopBackStack() })
+        }
+        composable(Screen.HardwareTuning.route) {
+            com.framex.app.ui.screens.hardware.HardwareTuningScreen(onNavigateBack = { navController.safePopBackStack() })
         }
     }
 }

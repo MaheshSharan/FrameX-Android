@@ -81,7 +81,6 @@ fun AboutRoute(
                 context.startActivity(intent)
             }
         },
-        deviceModelInfo = viewModel.deviceModelInfo,
         modifier = modifier
     )
 }

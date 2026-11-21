@@ -102,9 +102,6 @@ class SessionLogger @Inject constructor(
     private var _recordingStartTimestampMs: Long = 0L
     val recordingStartTimestampMs: Long get() = _recordingStartTimestampMs
 
-    private val _lastExportedFile = MutableStateFlow<File?>(null)
-    val lastExportedFile: StateFlow<File?> = _lastExportedFile.asStateFlow()
-
     private var snapshotChannel: Channel<MetricsEngine.MetricsSnapshot>? = null
     private var collectorJob: Job? = null
     private var writerJob: Job? = null
@@ -144,7 +141,6 @@ class SessionLogger @Inject constructor(
         val fileTag = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(startMs)
         val file = File(dir, "framex_session_$fileTag.csv")
         activeSessionFile = file
-        _lastExportedFile.value = file
 
         val channel = Channel<MetricsEngine.MetricsSnapshot>(
             capacity = CHANNEL_CAPACITY,
@@ -340,26 +336,7 @@ class SessionLogger @Inject constructor(
             writer.flush()
         }
 
-        _lastExportedFile.value = targetFile
         targetFile
-    }
-
-    fun buildShareIntent(file: File): Intent {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        return Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "FrameX session log — ${file.name}")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-    }
-
-    fun currentRecordingCount(): Int {
-        synchronized(bufferLock) {
-            if (recordedBuffer.isNotEmpty()) return recordedBuffer.size
-        }
-        if (!_isRecording.value || _recordingStartTimestampMs == 0L) return 0
-        return metricsEngine.snapshotHistory.value.count { it.timestampMs >= _recordingStartTimestampMs }
     }
 
     companion object {

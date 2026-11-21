@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,7 +42,8 @@ import com.framex.app.ui.screens.performance.sections.GoogleAppsSection
 import com.framex.app.ui.screens.performance.sections.HeroGamingCard
 import com.framex.app.ui.screens.performance.sections.RequirementsSection
 import com.framex.app.ui.screens.performance.sections.SystemHealthGaugesSection
-import com.framex.app.ui.screens.performance.sections.VivoPerformanceToolsSection
+import com.framex.app.ui.theme.FrameXSpacing
+import com.framex.app.ui.theme.StatusGreen
 
 @Composable
 fun PerformanceScreen(
@@ -62,7 +64,7 @@ fun PerformanceScreen(
     val isActive = uiState.gamingState is GamingModeState.Active
     val isBusy = uiState.gamingState is GamingModeState.Enabling || uiState.gamingState is GamingModeState.Disabling
 
-    val activeColor = Color(0xFF22C55E)
+    val activeColor = StatusGreen
     val primaryRed = MaterialTheme.colorScheme.primary
 
     val progressTarget = when (val s = uiState.gamingState) {
@@ -85,10 +87,12 @@ fun PerformanceScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
     ) {
         LazyColumn(
             modifier = Modifier
+                .widthIn(max = FrameXSpacing.MaxContentWidth)
                 .fillMaxSize()
                 .navigationBarsPadding()
         ) {
@@ -131,30 +135,6 @@ fun PerformanceScreen(
                     onRequestNotificationListener = onRequestNotificationListener
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // Dedicated Vivo & iQOO Hardware Suite
-            if (uiState.isVivoSuiteEnabled) {
-                item(key = "vivo_performance_tools_section") {
-                    VivoPerformanceToolsSection(
-                        launcherGames = uiState.launcherGames,
-                        perfGameList = uiState.vivoPerfGameList,
-                        rawPerfGameList = uiState.rawPerfGameList,
-                        isRefreshingPerfList = uiState.isRefreshingPerfList,
-                        mergeList144 = uiState.mergeList144,
-                        raw144MergeList = uiState.raw144MergeList,
-                        isRefreshing144List = uiState.isRefreshing144List,
-                        show144MergeList = uiState.maxRefreshRate >= 144,
-                        onRefreshPerfList = { onEvent(PerformanceUiEvent.RefreshVivoPerfList) },
-                        onAddAllToPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllToPerfList(pkgs, onComplete)) },
-                        onRemoveAllFromPerfList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFromPerfList(pkgs, onComplete)) },
-                        onCompileAll = { pkgs, onComplete -> onEvent(PerformanceUiEvent.CompileAllSpeed(pkgs, onComplete)) },
-                        onRefresh144MergeList = { onEvent(PerformanceUiEvent.Refresh144MergeList) },
-                        onAddAllTo144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.AddAllTo144MergeList(pkgs, onComplete)) },
-                        onRemoveAllFrom144MergeList = { pkgs, onComplete -> onEvent(PerformanceUiEvent.RemoveAllFrom144MergeList(pkgs, onComplete)) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
             }
 
             // System Health Gauges

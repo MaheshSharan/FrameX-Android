@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.framex.app.R
+import com.framex.app.privilege.PrivilegeMode
 
 enum class PermissionId {
     OVERLAY,
@@ -25,6 +26,7 @@ data class PermissionItem(
 
 @Immutable
 data class PermissionsUiState(
+    val selectedMode: PrivilegeMode = PrivilegeMode.NONE,
     val isShizukuAvailable: Boolean = false,
     val hasShizukuPermission: Boolean = false,
     val hasOverlayPermission: Boolean = false,
@@ -51,6 +53,7 @@ data class PermissionsUiState(
 
 sealed interface PermissionsUiEvent {
     data object RequestShizukuPermission : PermissionsUiEvent
+    data class SelectMode(val mode: PrivilegeMode) : PermissionsUiEvent
     data object LaunchShizukuApp : PermissionsUiEvent
     data object RefreshPermissions : PermissionsUiEvent
     data class RequestPermission(val id: PermissionId) : PermissionsUiEvent

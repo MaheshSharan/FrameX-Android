@@ -41,5 +41,6 @@ jobs:
         with:
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

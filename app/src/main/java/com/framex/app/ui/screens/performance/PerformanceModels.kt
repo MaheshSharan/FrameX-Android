@@ -13,7 +13,6 @@ import com.framex.app.metrics.MetricsState
 @Immutable
 data class ActiveGamingSession(
     val title: String,
-    val isVivoDevice: Boolean,
     val activeGamePackage: String?,
     val suspendedAppsCount: Int,
     val summary: LedgerSummary
@@ -36,13 +35,6 @@ data class PerformanceUiState(
     val deepFreezeEnabled: Boolean = false,
     val hasSeenDeepFreezeNotice: Boolean = false,
     val activeGamingSession: ActiveGamingSession? = null,
-    val isVivoSuiteEnabled: Boolean = false,
-    val rawPerfGameList: String? = null,
-    val vivoPerfGameList: List<String> = emptyList(),
-    val raw144MergeList: String? = null,
-    val mergeList144: List<String> = emptyList(),
-    val isRefreshingPerfList: Boolean = false,
-    val isRefreshing144List: Boolean = false,
     val maxRefreshRate: Int = 60,
 
     // System Access
@@ -85,17 +77,6 @@ sealed interface PerformanceUiEvent {
     data object CheckPing : PerformanceUiEvent
     data object ResetDefaults : PerformanceUiEvent
 
-    data object RefreshVivoPerfList : PerformanceUiEvent
-    data class AddAllToPerfList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
-    data class RemoveAllFromPerfList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
-    data class CompileAllSpeed(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
-
-    data object Refresh144MergeList : PerformanceUiEvent
-    data class AddAllTo144MergeList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
-    data class RemoveAllFrom144MergeList(val packages: Set<String>, val onComplete: (Boolean) -> Unit = {}) : PerformanceUiEvent
-    data class AddTo144MergeList(val packageName: String) : PerformanceUiEvent
-    data class RemoveFrom144MergeList(val packageName: String) : PerformanceUiEvent
-
     data object RefreshInstalledApps : PerformanceUiEvent
     data object RefreshSystemState : PerformanceUiEvent
     data class SetAddGameSheetVisible(val visible: Boolean) : PerformanceUiEvent
@@ -108,7 +89,10 @@ sealed interface PerformanceUiEvent {
  * One-shot UI effects.
  */
 sealed interface PerformanceUiEffect {
-    data class ShowToast(val message: String) : PerformanceUiEffect
+    data class ShowToast(
+        @androidx.annotation.StringRes val messageResId: Int,
+        val formatArgs: List<Any> = emptyList()
+    ) : PerformanceUiEffect
 }
 
 data class SystemSettingsGroup(
@@ -125,29 +109,11 @@ data class ShizukuAndGamingGroup(
     val launcherGames: Set<String>
 )
 
-data class VivoGroup(
-    val isVivoSuiteEnabled: Boolean,
-    val rawPerfGameList: String?,
-    val vivoPerfGameList: List<String>,
-    val raw144MergeList: String?,
-    val mergeList144: List<String>,
-    val isRefreshingPerfList: Boolean,
-    val isRefreshing144List: Boolean
-)
-
 data class Tuple4<A, B, C, D>(
     val first: A,
     val second: B,
     val third: C,
     val fourth: D
-)
-
-data class Tuple5<A, B, C, D, E>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D,
-    val fifth: E
 )
 
 data class SystemAccessGroup(
@@ -172,6 +138,7 @@ data class ActionStateGroup(
     val activeLatencyDiagnostic: Int?
 )
 
+@Immutable
 data class IntermediateUiState(
     val userApps: List<AppInfo>,
     val googleApps: List<AppInfo>,

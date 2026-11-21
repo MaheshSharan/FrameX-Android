@@ -1,0 +1,195 @@
+package com.framex.app.repository
+
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class GamingSettingsRepository @Inject constructor(
+    private val store: FrameXPreferenceStore
+) {
+    private val _gamingModeWhitelist = MutableStateFlow(
+        store.getStringSet("gaming_mode_whitelist", emptySet())
+    )
+    val gamingModeWhitelist: StateFlow<Set<String>> = _gamingModeWhitelist.asStateFlow()
+
+    private val _launcherGames = MutableStateFlow(
+        store.getStringSet("launcher_games", emptySet())
+    )
+    val launcherGames: StateFlow<Set<String>> = _launcherGames.asStateFlow()
+
+    private val _deepFreezeEnabled = MutableStateFlow(
+        store.getBoolean("deep_freeze_enabled", false)
+    )
+    val deepFreezeEnabled: StateFlow<Boolean> = _deepFreezeEnabled.asStateFlow()
+
+    private val _hasSeenDeepFreezeNotice = MutableStateFlow(
+        store.getBoolean("has_seen_deep_freeze_notice", false)
+    )
+    val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
+
+    private val _isGamingModeActiveFlow = MutableStateFlow(
+        store.getBoolean("is_gaming_mode_active", false)
+    )
+    val isGamingModeActiveFlow: StateFlow<Boolean> = _isGamingModeActiveFlow.asStateFlow()
+
+    init {
+        store.observeKey("gaming_settings") { prefs ->
+            prefs[stringSetPreferencesKey("gaming_mode_whitelist")]?.let { _gamingModeWhitelist.value = it }
+            prefs[stringSetPreferencesKey("launcher_games")]?.let { _launcherGames.value = it }
+            prefs[booleanPreferencesKey("deep_freeze_enabled")]?.let { _deepFreezeEnabled.value = it }
+            prefs[booleanPreferencesKey("has_seen_deep_freeze_notice")]?.let { _hasSeenDeepFreezeNotice.value = it }
+            prefs[booleanPreferencesKey("is_gaming_mode_active")]?.let { _isGamingModeActiveFlow.value = it }
+        }
+    }
+
+    fun toggleGamingWhitelistApp(packageName: String) {
+        val current = _gamingModeWhitelist.value.toMutableSet()
+        if (packageName in current) current.remove(packageName) else current.add(packageName)
+        val copy = current.toSet()
+        _gamingModeWhitelist.value = copy
+        store.putStringSet("gaming_mode_whitelist", copy)
+    }
+
+    fun setLauncherGames(games: Set<String>) {
+        val copy = games.toSet()
+        _launcherGames.value = copy
+        store.putStringSet("launcher_games", copy)
+    }
+
+    fun toggleLauncherGame(packageName: String) {
+        val current = _launcherGames.value.toMutableSet()
+        if (packageName in current) current.remove(packageName) else current.add(packageName)
+        setLauncherGames(current)
+    }
+
+    fun setDeepFreezeEnabled(enabled: Boolean) {
+        _deepFreezeEnabled.value = enabled
+        store.putBoolean("deep_freeze_enabled", enabled)
+    }
+
+    fun setHasSeenDeepFreezeNotice(seen: Boolean) {
+        _hasSeenDeepFreezeNotice.value = seen
+        store.putBoolean("has_seen_deep_freeze_notice", seen)
+    }
+
+    /** The package the catalog engine is currently tuning for; null once no game is targeted. */
+    fun getGamingActiveGamePackage(): String? = store.getString(KEY_ACTIVE_GAME_PACKAGE, null)
+
+    fun getGamingActiveGameUid(): Int? =
+        store.getInt(KEY_ACTIVE_GAME_UID, NO_UID).takeIf { it != NO_UID }
+
+    /** Persists which package/uid the current session's per-game commands were written for. */
+    fun setGamingActiveGame(packageName: String?, uid: Int?) {
+        if (packageName == null) store.remove(KEY_ACTIVE_GAME_PACKAGE) else store.putString(KEY_ACTIVE_GAME_PACKAGE, packageName)
+        if (uid == null) store.remove(KEY_ACTIVE_GAME_UID) else store.putInt(KEY_ACTIVE_GAME_UID, uid)
+    }
+
+    /**
+     * Suspends until every preference write issued so far is on disk. Call it after writing a
+     * recovery record and before the system mutation that the record protects (AGENTS 2.8).
+     */
+    suspend fun flushWrites() = store.flush()
+
+    fun isGamingModeActive(): Boolean = store.getBoolean("is_gaming_mode_active", false)
+
+    fun setGamingModeActive(active: Boolean) {
+        _isGamingModeActiveFlow.value = active
+        store.putBoolean("is_gaming_mode_active", active)
+    }
+
+    /** Backend that applied the current Gaming Mode session; recovery must undo through the same one. */
+    fun getAppliedVia(): com.framex.app.privilege.PrivilegeMode =
+        com.framex.app.privilege.PrivilegeMode.fromKey(store.getString("gaming_applied_via", null))
+
+    fun setAppliedVia(mode: com.framex.app.privilege.PrivilegeMode?) {
+        if (mode == null || mode == com.framex.app.privilege.PrivilegeMode.NONE) {
+            store.remove("gaming_applied_via")
+        } else {
+            store.putString("gaming_applied_via", mode.key)
+        }
+    }
+
+    fun getGamingAffectedPackages(): Set<String> {
+        return store.getStringSet("gaming_affected_packages", emptySet())
+    }
+
+    fun setGamingAffectedPackages(packages: Set<String>) {
+        if (packages.isEmpty()) {
+            store.remove("gaming_affected_packages")
+        } else {
+            store.putStringSet("gaming_affected_packages", packages)
+        }
+    }
+
+    /** Vendor-command baselines as `id -> value`; see [com.framex.app.gaming.catalog.BaselineStore]. */
+    fun getGamingBaselines(): Map<String, String> =
+        store.getStringSet(KEY_GAMING_BASELINES, emptySet()).mapNotNull { line ->
+            val split = line.indexOf(BASELINE_SEPARATOR)
+            if (split <= 0) null else line.substring(0, split) to line.substring(split + 1)
+        }.toMap()
+
+    fun setGamingBaselines(baselines: Map<String, String>) {
+        if (baselines.isEmpty()) {
+            store.remove(KEY_GAMING_BASELINES)
+        } else {
+            store.putStringSet(
+                KEY_GAMING_BASELINES,
+                baselines.map { (id, value) -> "$id$BASELINE_SEPARATOR$value" }.toSet()
+            )
+        }
+    }
+
+    fun needsThermalOverrideRecovery(): Boolean {
+        return store.getBoolean("needs_thermal_override_recovery", false)
+    }
+
+    fun setNeedsThermalOverrideActive(active: Boolean) {
+        store.putBoolean("needs_thermal_override_recovery", active)
+    }
+
+    fun markThermalOverrideRecoveryComplete() {
+        store.remove("needs_thermal_override_recovery")
+    }
+
+    fun needsLegacySettingsCleanup(): Boolean {
+        return !store.getBoolean("legacy_settings_cleanup_v2_done", false)
+    }
+
+    fun markLegacySettingsCleanupComplete() {
+        store.putBoolean("legacy_settings_cleanup_v2_done", true)
+    }
+
+    fun cleanupLegacyPreferences() {
+        val legacyKeys = listOf(
+            "vivo_monster_mode_legacy",
+            "esports_mode_enabled",
+            "legacy_refresh_override",
+            "legacy_thermal_override"
+        )
+        for (key in legacyKeys) {
+            if (store.contains(key)) {
+                store.remove(key)
+            }
+        }
+    }
+
+    fun getGameConfigBoostRam(pkg: String): Boolean =
+        store.getBoolean("game_config_${pkg}_boost_ram", true)
+
+    fun setGameConfigBoostRam(pkg: String, enabled: Boolean) {
+        store.putBoolean("game_config_${pkg}_boost_ram", enabled)
+    }
+
+    companion object {
+        private const val KEY_GAMING_BASELINES = "gaming_command_baselines"
+        private const val KEY_ACTIVE_GAME_PACKAGE = "gaming_active_game_package"
+        private const val KEY_ACTIVE_GAME_UID = "gaming_active_game_uid"
+        private const val BASELINE_SEPARATOR = '\u0001'
+        private const val NO_UID = -1
+    }
+}
