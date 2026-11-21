@@ -55,9 +55,9 @@ fun ThermalDetailsSection(
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = Color.White.copy(0.08f))
                 Spacer(modifier = Modifier.height(12.dp))
-                SensorDetailRow("CPU Thermal", if (metricsState.hasThermalCpu) "HAL 2.0 / sysfs zone" else "Unsupported", metricsState.hasThermalCpu)
-                SensorDetailRow("GPU Thermal", if (metricsState.hasThermalGpu) "HAL 2.0 / sysfs zone" else "Unsupported", metricsState.hasThermalGpu)
-                SensorDetailRow("Skin Thermal", if (metricsState.hasThermalSkin) "HAL 2.0 / quiet_therm" else "Unsupported", metricsState.hasThermalSkin)
+                SensorDetailRow("CPU Thermal", if (metricsState.hasThermalCpu) "HAL 2.0 / sysfs zone" else "Unavailable", metricsState.hasThermalCpu)
+                SensorDetailRow("GPU Thermal", if (metricsState.hasThermalGpu) "HAL 2.0 / sysfs zone" else "Unavailable", metricsState.hasThermalGpu)
+                SensorDetailRow("Skin Thermal", if (metricsState.hasThermalSkin) "HAL 2.0 / sysfs skin zone" else "Unavailable", metricsState.hasThermalSkin)
                 SensorDetailRow("Battery Thermal", "Android Battery Manager (Intent)", metricsState.batteryTempC > 0f)
             }
         }

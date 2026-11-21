@@ -284,3 +284,9 @@
 
     <!-- Additional Service & Performance Toast Strings -->
 </resources>
+    <string name="thermal_axis_now">now</string>
+    <string name="thermal_window_2m">2 min</string>
+    <string name="thermal_window_5m">5 min</string>
+    <string name="thermal_window_10m">10 min</string>
+    <string name="thermal_window_all">All</string>
+    <string name="cd_timeline_window_label">Timeline span</string>

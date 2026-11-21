@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.framex.app.metrics.MetricCapability
+import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.MetricReadStatus
 import com.framex.app.metrics.MetricsState
 import com.framex.app.metrics.toCapability
@@ -32,10 +33,10 @@ fun getThermalDisplayValue(value: Float, present: Boolean, readStatus: MetricRea
     MetricReadStatus.NoShizuku -> "Needs Shizuku"
     MetricReadStatus.PermissionDenied -> "Restricted"
     MetricReadStatus.HardwareUnsupported,
-    MetricReadStatus.EmptyOutput -> "Not Supported"
+    MetricReadStatus.EmptyOutput -> "Unavailable"
     MetricReadStatus.ParseFailed -> "Parse Failed"
     MetricReadStatus.Loading -> "Waiting..."
-    else -> if (present && value > 0f) String.format(Locale.US, "%.1f°C", value) else "Not Supported"
+    else -> if (present && value > 0f) String.format(Locale.US, "%.1f°C", value) else "Unavailable"
 }
 
 fun getBatteryDisplayValue(tempC: Float): String =
@@ -52,6 +53,24 @@ fun getTopProcessDisplayValue(name: String?, percent: Float, readStatus: MetricR
     MetricReadStatus.Ok -> if (name != null) "$name (${String.format(Locale.US, "%.0f", percent)}%)" else "—"
     else -> "—"
 }
+
+/**
+ * Returns a view of the newest samples within [windowSec] of the last one. Samples are ordered
+ * by time, so a binary search finds the cut in O(log n) and no elements are copied.
+ */
+fun List<MetricsEngine.MetricsSnapshot>.lastWindow(windowSec: Int?): List<MetricsEngine.MetricsSnapshot> {
+    if (windowSec == null || isEmpty()) return this
+    val cutoffMs = last().timestampMs - windowSec * MS_PER_SEC
+    var lo = 0
+    var hi = size
+    while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        if (this[mid].timestampMs < cutoffMs) lo = mid + 1 else hi = mid
+    }
+    return subList(lo, size)
+}
+
+private const val MS_PER_SEC = 1000L
 
 fun formatDurationMinSec(totalSec: Int): String {
     if (totalSec <= 0) return "0s"

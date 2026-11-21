@@ -100,15 +100,17 @@ internal fun MetricChartCard(
         }
     }
 
-    val xLabels = remember(snapshots.size, snapshots.firstOrNull()?.timestampMs, snapshots.lastOrNull()?.timestampMs) {
+    // Oldest sample sits on the left, so labels count the age back from "now" on the right.
+    val nowLabel = stringResource(R.string.thermal_axis_now)
+    val xLabels = remember(snapshots.size, snapshots.firstOrNull()?.timestampMs, snapshots.lastOrNull()?.timestampMs, nowLabel) {
         val totalSec = if (snapshots.size >= 2) {
             ((snapshots.last().timestampMs - snapshots.first().timestampMs) / 1000L).toInt().coerceAtLeast(snapshots.size)
         } else {
             60
         }
         List(5) { idx ->
-            val sec = (totalSec * idx) / 4
-            formatDurationMinSec(sec)
+            val ageSec = (totalSec * (4 - idx)) / 4
+            if (ageSec == 0) nowLabel else "-" + formatDurationMinSec(ageSec)
         }
     }
 

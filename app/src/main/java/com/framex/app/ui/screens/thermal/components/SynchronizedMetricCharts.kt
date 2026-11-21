@@ -4,25 +4,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.metrics.RecordableMetric
-import com.framex.app.ui.screens.thermal.SessionKpiSummary
+import com.framex.app.ui.screens.thermal.computeSessionKpiSummary
+import com.framex.app.ui.screens.thermal.TimelineWindow
+import com.framex.app.ui.screens.thermal.lastWindow
 import com.framex.app.ui.theme.PrimaryRed
 import java.util.Locale
 
 @Composable
 fun SynchronizedMetricCharts(
-    snapshots: List<MetricsEngine.MetricsSnapshot>,
+    history: List<MetricsEngine.MetricsSnapshot>,
     selectedMetrics: Set<RecordableMetric>,
-    kpiSummary: SessionKpiSummary,
     maxRefreshRateHz: Int,
     modifier: Modifier = Modifier
 ) {
     val maxFpsScale = maxRefreshRateHz.toFloat().coerceAtLeast(60f)
+    // UI-only choice, so it lives here rather than in the ViewModel.
+    var windowIndex by rememberSaveable { mutableIntStateOf(TimelineWindow.ALL.ordinal) }
+    val window = TimelineWindow.entries[windowIndex]
+    val snapshots = remember(history, window) { history.lastWindow(window.seconds) }
+    // Footers and chart scales describe the visible window, not the whole session.
+    val kpiSummary = remember(snapshots) { computeSessionKpiSummary(snapshots) }
     val clusterLabels = remember(snapshots) {
         snapshots.lastOrNull()?.state?.cpuClusters?.map { it.label }.orEmpty()
     }
@@ -31,6 +42,8 @@ fun SynchronizedMetricCharts(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        TimelineWindowChips(selected = window, onSelect = { windowIndex = it.ordinal })
+
         if (RecordableMetric.FPS in selectedMetrics || RecordableMetric.TEMPERATURES in selectedMetrics) {
             val fpsTempSeries = remember(maxFpsScale) {
                 listOf(

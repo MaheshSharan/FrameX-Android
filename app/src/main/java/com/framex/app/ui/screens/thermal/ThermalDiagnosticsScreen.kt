@@ -192,9 +192,8 @@ fun ThermalDiagnosticsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 SynchronizedMetricCharts(
-                    snapshots = activeProfilerSnapshots,
+                    history = activeProfilerSnapshots,
                     selectedMetrics = recordingConfig.selectedMetrics,
-                    kpiSummary = kpiSummary,
                     maxRefreshRateHz = maxRefreshRateHz
                 )
                 Spacer(modifier = Modifier.height(FrameXSpacing.XLarge))
