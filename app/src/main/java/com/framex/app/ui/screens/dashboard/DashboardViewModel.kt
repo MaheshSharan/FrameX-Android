@@ -5,12 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.overlay.OverlayService
 import com.framex.app.overlay.OverlayServiceController
-import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.privilege.PrivilegeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,49 +21,17 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val overlayServiceController: OverlayServiceController,
     private val privilegeManager: PrivilegeManager,
-    private val metricsEngine: MetricsEngine,
-    private val settingsRepository: SettingsRepository
+    private val metricsEngine: MetricsEngine
 ) : ViewModel() {
 
     private val hasOverlayPermission = MutableStateFlow(overlayServiceController.hasOverlayPermission())
-    private val _whatsNewInfo = MutableStateFlow<WhatsNewInfo?>(null)
-
     init {
-        // Onboarding state must be loaded before it decides whether to show What's New.
-        viewModelScope.launch {
-            settingsRepository.awaitSettingsLoaded()
-            checkWhatsNew()
-        }
         metricsEngine.setScreenOverrideModules(setOf("fps"), requesterKey = "dashboard_screen")
     }
 
     override fun onCleared() {
         super.onCleared()
         metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "dashboard_screen")
-    }
-
-    private fun checkWhatsNew() {
-        if (WhatsNewRegistry.DEBUG_FORCE_SHOW_WHATS_NEW) {
-            val currentCode = com.framex.app.BuildConfig.VERSION_CODE.toLong()
-            _whatsNewInfo.value = WhatsNewRegistry.getWhatsNewForVersion(currentCode)
-            return
-        }
-
-        val lastSeenCode = settingsRepository.getLastSeenVersionCode()
-        val currentCode = com.framex.app.BuildConfig.VERSION_CODE.toLong()
-        val isOnboardingDone = settingsRepository.isOnboardingCompleted.value
-
-        if (lastSeenCode == 0L) {
-            if (isOnboardingDone) {
-                // Existing user updating to this build for the first time: show What's New once
-                _whatsNewInfo.value = WhatsNewRegistry.getWhatsNewForVersion(currentCode)
-            } else {
-                // Fresh install: record baseline so new users see onboarding instead
-                settingsRepository.updateLastSeenVersionCode(currentCode)
-            }
-        } else if (currentCode > lastSeenCode) {
-            _whatsNewInfo.value = WhatsNewRegistry.getWhatsNewForVersion(currentCode)
-        }
     }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -86,8 +52,6 @@ class DashboardViewModel @Inject constructor(
         )
     }.combine(privilegeManager.currentMode) { state, mode ->
         state.copy(canShowHardwareTuning = mode == PrivilegeMode.ROOT)
-    }.combine(_whatsNewInfo) { state, whatsNew ->
-        state.copy(whatsNewInfo = whatsNew)
     }
     .flowOn(Dispatchers.Default)
     .stateIn(
@@ -98,7 +62,6 @@ class DashboardViewModel @Inject constructor(
             hasOverlayPermission = overlayServiceController.hasOverlayPermission(),
             isShizukuAvailable = privilegeManager.isAvailable.value,
             hasShizukuPermission = privilegeManager.isReady.value,
-            whatsNewInfo = _whatsNewInfo.value,
             canShowHardwareTuning = privilegeManager.currentMode.value == PrivilegeMode.ROOT
         )
     )
@@ -108,14 +71,7 @@ class DashboardViewModel @Inject constructor(
             DashboardUiEvent.StartOverlay -> overlayServiceController.startOverlayService()
             DashboardUiEvent.StopOverlay -> overlayServiceController.stopOverlayService()
             DashboardUiEvent.RefreshPermissions -> refreshPermissions()
-            DashboardUiEvent.DismissWhatsNew -> dismissWhatsNew()
         }
-    }
-
-    private fun dismissWhatsNew() {
-        _whatsNewInfo.value = null
-        val currentCode = com.framex.app.BuildConfig.VERSION_CODE.toLong()
-        settingsRepository.updateLastSeenVersionCode(currentCode)
     }
 
     fun refreshPermissions() {

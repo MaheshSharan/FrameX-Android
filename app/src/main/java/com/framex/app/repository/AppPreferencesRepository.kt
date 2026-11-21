@@ -42,12 +42,6 @@ class AppPreferencesRepository @Inject constructor(
         store.putBoolean("auto_update_check_enabled", enabled)
     }
 
-    fun getLastSeenVersionCode(): Long = store.getLong("last_seen_version_code", 0L)
-
-    fun updateLastSeenVersionCode(versionCode: Long) {
-        store.putLong("last_seen_version_code", versionCode)
-    }
-
     fun isFeatureDiscoveryGloballyDismissed(): Boolean {
         return store.getBoolean("globally_dismissed", default = false)
     }

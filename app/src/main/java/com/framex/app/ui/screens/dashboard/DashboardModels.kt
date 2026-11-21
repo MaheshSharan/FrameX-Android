@@ -24,7 +24,6 @@ data class DashboardUiState(
     val hasShizukuPermission: Boolean = false,
     val fpsHistory: List<Int> = emptyList(),
     val fpsStats: FpsStatsSummary = FpsStatsSummary(),
-    val whatsNewInfo: WhatsNewInfo? = null,
     /** True only under Root; write-locking sysfs nodes needs Root, Shizuku support is partial. */
     val canShowHardwareTuning: Boolean = false
 ) {
@@ -39,5 +38,4 @@ sealed interface DashboardUiEvent {
     data object StartOverlay : DashboardUiEvent
     data object StopOverlay : DashboardUiEvent
     data object RefreshPermissions : DashboardUiEvent
-    data object DismissWhatsNew : DashboardUiEvent
 }

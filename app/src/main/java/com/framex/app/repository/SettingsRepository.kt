@@ -118,8 +118,6 @@ class SettingsRepository @Inject constructor(
 
     fun setOnboardingCompleted(completed: Boolean) = appPrefs.setOnboardingCompleted(completed)
     fun setAutoUpdateCheckEnabled(enabled: Boolean) = appPrefs.setAutoUpdateCheckEnabled(enabled)
-    fun getLastSeenVersionCode(): Long = appPrefs.getLastSeenVersionCode()
-    fun updateLastSeenVersionCode(versionCode: Long) = appPrefs.updateLastSeenVersionCode(versionCode)
 
     suspend fun awaitSettingsLoaded() = appPrefs.awaitLoaded()
     suspend fun flushRecoveryWrites() = gaming.flushWrites()
