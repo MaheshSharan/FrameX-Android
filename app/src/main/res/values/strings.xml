@@ -138,6 +138,7 @@
     <string name="perm_why_desc">FrameX operates as a high-privilege tool. Without overlay access, we cannot draw the HUD. Without usage stats, we cannot identify which game is running. Shizuku allows us to bypass Android 14+ restrictions securely.</string>
     <string name="perm_return_dashboard">Return to Dashboard</string>
     <string name="perm_shizuku_not_found">Shizuku app not found</string>
+    <string name="perm_open_settings_failed">Unable to open this screen on your device</string>
     <string name="perm_start_shizuku_first">Start Shizuku service first</string>
     <string name="perm_status_format">%1$s: %2$s</string>
 

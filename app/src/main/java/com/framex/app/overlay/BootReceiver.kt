@@ -4,7 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.provider.Settings
+import com.framex.app.permissions.AppPermission
+import com.framex.app.permissions.PermissionsManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.utils.FrameXLog
 import dagger.hilt.android.AndroidEntryPoint
@@ -24,6 +25,9 @@ class BootReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var permissionsManager: PermissionsManager
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
@@ -47,7 +51,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         val wasRunning = settingsRepository.overlay.wasOverlayRunning()
-        if (!shouldRestoreOverlay(action, wasRunning, Settings.canDrawOverlays(context))) return
+        if (!shouldRestoreOverlay(action, wasRunning, permissionsManager.isGranted(AppPermission.OVERLAY))) return
         startOverlay(context)
     }
 
