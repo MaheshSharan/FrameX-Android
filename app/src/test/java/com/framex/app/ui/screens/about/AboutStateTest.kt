@@ -23,9 +23,6 @@ class AboutStateTest {
         assertNull(state.updateInfoState)
         assertNull(state.signatureErrorMessage)
         assertEquals(DownloadState.Idle, state.downloadState)
-        assertFalse(state.isVivoDevice)
-        assertFalse(state.isVivoOptActive)
-        assertFalse(state.showVivoDiagModal)
         assertEquals(ExecutionCenterTab.COMMON, state.selectedExecutionTab)
         assertFalse(state.disableThermalThrottling)
         assertTrue(state.ramCachePreTrimEnabled)
@@ -35,16 +32,8 @@ class AboutStateTest {
         assertFalse(state.networkFirewall)
         assertFalse(state.refreshRateLock)
         assertFalse(state.touchBoost)
-        assertFalse(state.vivoMonsterMode)
-        assertFalse(state.vivoVipThread)
-        assertFalse(state.vivoGameHandshake)
-        assertFalse(state.vivoGyroPromotion)
-        assertFalse(state.vivoTouchOptimization)
-        assertFalse(state.vivo144FpsUnlock)
-        assertFalse(state.vivoMaintenancePulse)
-        assertFalse(state.vivoPulseGamePlusMode)
-        assertFalse(state.vivoPulseStandardPromotion)
-        assertFalse(state.vivoPulseSceneMoreFps)
+        assertTrue(state.capableCommandIds.isEmpty())
+        assertFalse(state.isRescanningDevice)
         assertFalse(state.hasCrashLog)
         assertNull(state.pendingInstallApk)
         assertFalse(state.waitingForInstallPermission)
@@ -68,14 +57,11 @@ class AboutStateTest {
             isCheckingUpdate = true,
             statusMessage = "Update available",
             updateInfoState = mockUpdate,
-            isVivoDevice = true,
-            isVivoOptActive = true,
-            selectedExecutionTab = ExecutionCenterTab.VIVO,
+            selectedExecutionTab = ExecutionCenterTab.GENERIC,
             disableThermalThrottling = true,
             fixedPerformanceMode = true,
-            vivo144FpsUnlock = true,
-            vivoMaintenancePulse = true,
-            vivoPulseGamePlusMode = true,
+            capableCommandIds = setOf("service:thermal_override"),
+            isRescanningDevice = true,
             hasCrashLog = true,
             waitingForInstallPermission = true
         )
@@ -86,14 +72,11 @@ class AboutStateTest {
         assertTrue(updated.isCheckingUpdate)
         assertEquals("Update available", updated.statusMessage)
         assertEquals(mockUpdate, updated.updateInfoState)
-        assertTrue(updated.isVivoDevice)
-        assertTrue(updated.isVivoOptActive)
-        assertEquals(ExecutionCenterTab.VIVO, updated.selectedExecutionTab)
+        assertEquals(ExecutionCenterTab.GENERIC, updated.selectedExecutionTab)
         assertTrue(updated.disableThermalThrottling)
         assertTrue(updated.fixedPerformanceMode)
-        assertTrue(updated.vivo144FpsUnlock)
-        assertTrue(updated.vivoMaintenancePulse)
-        assertTrue(updated.vivoPulseGamePlusMode)
+        assertEquals(setOf("service:thermal_override"), updated.capableCommandIds)
+        assertTrue(updated.isRescanningDevice)
         assertTrue(updated.hasCrashLog)
         assertTrue(updated.waitingForInstallPermission)
     }

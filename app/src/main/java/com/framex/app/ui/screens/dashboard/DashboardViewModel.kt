@@ -7,6 +7,7 @@ import com.framex.app.overlay.OverlayService
 import com.framex.app.overlay.OverlayServiceController
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
+import com.framex.app.privilege.PrivilegeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -83,6 +84,8 @@ class DashboardViewModel @Inject constructor(
             fpsHistory = history,
             fpsStats = stats
         )
+    }.combine(privilegeManager.currentMode) { state, mode ->
+        state.copy(canShowHardwareTuning = mode == PrivilegeMode.ROOT)
     }.combine(_whatsNewInfo) { state, whatsNew ->
         state.copy(whatsNewInfo = whatsNew)
     }
@@ -95,7 +98,8 @@ class DashboardViewModel @Inject constructor(
             hasOverlayPermission = overlayServiceController.hasOverlayPermission(),
             isShizukuAvailable = privilegeManager.isAvailable.value,
             hasShizukuPermission = privilegeManager.isReady.value,
-            whatsNewInfo = _whatsNewInfo.value
+            whatsNewInfo = _whatsNewInfo.value,
+            canShowHardwareTuning = privilegeManager.currentMode.value == PrivilegeMode.ROOT
         )
     )
 

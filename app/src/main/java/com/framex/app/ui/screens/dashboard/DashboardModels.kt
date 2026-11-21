@@ -24,7 +24,9 @@ data class DashboardUiState(
     val hasShizukuPermission: Boolean = false,
     val fpsHistory: List<Int> = emptyList(),
     val fpsStats: FpsStatsSummary = FpsStatsSummary(),
-    val whatsNewInfo: WhatsNewInfo? = null
+    val whatsNewInfo: WhatsNewInfo? = null,
+    /** True only under Root; write-locking sysfs nodes needs Root, Shizuku support is partial. */
+    val canShowHardwareTuning: Boolean = false
 ) {
     val allPermissionsReady: Boolean
         get() = hasOverlayPermission && isShizukuAvailable && hasShizukuPermission

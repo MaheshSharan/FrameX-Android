@@ -109,11 +109,14 @@ fun DashboardScreen(
                         )
                     }
 
-                    // Hardware Tuning Banner Card
-                    item(key = "hardware_tuning_card") {
-                        com.framex.app.ui.screens.dashboard.components.HardwareTuningDashboardCard(
-                            onClick = onNavigateToHardwareTuning
-                        )
+                    // Hardware Tuning Banner Card. Root-only: write-locking sysfs nodes needs
+                    // Root, so the entry point is hidden entirely under Shizuku, not disabled.
+                    if (uiState.canShowHardwareTuning) {
+                        item(key = "hardware_tuning_card") {
+                            com.framex.app.ui.screens.dashboard.components.HardwareTuningDashboardCard(
+                                onClick = onNavigateToHardwareTuning
+                            )
+                        }
                     }
 
                     // 3. Quick Access 2x2 Grid (Metrics, Theme, Performance, Shizuku)

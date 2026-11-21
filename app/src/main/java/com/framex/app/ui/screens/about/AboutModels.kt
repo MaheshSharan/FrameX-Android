@@ -7,9 +7,7 @@ import java.io.File
 
 enum class ExecutionCenterTab(val label: String) {
     COMMON("Common"),
-    GENERIC("Generic"),
-    VIVO("Vivo"),
-    IQOO("iQOO")
+    GENERIC("Generic")
 }
 
 @Immutable
@@ -22,10 +20,6 @@ data class AboutUiState(
     val updateInfoState: AppUpdateInfo? = null,
     val signatureErrorMessage: String? = null,
     val downloadState: DownloadState = DownloadState.Idle,
-    val isVivoDevice: Boolean = false,
-    val isIqooDevice: Boolean = false,
-    val isVivoOptActive: Boolean = false,
-    val showVivoDiagModal: Boolean = false,
     val selectedExecutionTab: ExecutionCenterTab = ExecutionCenterTab.COMMON,
     val disableThermalThrottling: Boolean = false,
     val ramCachePreTrimEnabled: Boolean = true,
@@ -35,16 +29,10 @@ data class AboutUiState(
     val networkFirewall: Boolean = false,
     val refreshRateLock: Boolean = false,
     val touchBoost: Boolean = false,
-    val vivoMonsterMode: Boolean = false,
-    val vivoVipThread: Boolean = false,
-    val vivoGameHandshake: Boolean = false,
-    val vivoGyroPromotion: Boolean = false,
-    val vivoTouchOptimization: Boolean = false,
-    val vivo144FpsUnlock: Boolean = false,
-    val vivoMaintenancePulse: Boolean = false,
-    val vivoPulseGamePlusMode: Boolean = false,
-    val vivoPulseStandardPromotion: Boolean = false,
-    val vivoPulseSceneMoreFps: Boolean = false,
+    /** Ids from [com.framex.app.gaming.catalog.GamingCommandCatalog] the device probe found
+     *  both existing and writable. A toggle with none of its entries here is hidden entirely. */
+    val capableCommandIds: Set<String> = emptySet(),
+    val isRescanningDevice: Boolean = false,
     val maxRefreshRate: Int = 60,
     val hasCrashLog: Boolean = false,
     val pendingInstallApk: File? = null,
@@ -54,8 +42,6 @@ data class AboutUiState(
 sealed interface AboutUiEvent {
     data class SetAutoUpdateCheck(val enabled: Boolean) : AboutUiEvent
     data object CheckForUpdates : AboutUiEvent
-    data class SetVivoOptEnabled(val enabled: Boolean) : AboutUiEvent
-    data class SetShowVivoDiagModal(val show: Boolean) : AboutUiEvent
     data class SelectExecutionCenterTab(val tab: ExecutionCenterTab) : AboutUiEvent
     data class SetDisableThermalThrottling(val enabled: Boolean) : AboutUiEvent
     data class SetRamCachePreTrim(val enabled: Boolean) : AboutUiEvent
@@ -65,16 +51,7 @@ sealed interface AboutUiEvent {
     data class SetNetworkFirewall(val enabled: Boolean) : AboutUiEvent
     data class SetRefreshRateLock(val enabled: Boolean) : AboutUiEvent
     data class SetTouchBoost(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoMonsterMode(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoVipThread(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoGameHandshake(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoGyroPromotion(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoTouchOptimization(val enabled: Boolean) : AboutUiEvent
-    data class SetVivo144FpsUnlock(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoMaintenancePulse(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoPulseGamePlusMode(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoPulseStandardPromotion(val enabled: Boolean) : AboutUiEvent
-    data class SetVivoPulseSceneMoreFps(val enabled: Boolean) : AboutUiEvent
+    data object RescanDevice : AboutUiEvent
     data object ShareCrashLog : AboutUiEvent
     data object ClearCrashLog : AboutUiEvent
     data class SetUpdateInfo(val info: AppUpdateInfo?) : AboutUiEvent

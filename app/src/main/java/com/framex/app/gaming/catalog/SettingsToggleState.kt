@@ -2,23 +2,29 @@ package com.framex.app.gaming.catalog
 
 import com.framex.app.repository.SettingsRepository
 
+/** Reads the Execution Center switches. */
+fun interface ToggleState {
+    fun isOn(toggle: Toggle): Boolean
+}
+
 /** [ToggleState] over the Execution Center settings. */
 class SettingsToggleState(private val settings: SettingsRepository) : ToggleState {
 
     override fun isOn(toggle: Toggle): Boolean = when (toggle) {
         Toggle.ALWAYS -> true
-        Toggle.MONSTER_MODE -> settings.vivoMonsterMode.value
-        Toggle.THERMAL_UNLOCK -> settings.disableThermalThrottling.value
-        Toggle.GAME_HANDSHAKE -> settings.vivoGameHandshake.value
-        Toggle.GYRO_PROMOTION -> settings.vivoGyroPromotion.value
-        Toggle.TOUCH_OPTIMIZATION -> settings.vivoTouchOptimization.value
-        Toggle.FPS_144_UNLOCK -> settings.vivo144FpsUnlock.value
-        Toggle.VIP_THREAD -> settings.vivoVipThread.value
-        Toggle.PULSE_GAME_PLUS -> pulse(settings.vivoPulseGamePlusMode.value)
-        Toggle.PULSE_STANDARD_PROMOTION -> pulse(settings.vivoPulseStandardPromotion.value)
-        Toggle.PULSE_SCENE_MORE_FPS -> pulse(settings.vivoPulseSceneMoreFps.value)
+        Toggle.RAM_CACHE_PRE_TRIM -> settings.ramCachePreTrimEnabled.value
+        Toggle.THERMAL_OVERRIDE -> settings.disableThermalThrottling.value
+        Toggle.CPU_PRIORITY_LOCK -> settings.cpuPriorityLock.value
+        Toggle.NETWORK_FIREWALL -> settings.networkFirewall.value
+        Toggle.PHANTOM_PROC_KILLER -> settings.disablePhantomProcKiller.value
+        Toggle.FIXED_PERFORMANCE_MODE -> settings.fixedPerformanceMode.value
+        Toggle.REFRESH_RATE_LOCK -> settings.refreshRateLock.value
+        Toggle.TOUCH_BOOST -> settings.touchBoost.value
     }
+}
 
-    /** Every pulse command also needs the master pulse switch. */
-    private fun pulse(own: Boolean): Boolean = settings.vivoMaintenancePulse.value && own
+/** Capability lookup the capability probe exposes; kept here so the catalog package does not
+ *  need to depend on the privilege package to describe its own filtering contract. */
+fun interface CapableLookup {
+    fun isCapable(commandId: String): Boolean
 }

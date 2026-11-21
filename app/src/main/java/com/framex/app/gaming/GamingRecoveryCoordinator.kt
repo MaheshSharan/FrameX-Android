@@ -25,10 +25,10 @@ internal class GamingRecoveryCoordinator(
         var triedRecordedBackend = false
         privilegeManager.isReady.collect { ready ->
             val wasActive = settingsRepository.isGamingModeActive()
-            val hasSnapshot = settingsRepository.hasActiveGamingSnapshot()
+            val hasBaselines = settingsRepository.getGamingBaselines().isNotEmpty()
             val affected = settingsRepository.getGamingAffectedPackages()
 
-            if (!wasActive && !hasSnapshot && affected.isEmpty()) {
+            if (!wasActive && !hasBaselines && affected.isEmpty()) {
                 return@collect
             }
 

@@ -11,70 +11,56 @@ class CommandPlannerTest {
 
     private val everything = ToggleState { true }
     private val nothing = ToggleState { it == Toggle.ALWAYS }
+    private val allCapable = CapableLookup { true }
+    private val noneCapable = CapableLookup { id -> id.startsWith("settings:secure:user_preferred_display_mode_id") }
 
     @Test
-    fun everyPlatformHasUniqueEntryIds() {
-        Platform.values().forEach { platform ->
-            val ids = GamingCommandCatalog.forPlatform(platform).map { it.id }
-            assertEquals("duplicate id on $platform", ids.size, ids.toSet().size)
-        }
+    fun everyCatalogEntryHasAUniqueId() {
+        val ids = GamingCommandCatalog.entries.map { it.id }
+        assertEquals(ids.size, ids.toSet().size)
     }
 
     @Test
     fun switchesOffRemoveTheirEntriesFromThePlan() {
-        val plan = CommandPlanner.plan(Platform.VIVO, nothing)
+        val plan = CommandPlanner.plan(nothing, allCapable)
         assertTrue(plan.enabled.all { it.toggle == Toggle.ALWAYS })
-        assertTrue(plan.disabled.any { it.key == "system_property_power_mode_type" })
-        assertEquals(
-            GamingCommandCatalog.forPlatform(Platform.VIVO).size,
-            plan.enabled.size + plan.disabled.size
-        )
+        assertTrue(plan.disabled.any { it.toggle == Toggle.RAM_CACHE_PRE_TRIM })
+        assertEquals(GamingCommandCatalog.entries.size, plan.enabled.size + plan.disabled.size)
     }
 
     @Test
-    fun monsterModeEnablesThePowerEntriesOnly() {
-        val plan = CommandPlanner.plan(Platform.VIVO, togglesOn(Toggle.MONSTER_MODE))
-        val keys = plan.enabled.map { it.key }
-        assertTrue("power_save_type" in keys)
-        assertFalse("vts_game_para_adjust" in keys)
+    fun aCapabilityMissReMovesTheEntryEvenWhenItsSwitchIsOn() {
+        val plan = CommandPlanner.plan(everything, noneCapable)
+        assertTrue(plan.enabled.all { it.toggle == Toggle.ALWAYS })
+        assertTrue(plan.disabled.any { it.toggle == Toggle.TOUCH_BOOST })
     }
 
     @Test
-    fun restoreSetEqualsApplySetForEveryPlatformAndSwitchState() {
-        for (platform in Platform.values()) {
-            for (toggles in listOf(everything, nothing, togglesOn(Toggle.TOUCH_OPTIMIZATION))) {
-                val plan = CommandPlanner.plan(platform, toggles)
-                val captured = plan.enabled.map { it.id }.toSet()
-                val restored = CommandPlanner.capturedEntries(platform, captured)
-                assertEquals(plan.enabled.map { it.id }, restored.map { it.id })
-            }
+    fun touchBoostEnablesOnlyTheTouchResponseEntry() {
+        val plan = CommandPlanner.plan(togglesOn(Toggle.TOUCH_BOOST), allCapable)
+        val ids = plan.enabled.map { it.id }
+        assertTrue(ids.any { it.contains("touch_response_speed") })
+        assertFalse(ids.any { it.contains("peak_refresh_rate") })
+    }
+
+    @Test
+    fun restoreSetEqualsApplySetForEverySwitchState() {
+        for (toggles in listOf(everything, nothing, togglesOn(Toggle.TOUCH_BOOST))) {
+            val plan = CommandPlanner.plan(toggles, allCapable)
+            val captured = plan.enabled.map { it.id }.toSet()
+            val restored = CommandPlanner.capturedEntries(captured)
+            assertEquals(plan.enabled.map { it.id }.toSet(), restored.map { it.id }.toSet())
         }
     }
 
     @Test
-    fun pulseEntriesAreSeparatedFromActivationEntries() {
-        val plan = CommandPlanner.plan(Platform.VIVO, everything)
-        assertTrue(plan.pulse().all { it.phase == Phase.PULSE })
-        assertTrue(plan.activation().none { it.phase == Phase.PULSE })
-        assertEquals(setOf("game_plus_mode_key", "game_standard_promotion_mode", "game_scene_more_fps"), plan.pulse().map { it.key }.toSet())
-    }
-
-    @Test
-    fun iqooPlanNeverContainsVivoOnlyKeys() {
-        val keys = CommandPlanner.plan(Platform.IQOO, everything).enabled.map { it.key }
-        assertFalse("system_property_power_mode_type" in keys)
-        assertFalse("speed_mode_apps" in keys)
-        assertTrue("gamecube_frame_interpolation_for_sr" in keys)
-    }
-
-    @Test
-    fun entriesThatNeedAGameAreWaitingUntilItsPackageAndPidAreKnown() {
-        val noGame = ResolveContext(null, 0, 120)
-        val packageOnly = ResolveContext("com.game.app", 0, 120)
-        val running = ResolveContext("com.game.app", 4242, 120)
+    fun entriesThatNeedAGameAreWaitingUntilItsPackageOrUidAreKnown() {
+        val noGame = ResolveContext(null)
+        val packageOnly = ResolveContext("com.game.app")
+        val packageAndUid = ResolveContext("com.game.app", uid = 4242)
         assertFalse(noGame.satisfies(Need.PACKAGE))
         assertTrue(packageOnly.satisfies(Need.PACKAGE))
-        assertFalse(packageOnly.satisfies(Need.PACKAGE_AND_PID))
-        assertTrue(running.satisfies(Need.PACKAGE_AND_PID))
+        assertFalse(packageOnly.satisfies(Need.PACKAGE_AND_UID))
+        assertTrue(packageAndUid.satisfies(Need.PACKAGE_AND_UID))
     }
 }

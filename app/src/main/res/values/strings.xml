@@ -260,10 +260,10 @@
     <string name="gaming_recovery_notif_text">Tap to connect Shizuku and restore your apps.</string>
 
     <!-- Gaming Mode Engine Status & Messages -->
-    <string name="gaming_toast_hardware_rolled_back">Hardware optimizations rolled back</string>
     <string name="gaming_err_shizuku_unavailable">Privileged access is not available. Check the selected mode.</string>
-    <string name="gaming_err_revert_vivo_failed">Failed to revert prior Vivo optimizations</string>
     <string name="gaming_err_snapshot_failed">Failed to capture system settings snapshot</string>
+    <string name="gaming_toast_partial_optimizations">Gaming Mode is active, but some optimizations couldn\'t be applied — check Execution Center</string>
+    <string name="gaming_toast_partial_restore">Gaming Mode deactivated, but some settings couldn\'t be fully reverted</string>
     <string name="gaming_err_deactivate_shizuku">Deactivation incomplete: Privileged service unavailable. Tap to retry.</string>
     <string name="gaming_err_deactivate_partial">Deactivation incomplete: %1$d apps still suspended. Tap to retry.</string>
     <string name="gaming_status_preparing">Preparing…</string>
@@ -273,21 +273,6 @@
 
     <!-- Performance Screen Toasts & Banners -->
     <string name="perf_toast_add_one_game">Kindly add a minimum of one game in game launcher</string>
-    <string name="perf_toast_vivo_pid_hint">Gaming Mode active: Launch your game within 2 min for PID-locked performance optimizations.</string>
-    <string name="perf_toast_perf_list_added">Added %1$d game(s) to Perf List ✓</string>
-    <string name="perf_toast_perf_list_add_err">Some games could not be added to Perf List</string>
-    <string name="perf_toast_perf_list_removed">Removed %1$d game(s) from Perf List ✓</string>
-    <string name="perf_toast_perf_list_remove_err">Some games could not be removed from Perf List</string>
-    <string name="perf_toast_144_list_added">Added %1$d game(s) to 144Hz Merge List ✓</string>
-    <string name="perf_toast_144_list_add_err">Some games could not be added to 144Hz Merge List</string>
-    <string name="perf_toast_144_list_removed">Removed %1$d game(s) from 144Hz Merge List ✓</string>
-    <string name="perf_toast_144_list_remove_err">Some games could not be removed from 144Hz Merge List</string>
-    <string name="perf_toast_144_single_added">Added to 144Hz Merge List ✓</string>
-    <string name="perf_toast_144_single_add_err">Failed to add to 144Hz Merge List</string>
-    <string name="perf_toast_144_single_removed">Removed from 144Hz Merge List ✓</string>
-    <string name="perf_toast_144_single_remove_err">Failed to remove from 144Hz Merge List</string>
-    <string name="perf_toast_aot_compiled">AOT compiled %1$d app(s) to speed filter ✓</string>
-    <string name="perf_toast_aot_compile_err">AOT compilation failed for one or more apps</string>
     <string name="perf_toast_open_shizuku_err">Unable to open Shizuku app</string>
     <string name="perf_toast_open_write_settings_err">Unable to open Write Settings</string>
     <string name="perf_toast_open_dnd_err">Unable to open DND settings</string>

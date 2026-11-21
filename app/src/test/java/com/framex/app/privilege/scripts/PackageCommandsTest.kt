@@ -14,29 +14,25 @@ class PackageCommandsTest {
     }
 
     @Test
-    fun batchSucceedsWithOneCommand() {
-        val seen = mutableListOf<String>()
+    fun everyPackageIsHandledInOneCall() {
+        var calls = 0
         val outcome = PackageCommands.applySuspend(listOf("a.b", "c.d"), suspended = true) { cmd ->
-            seen.add(cmd)
-            0 to ""
+            calls++
+            assertTrue(cmd.contains("cmd package suspend --user 0 a.b"))
+            assertTrue(cmd.contains("cmd package suspend --user 0 c.d"))
+            0 to "FXS|a.b|0|0\nFXS|c.d|0|0"
         }
-        assertEquals(listOf("cmd package suspend --user 0 a.b c.d"), seen)
+        assertEquals(1, calls)
         assertEquals(2, outcome.successCount)
         assertTrue(outcome.failedPackages.isEmpty())
     }
 
     @Test
-    fun failedBatchFallsBackToPerPackageAndSkipsUninstalled() {
-        val outcome = PackageCommands.applySuspend(listOf("a.b", "c.d", "e.f"), suspended = false) { cmd ->
-            when {
-                cmd.contains("a.b c.d e.f") -> 1 to "error"
-                cmd.endsWith("a.b") -> 0 to ""
-                cmd.endsWith("c.d") -> 1 to "Unknown target package: c.d"
-                else -> 1 to "SecurityException"
-            }
-        }
+    fun rejectedPackagesAreReportedAndUninstalledOnesSkipped() {
+        val report = "FXS|a.b|0|0\nFXS|c.d|1|1\nFXS|e.f|255|0"
+        val outcome = PackageCommands.parseSuspendReport(listOf("a.b", "c.d", "e.f", "g.h"), report)
         assertEquals(1, outcome.successCount)
-        assertEquals(listOf("e.f"), outcome.failedPackages)
+        assertEquals(listOf("e.f", "g.h"), outcome.failedPackages)
     }
 
     @Test

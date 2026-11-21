@@ -15,23 +15,6 @@ open class DeviceDiagnosticManager @Inject constructor(
         return readSystemProperty(key).ifBlank { null }
     }
 
-    open fun isVivoOnly(): Boolean {
-        val brand = getProperty("ro.product.brand")?.lowercase() ?: android.os.Build.BRAND?.lowercase().orEmpty()
-        val manufacturer = getProperty("ro.product.manufacturer")?.lowercase() ?: android.os.Build.MANUFACTURER?.lowercase().orEmpty()
-        return (brand.contains("vivo") || manufacturer.contains("vivo")) && !isIqooOnly()
-    }
-
-    open fun isIqooOnly(): Boolean {
-        val brand = getProperty("ro.product.brand")?.lowercase() ?: android.os.Build.BRAND?.lowercase().orEmpty()
-        val manufacturer = getProperty("ro.product.manufacturer")?.lowercase() ?: android.os.Build.MANUFACTURER?.lowercase().orEmpty()
-        val model = getProperty("ro.product.model")?.lowercase() ?: android.os.Build.MODEL?.lowercase().orEmpty()
-        return brand.contains("iqoo") || manufacturer.contains("iqoo") || model.contains("iqoo")
-    }
-
-    open fun isVivoOrIqoo(): Boolean {
-        return isVivoOnly() || isIqooOnly()
-    }
-
     fun getDeviceModelInfo(): String {
         val model = getProperty("ro.product.model") ?: android.os.Build.MODEL
         val brand = getProperty("ro.product.brand") ?: android.os.Build.BRAND

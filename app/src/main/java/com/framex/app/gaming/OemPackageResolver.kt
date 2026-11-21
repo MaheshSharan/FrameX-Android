@@ -25,9 +25,7 @@ data class AppInfo(
  * for [GamingModeEngine] (Plan 4.4).
  */
 @Singleton
-class OemPackageResolver @Inject constructor(
-    private val vivoSuiteGate: VivoSuiteGate
-) {
+class OemPackageResolver @Inject constructor() {
 
     fun getInstalledUserApps(context: Context): List<AppInfo> {
         return try {
@@ -79,13 +77,19 @@ class OemPackageResolver @Inject constructor(
         context: Context,
         whitelist: Set<String>,
         launcherGames: Set<String>,
-        deepFreezeEnabled: Boolean
+        deepFreezeEnabled: Boolean,
+        frameXSuspended: Set<String> = emptySet()
     ): List<String> {
+        // Apps the user already disabled or suspended must stay exactly as they are: FrameX
+        // would otherwise track them and "restore" them on deactivation. Packages FrameX itself
+        // suspended in an earlier, unfinished session are not the user's choice, so they stay
+        // eligible and keep being tracked.
+        val userDisabled = queryUserDisabledPackages(context) - frameXSuspended
         val protectedSet = buildProtectedSet(
             context = context,
             baseCriticalPackages = CRITICAL_SYSTEM_PACKAGES + context.packageName,
             whitelist = whitelist + launcherGames
-        )
+        ) + userDisabled
         val userPkgs = getInstalledUserApps(context).map { it.packageName }
         val bloatPkgs = queryBloatwareInstalled(context, protectedSet)
         val googleCandidates = if (deepFreezeEnabled) {
@@ -96,6 +100,18 @@ class OemPackageResolver @Inject constructor(
         return (userPkgs + bloatPkgs + googleCandidates)
             .distinct()
             .filter { it !in protectedSet }
+    }
+
+    /** Packages that are disabled or suspended right now, read from one package-manager pass. */
+    private fun queryUserDisabledPackages(context: Context): Set<String> = try {
+        @Suppress("DEPRECATION")
+        context.packageManager.getInstalledApplications(0)
+            .filter { !it.enabled || (it.flags and ApplicationInfo.FLAG_SUSPENDED) != 0 }
+            .map { it.packageName }
+            .toSet()
+    } catch (e: Exception) {
+        FrameXLog.e("queryUserDisabledPackages failed", e, tag = TAG)
+        emptySet()
     }
 
     fun queryBloatwareInstalled(context: Context, protectedPackages: Set<String>): List<String> {
@@ -139,7 +155,9 @@ class OemPackageResolver @Inject constructor(
         val result = mutableSetOf<String>()
         try {
             Telephony.Sms.getDefaultSmsPackage(context)?.let { if (it.isNotEmpty()) result.add(it) }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            FrameXLog.w("Default SMS package lookup failed", e, tag = TAG)
+        }
         try {
             val pm = context.packageManager
             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))
@@ -147,7 +165,9 @@ class OemPackageResolver @Inject constructor(
             pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
                 .mapNotNull { it.activityInfo?.packageName }
                 .forEach { result.add(it) }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            FrameXLog.w("SMS intent resolution failed", e, tag = TAG)
+        }
         return result
     }
 
@@ -156,11 +176,15 @@ class OemPackageResolver @Inject constructor(
         try {
             val flat = Settings.Secure.getString(context.contentResolver, "assistant") ?: ""
             ComponentName.unflattenFromString(flat)?.packageName?.let { result.add(it) }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            FrameXLog.w("Assistant component lookup failed", e, tag = TAG)
+        }
         try {
             val flat = Settings.Secure.getString(context.contentResolver, "voice_interaction_service") ?: ""
             ComponentName.unflattenFromString(flat)?.packageName?.let { result.add(it) }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            FrameXLog.w("Voice interaction service lookup failed", e, tag = TAG)
+        }
         try {
             val pm = context.packageManager
             val intent = Intent(Intent.ACTION_ASSIST)
@@ -168,26 +192,29 @@ class OemPackageResolver @Inject constructor(
             pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
                 .mapNotNull { it.activityInfo?.packageName }
                 .forEach { result.add(it) }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            FrameXLog.w("Assist intent resolution failed", e, tag = TAG)
+        }
         return result
     }
 
+    /**
+     * Only the device's actual default browser is protected. [PackageManager.queryIntentActivities]
+     * previously also ran here and added every browser-capable app, not just the default one — on
+     * a device with multiple browsers installed (e.g. Brave alongside Chrome) that protected every
+     * one of them from suspension regardless of which was actually set as default.
+     */
     private fun queryDefaultBrowsers(context: Context): Set<String> {
         return try {
             val pm = context.packageManager
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com")).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
             }
-            val result = mutableSetOf<String>()
             @Suppress("DEPRECATION")
-            pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName?.let { if (it != "android") result.add(it) }
-            @Suppress("DEPRECATION")
-            pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-                .mapNotNull { it.activityInfo?.packageName }
-                .filter { it != "android" }
-                .forEach { result.add(it) }
-            result
+            val default = pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName
+                ?.takeIf { it != "android" }
+            if (default != null) setOf(default) else emptySet()
         } catch (_: Exception) {
             emptySet()
         }
@@ -203,7 +230,14 @@ class OemPackageResolver @Inject constructor(
         }
     }
 
+    /**
+     * [Settings.Secure.ENABLED_INPUT_METHODS] throws [SecurityException] for any app whose
+     * targetSdkVersion is above 33 (this app targets 34) — the OS blocks the read unconditionally,
+     * not conditionally, so there is no "try it and see" here: skip the call outright rather than
+     * throw on every single activation.
+     */
     private fun queryEnabledInputMethods(context: Context): Set<String> {
+        if (android.os.Build.VERSION.SDK_INT > 33) return emptySet()
         return try {
             val flat = Settings.Secure.getString(
                 context.contentResolver,

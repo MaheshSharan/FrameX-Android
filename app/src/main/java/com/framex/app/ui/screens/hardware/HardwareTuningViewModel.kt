@@ -53,7 +53,14 @@ class HardwareTuningViewModel @Inject constructor(
         refreshHardware()
         viewModelScope.launch {
             privilegeManager.capabilities.collect { caps ->
-                _uiState.update { it.copy(canTune = caps?.canWriteSysfs == true) }
+                // Write-locking sysfs nodes needs Root; Shizuku support here is partial and
+                // unreliable, so tuning is gated to Root even when a sysfs write looks possible.
+                _uiState.update {
+                    it.copy(
+                        canTune = caps?.canWriteSysfs == true &&
+                            privilegeManager.currentMode.value == PrivilegeMode.ROOT
+                    )
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The on/off switches for the eight Common/Generic Execution Center commands. */
 @Singleton
 class ExecutionCenterSettingsRepository @Inject constructor(
     private val store: FrameXPreferenceStore
@@ -51,56 +52,6 @@ class ExecutionCenterSettingsRepository @Inject constructor(
     )
     val touchBoost: StateFlow<Boolean> = _touchBoost.asStateFlow()
 
-    private val _vivoMonsterMode = MutableStateFlow(
-        store.getBoolean("exec_vivo_monster_mode", false)
-    )
-    val vivoMonsterMode: StateFlow<Boolean> = _vivoMonsterMode.asStateFlow()
-
-    private val _vivoVipThread = MutableStateFlow(
-        store.getBoolean("exec_vivo_vip_thread", false)
-    )
-    val vivoVipThread: StateFlow<Boolean> = _vivoVipThread.asStateFlow()
-
-    private val _vivoGameHandshake = MutableStateFlow(
-        store.getBoolean("exec_vivo_game_handshake", false)
-    )
-    val vivoGameHandshake: StateFlow<Boolean> = _vivoGameHandshake.asStateFlow()
-
-    private val _vivoGyroPromotion = MutableStateFlow(
-        store.getBoolean("exec_vivo_gyro_promotion", false)
-    )
-    val vivoGyroPromotion: StateFlow<Boolean> = _vivoGyroPromotion.asStateFlow()
-
-    private val _vivoTouchOptimization = MutableStateFlow(
-        store.getBoolean("exec_vivo_touch_optimization", false)
-    )
-    val vivoTouchOptimization: StateFlow<Boolean> = _vivoTouchOptimization.asStateFlow()
-
-    private val _vivo144FpsUnlock = MutableStateFlow(
-        store.getBoolean("exec_vivo_144_fps_unlock", false)
-    )
-    val vivo144FpsUnlock: StateFlow<Boolean> = _vivo144FpsUnlock.asStateFlow()
-
-    private val _vivoMaintenancePulse = MutableStateFlow(
-        store.getBoolean("exec_vivo_maintenance_pulse", false)
-    )
-    val vivoMaintenancePulse: StateFlow<Boolean> = _vivoMaintenancePulse.asStateFlow()
-
-    private val _vivoPulseGamePlusMode = MutableStateFlow(
-        store.getBoolean("exec_vivo_pulse_game_plus_mode", false)
-    )
-    val vivoPulseGamePlusMode: StateFlow<Boolean> = _vivoPulseGamePlusMode.asStateFlow()
-
-    private val _vivoPulseStandardPromotion = MutableStateFlow(
-        store.getBoolean("exec_vivo_pulse_standard_promotion", false)
-    )
-    val vivoPulseStandardPromotion: StateFlow<Boolean> = _vivoPulseStandardPromotion.asStateFlow()
-
-    private val _vivoPulseSceneMoreFps = MutableStateFlow(
-        store.getBoolean("exec_vivo_pulse_scene_more_fps", false)
-    )
-    val vivoPulseSceneMoreFps: StateFlow<Boolean> = _vivoPulseSceneMoreFps.asStateFlow()
-
     private val _auditLoggingEnabled = MutableStateFlow(
         store.getBoolean("audit_logging_enabled", false)
     )
@@ -116,16 +67,6 @@ class ExecutionCenterSettingsRepository @Inject constructor(
             prefs[booleanPreferencesKey("exec_network_firewall")]?.let { _networkFirewall.value = it }
             prefs[booleanPreferencesKey("exec_refresh_rate_lock")]?.let { _refreshRateLock.value = it }
             prefs[booleanPreferencesKey("exec_touch_boost")]?.let { _touchBoost.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_monster_mode")]?.let { _vivoMonsterMode.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_vip_thread")]?.let { _vivoVipThread.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_game_handshake")]?.let { _vivoGameHandshake.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_gyro_promotion")]?.let { _vivoGyroPromotion.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_touch_optimization")]?.let { _vivoTouchOptimization.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_144_fps_unlock")]?.let { _vivo144FpsUnlock.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_maintenance_pulse")]?.let { _vivoMaintenancePulse.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_pulse_game_plus_mode")]?.let { _vivoPulseGamePlusMode.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_pulse_standard_promotion")]?.let { _vivoPulseStandardPromotion.value = it }
-            prefs[booleanPreferencesKey("exec_vivo_pulse_scene_more_fps")]?.let { _vivoPulseSceneMoreFps.value = it }
             prefs[booleanPreferencesKey("audit_logging_enabled")]?.let { _auditLoggingEnabled.value = it }
         }
     }
@@ -168,56 +109,6 @@ class ExecutionCenterSettingsRepository @Inject constructor(
     fun setTouchBoost(enabled: Boolean) {
         _touchBoost.value = enabled
         store.putBoolean("exec_touch_boost", enabled)
-    }
-
-    fun setVivoMonsterMode(enabled: Boolean) {
-        _vivoMonsterMode.value = enabled
-        store.putBoolean("exec_vivo_monster_mode", enabled)
-    }
-
-    fun setVivoVipThread(enabled: Boolean) {
-        _vivoVipThread.value = enabled
-        store.putBoolean("exec_vivo_vip_thread", enabled)
-    }
-
-    fun setVivoGameHandshake(enabled: Boolean) {
-        _vivoGameHandshake.value = enabled
-        store.putBoolean("exec_vivo_game_handshake", enabled)
-    }
-
-    fun setVivoGyroPromotion(enabled: Boolean) {
-        _vivoGyroPromotion.value = enabled
-        store.putBoolean("exec_vivo_gyro_promotion", enabled)
-    }
-
-    fun setVivoTouchOptimization(enabled: Boolean) {
-        _vivoTouchOptimization.value = enabled
-        store.putBoolean("exec_vivo_touch_optimization", enabled)
-    }
-
-    fun setVivo144FpsUnlock(enabled: Boolean) {
-        _vivo144FpsUnlock.value = enabled
-        store.putBoolean("exec_vivo_144_fps_unlock", enabled)
-    }
-
-    fun setVivoMaintenancePulse(enabled: Boolean) {
-        _vivoMaintenancePulse.value = enabled
-        store.putBoolean("exec_vivo_maintenance_pulse", enabled)
-    }
-
-    fun setVivoPulseGamePlusMode(enabled: Boolean) {
-        _vivoPulseGamePlusMode.value = enabled
-        store.putBoolean("exec_vivo_pulse_game_plus_mode", enabled)
-    }
-
-    fun setVivoPulseStandardPromotion(enabled: Boolean) {
-        _vivoPulseStandardPromotion.value = enabled
-        store.putBoolean("exec_vivo_pulse_standard_promotion", enabled)
-    }
-
-    fun setVivoPulseSceneMoreFps(enabled: Boolean) {
-        _vivoPulseSceneMoreFps.value = enabled
-        store.putBoolean("exec_vivo_pulse_scene_more_fps", enabled)
     }
 
     fun setAuditLoggingEnabled(enabled: Boolean) {

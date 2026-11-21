@@ -10,29 +10,33 @@ import com.framex.app.utils.ShellSanitizer
 object PackageCommands {
 
     private const val APP_OP_MARKER = "FXOP:"
-
-    private val SKIPPABLE_FAILURES = listOf("unknown target package", "does not exist", "not found")
+    private const val SUSPEND_MARKER = "FXS|"
+    private const val SUSPEND_PARALLELISM = 8
+    private const val NOT_INSTALLED_PATTERN = "unknown target package|does not exist|not found"
 
     /** Keeps only names that pass the package-name validator; the rest never reach a shell. */
     fun validPackages(packages: Collection<String>): List<String> =
         packages.mapNotNull { ShellSanitizer.sanitizePackageName(it) }
 
-    fun suspendBatch(packages: List<String>, suspended: Boolean): String =
-        "cmd package ${verb(suspended)} --user 0 ${packages.joinToString(" ")}"
-
-    fun suspendOne(pkg: String, suspended: Boolean): String =
-        "cmd package ${verb(suspended)} --user 0 $pkg"
-
-    /** True when a per-package failure only means the package is not installed. */
-    fun isUninstalledFailure(output: String): Boolean {
-        val lower = output.lowercase()
-        return SKIPPABLE_FAILURES.any { lower.contains(it) }
-    }
+    /**
+     * One script that tries every package on its own, a few at a time. `cmd package suspend`
+     * aborts the whole call at the first package it rejects (not installed, or protected on
+     * this device), so a shared call would leave the rest untouched and force a slow retry
+     * per package. Each line reports `FXS|pkg|exitCode|notInstalled` so nothing is guessed.
+     */
+    fun suspendScript(packages: List<String>, suspended: Boolean): String =
+        packages.chunked(SUSPEND_PARALLELISM).joinToString("\n") { chunk ->
+            chunk.joinToString("\n") { pkg ->
+                "( out=$(cmd package ${verb(suspended)} --user 0 $pkg 2>&1); rc=\$?; " +
+                    "if echo \"\$out\" | grep -qiE '$NOT_INSTALLED_PATTERN'; then gone=1; else gone=0; fi; " +
+                    "echo \"$SUSPEND_MARKER$pkg|\$rc|\$gone\" ) &"
+            } + "\nwait"
+        }
 
     /**
-     * Suspends or restores [packages] with one batched command and falls back to one command
-     * per package only when the batch fails. [run] returns the exit code and output of a
-     * command; it is inline so callers may use suspending executors.
+     * Suspends or restores [packages] in one privileged call. A package that is not installed
+     * is skipped; any other rejection is reported in the outcome. [run] returns the exit code
+     * and output of a command; it is inline so callers may use suspending executors.
      */
     inline fun applySuspend(
         packages: List<String>,
@@ -41,15 +45,27 @@ object PackageCommands {
     ): SuspendOutcome {
         val valid = validPackages(packages)
         if (valid.isEmpty()) return SuspendOutcome(emptyList(), 0)
-        if (run(suspendBatch(valid, suspended)).first == 0) return SuspendOutcome(emptyList(), valid.size)
+        val (_, output) = run(suspendScript(valid, suspended))
+        return parseSuspendReport(valid, output)
+    }
 
+    /** Packages with no result line are reported failed, so a dropped call is never a success. */
+    fun parseSuspendReport(packages: List<String>, output: String): SuspendOutcome {
+        val results = output.lineSequence()
+            .filter { it.startsWith(SUSPEND_MARKER) }
+            .mapNotNull { line ->
+                val parts = line.removePrefix(SUSPEND_MARKER).split('|')
+                if (parts.size == 3) parts[0] to (parts[1] to parts[2]) else null
+            }
+            .toMap()
         val failed = mutableListOf<String>()
         var succeeded = 0
-        for (pkg in valid) {
-            val (exitCode, output) = run(suspendOne(pkg, suspended))
+        for (pkg in packages) {
+            val result = results[pkg]
             when {
-                exitCode == 0 -> succeeded++
-                !isUninstalledFailure(output) -> failed.add(pkg)
+                result == null -> failed.add(pkg)
+                result.first == "0" -> succeeded++
+                result.second != "1" -> failed.add(pkg)
             }
         }
         return SuspendOutcome(failed, succeeded)

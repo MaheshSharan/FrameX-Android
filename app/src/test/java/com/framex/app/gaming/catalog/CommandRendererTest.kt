@@ -1,5 +1,7 @@
 package com.framex.app.gaming.catalog
 
+import com.framex.app.gaming.ledger.OpPriority
+import com.framex.app.gaming.ledger.Stage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -7,48 +9,56 @@ import org.junit.Test
 
 class CommandRendererTest {
 
-    private val running = ResolveContext("com.game.app", 4242, 144)
+    private val running = ResolveContext("com.game.app", uid = 4242, refreshRateHz = 144)
 
-    private fun entry(key: String, platform: Platform = Platform.VIVO) =
-        GamingCommandCatalog.forPlatform(platform).first { it.key == key }
+    private fun settingsEntry(key: String) =
+        GamingCommandCatalog.entries.first {
+            val t = it.target
+            t is CommandTarget.SettingsKey && t.key == key
+        }
+
+    private fun serviceEntry(stableId: String) =
+        GamingCommandCatalog.entries.first {
+            val t = it.target
+            t is CommandTarget.ServiceCommand && t.stableId == stableId
+        }
 
     @Test
-    fun plainValuesAreWrittenWithoutQuotes() {
+    fun settingsValuesAreWrittenWithoutQuotesWhenBare() {
         assertEquals(
-            "content insert --uri content://settings/global --bind name:s:bbb_perf_mode --bind value:s:1",
-            CommandRenderer.apply(entry("bbb_perf_mode"), running)
+            "settings put system touch_response_speed 2",
+            CommandRenderer.apply(settingsEntry("touch_response_speed"), running)
         )
     }
 
     @Test
-    fun valuesWithSeparatorsAreQuoted() {
+    fun refreshRateValueCarriesTheResolvedHz() {
         assertEquals(
-            "content insert --uri content://settings/system --bind name:s:vts_game_para_adjust --bind value:s:\"1,5,5,5\"",
-            CommandRenderer.apply(entry("vts_game_para_adjust"), running)
+            "settings put system peak_refresh_rate 144",
+            CommandRenderer.apply(settingsEntry("peak_refresh_rate"), running)
         )
     }
 
     @Test
-    fun handshakeValueCarriesPackagePidAndRefreshRate() {
-        val command = CommandRenderer.apply(entry("sdk_game_target_fps"), running)
+    fun serviceCommandsReturnTheirActivateLineDirectly() {
         assertEquals(
-            "content insert --uri content://settings/system --bind name:s:sdk_game_target_fps --bind value:s:com.game.app_4242_144",
-            command
+            "cmd thermalservice override-status 0",
+            CommandRenderer.apply(serviceEntry("thermal_override"), running)
         )
     }
 
     @Test
-    fun gyroValuesUseTheTargetPackage() {
+    fun perGameServiceCommandsCarryTheResolvedPackage() {
         assertEquals(
-            "content insert --uri content://settings/system --bind name:s:vivo_game_gyro_promotion --bind value:s:\"1@com.game.app\"",
-            CommandRenderer.apply(entry("vivo_game_gyro_promotion"), running)
+            "cmd activity set-bg-restriction-level --user 0 com.game.app unrestricted",
+            CommandRenderer.apply(serviceEntry("cpu_priority_bg_restriction"), running)
         )
     }
 
     @Test
-    fun unsafeValuesAreRefused() {
+    fun unsafeSettingsValuesAreRefused() {
         listOf("a b", "x;reboot", "\$(id)", "a\"b", "", "`id`", "a|b").forEach { value ->
-            val unsafe = entry("bbb_perf_mode").copy(value = { value })
+            val unsafe = settingsEntry("touch_response_speed").copy(value = { value })
             assertNull("accepted: $value", CommandRenderer.apply(unsafe, running))
         }
     }
@@ -56,34 +66,70 @@ class CommandRendererTest {
     @Test
     fun baselineIsWrittenBackWhenItExisted() {
         assertEquals(
-            "content insert --uri content://settings/system --bind name:s:touch_smooth --bind value:s:0",
-            CommandRenderer.restore(entry("touch_smooth"), "0")
+            "settings put system touch_response_speed 0",
+            CommandRenderer.restore(settingsEntry("touch_response_speed"), "0", running)
         )
     }
 
     @Test
-    fun missingBaselineDeletesTheKey() {
+    fun missingBaselineDeletesTheSettingsKey() {
         assertEquals(
-            "content delete --uri content://settings/system --where \"name='touch_smooth'\"",
-            CommandRenderer.restore(entry("touch_smooth"), null)
+            "settings delete system touch_response_speed",
+            CommandRenderer.restore(settingsEntry("touch_response_speed"), null, running)
         )
     }
 
     @Test
-    fun sessionOwnedKeysAreAlwaysDeleted() {
-        val command = CommandRenderer.restore(entry("speed_mode_apps"), "something")
-        assertEquals("content delete --uri content://settings/global --where \"name='speed_mode_apps'\"", command)
+    fun fixedRevertIgnoresTheBaselineAndCarriesThePackage() {
+        val command = CommandRenderer.restore(serviceEntry("cpu_priority_bg_restriction"), "irrelevant", running)
+        assertEquals("cmd activity set-bg-restriction-level --user 0 com.game.app adaptive_bucket", command)
+    }
+
+    @Test
+    fun oneShotEntriesNeverRestore() {
+        val entry = GamingCommandCatalog.entries.first {
+            (it.target as? CommandTarget.ServiceCommand)?.stableId == "ram_trim_caches"
+        }
+        assertEquals(Restore.NONE, entry.restore)
+        assertNull(CommandRenderer.restore(entry, "anything", running))
     }
 
     @Test
     fun unsafeBaselineIsNeverTurnedIntoADelete() {
-        assertNull(CommandRenderer.restore(entry("touch_smooth"), "a b; reboot"))
+        assertNull(CommandRenderer.restore(settingsEntry("touch_response_speed"), "a b; reboot", running))
     }
 
     @Test
-    fun captureLineReadsTheKeyThroughSettingsGet() {
-        val line = CommandRenderer.captureLine(entry("touch_smooth"))
+    fun captureLineReadsSettingsKeysThroughSettingsGet() {
+        val line = CommandRenderer.captureLine(settingsEntry("touch_response_speed"))
         assertNotNull(line)
-        assertEquals("echo \"FXB|system:touch_smooth|\$(settings get system touch_smooth 2>/dev/null)\"", line)
+        assertEquals(
+            "echo \"FXB|settings:system:touch_response_speed|\$(settings get system touch_response_speed 2>/dev/null)\"",
+            line
+        )
+    }
+
+    @Test
+    fun captureLineIsNullForAServiceCommandWithNoCapture() {
+        assertNull(CommandRenderer.captureLine(serviceEntry("thermal_override")))
+    }
+
+    @Test
+    fun phantomProcOverrideHasNoCaptureAndRestoresViaFixedRevert() {
+        val entry = GamingCommandCatalog.entries.first {
+            (it.target as? CommandTarget.ServiceCommand)?.stableId == "phantom_proc_max_override"
+        }
+        assertNull(CommandRenderer.captureLine(entry))
+        assertEquals(
+            "device_config delete activity_manager max_phantom_processes",
+            CommandRenderer.restore(entry, null, running)
+        )
+    }
+
+    @Test
+    fun priorityAndStageSurviveACopy() {
+        val entry = settingsEntry("peak_refresh_rate")
+        assertEquals(Stage.DISPLAY, entry.stage)
+        assertEquals(OpPriority.PRIMARY, entry.priority)
     }
 }

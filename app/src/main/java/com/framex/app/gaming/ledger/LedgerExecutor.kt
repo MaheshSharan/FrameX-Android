@@ -31,6 +31,10 @@ class LedgerExecutor @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         if (specs.isEmpty()) return@withContext true
         if (!privilegeManager.isReady.value) {
+            com.framex.app.utils.FrameXLog.w(
+                "executeBatch(): privilegeManager not ready, skipping stage=$stage commands=${specs.map { it.command }}",
+                tag = TAG
+            )
             recordPermissionFailure(stage, specs)
             return@withContext false
         }
@@ -76,7 +80,15 @@ class LedgerExecutor @Inject constructor(
             val cmdResult = parsedResults.getOrNull(index)
 
             val isSuccess = cmdResult != null && cmdResult.exitCode == 0 && !cmdResult.hasErrorIndicator
-            if (!isSuccess) allPassed = false
+            if (!isSuccess) {
+                allPassed = false
+                com.framex.app.utils.FrameXLog.w(
+                    "executeBatch(): command failed stage=$stage cmd='${spec.command}' " +
+                        "exitCode=${cmdResult?.exitCode} hasErrorIndicator=${cmdResult?.hasErrorIndicator} " +
+                        "output='${cmdResult?.outputChunk}'",
+                    tag = TAG
+                )
+            }
 
             val status = if (isSuccess) OpStatus.APPLIED else OpStatus.FAILED
 

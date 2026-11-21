@@ -1,7 +1,5 @@
 package com.framex.app.repository
 
-import com.framex.app.gaming.GamingOptimizationSnapshot
-import com.framex.app.gaming.GamingPlatformPath
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,8 +64,6 @@ class SettingsRepository @Inject constructor(
     val launcherGames: StateFlow<Set<String>> get() = gaming.launcherGames
     val deepFreezeEnabled: StateFlow<Boolean> get() = gaming.deepFreezeEnabled
     val hasSeenDeepFreezeNotice: StateFlow<Boolean> get() = gaming.hasSeenDeepFreezeNotice
-    val vivoOptEnabled: StateFlow<Boolean> get() = gaming.vivoOptEnabled
-    val gamingPlatformPath: StateFlow<GamingPlatformPath> get() = gaming.gamingPlatformPath
     val isGamingModeActiveFlow: StateFlow<Boolean> get() = gaming.isGamingModeActiveFlow
 
     fun toggleGamingWhitelistApp(packageName: String) = gaming.toggleGamingWhitelistApp(packageName)
@@ -75,9 +71,6 @@ class SettingsRepository @Inject constructor(
     fun toggleLauncherGame(packageName: String) = gaming.toggleLauncherGame(packageName)
     fun setDeepFreezeEnabled(enabled: Boolean) = gaming.setDeepFreezeEnabled(enabled)
     fun setHasSeenDeepFreezeNotice(seen: Boolean) = gaming.setHasSeenDeepFreezeNotice(seen)
-    fun setVivoOptEnabled(enabled: Boolean) = gaming.setVivoOptEnabled(enabled)
-    fun getGamingPlatformPath(): GamingPlatformPath? = gaming.getGamingPlatformPath()
-    fun setGamingPlatformPath(path: GamingPlatformPath?) = gaming.setGamingPlatformPath(path)
     fun isGamingModeActive(): Boolean = gaming.isGamingModeActive()
     fun setGamingModeActive(active: Boolean) = gaming.setGamingModeActive(active)
     fun getGamingAppliedVia() = gaming.getAppliedVia()
@@ -86,12 +79,9 @@ class SettingsRepository @Inject constructor(
     fun setGamingAffectedPackages(packages: Set<String>) = gaming.setGamingAffectedPackages(packages)
     fun getGamingBaselines(): Map<String, String> = gaming.getGamingBaselines()
     fun setGamingBaselines(baselines: Map<String, String>) = gaming.setGamingBaselines(baselines)
-    fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) =
-        gaming.saveGamingOptimizationSnapshot(snapshot)
-    fun loadGamingOptimizationSnapshot(): GamingOptimizationSnapshot? =
-        gaming.loadGamingOptimizationSnapshot()
-    fun clearGamingOptimizationSnapshot() = gaming.clearGamingOptimizationSnapshot()
-    fun hasActiveGamingSnapshot(): Boolean = gaming.hasActiveGamingSnapshot()
+    fun getGamingActiveGamePackage(): String? = gaming.getGamingActiveGamePackage()
+    fun getGamingActiveGameUid(): Int? = gaming.getGamingActiveGameUid()
+    fun setGamingActiveGame(packageName: String?, uid: Int?) = gaming.setGamingActiveGame(packageName, uid)
     fun needsThermalOverrideRecovery(): Boolean = gaming.needsThermalOverrideRecovery()
     fun setNeedsThermalOverrideActive(active: Boolean) = gaming.setNeedsThermalOverrideActive(active)
     fun markThermalOverrideRecoveryComplete() = gaming.markThermalOverrideRecoveryComplete()
@@ -110,16 +100,6 @@ class SettingsRepository @Inject constructor(
     val networkFirewall: StateFlow<Boolean> get() = executionCenter.networkFirewall
     val refreshRateLock: StateFlow<Boolean> get() = executionCenter.refreshRateLock
     val touchBoost: StateFlow<Boolean> get() = executionCenter.touchBoost
-    val vivoMonsterMode: StateFlow<Boolean> get() = executionCenter.vivoMonsterMode
-    val vivoVipThread: StateFlow<Boolean> get() = executionCenter.vivoVipThread
-    val vivoGameHandshake: StateFlow<Boolean> get() = executionCenter.vivoGameHandshake
-    val vivoGyroPromotion: StateFlow<Boolean> get() = executionCenter.vivoGyroPromotion
-    val vivoTouchOptimization: StateFlow<Boolean> get() = executionCenter.vivoTouchOptimization
-    val vivo144FpsUnlock: StateFlow<Boolean> get() = executionCenter.vivo144FpsUnlock
-    val vivoMaintenancePulse: StateFlow<Boolean> get() = executionCenter.vivoMaintenancePulse
-    val vivoPulseGamePlusMode: StateFlow<Boolean> get() = executionCenter.vivoPulseGamePlusMode
-    val vivoPulseStandardPromotion: StateFlow<Boolean> get() = executionCenter.vivoPulseStandardPromotion
-    val vivoPulseSceneMoreFps: StateFlow<Boolean> get() = executionCenter.vivoPulseSceneMoreFps
     val auditLoggingEnabled: StateFlow<Boolean> get() = executionCenter.auditLoggingEnabled
 
     fun setDisableThermalThrottling(enabled: Boolean) = executionCenter.setDisableThermalThrottling(enabled)
@@ -130,16 +110,6 @@ class SettingsRepository @Inject constructor(
     fun setNetworkFirewall(enabled: Boolean) = executionCenter.setNetworkFirewall(enabled)
     fun setRefreshRateLock(enabled: Boolean) = executionCenter.setRefreshRateLock(enabled)
     fun setTouchBoost(enabled: Boolean) = executionCenter.setTouchBoost(enabled)
-    fun setVivoMonsterMode(enabled: Boolean) = executionCenter.setVivoMonsterMode(enabled)
-    fun setVivoVipThread(enabled: Boolean) = executionCenter.setVivoVipThread(enabled)
-    fun setVivoGameHandshake(enabled: Boolean) = executionCenter.setVivoGameHandshake(enabled)
-    fun setVivoGyroPromotion(enabled: Boolean) = executionCenter.setVivoGyroPromotion(enabled)
-    fun setVivoTouchOptimization(enabled: Boolean) = executionCenter.setVivoTouchOptimization(enabled)
-    fun setVivo144FpsUnlock(enabled: Boolean) = executionCenter.setVivo144FpsUnlock(enabled)
-    fun setVivoMaintenancePulse(enabled: Boolean) = executionCenter.setVivoMaintenancePulse(enabled)
-    fun setVivoPulseGamePlusMode(enabled: Boolean) = executionCenter.setVivoPulseGamePlusMode(enabled)
-    fun setVivoPulseStandardPromotion(enabled: Boolean) = executionCenter.setVivoPulseStandardPromotion(enabled)
-    fun setVivoPulseSceneMoreFps(enabled: Boolean) = executionCenter.setVivoPulseSceneMoreFps(enabled)
     fun setAuditLoggingEnabled(enabled: Boolean) = executionCenter.setAuditLoggingEnabled(enabled)
 
     // --- App Preferences domain ---

@@ -9,7 +9,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,10 +46,19 @@ class CpuTuningControllerTest {
         }
         shizuku.handler = handler
         root.handler = handler
-        return CpuTuningController(PrivilegeManager(settings, shizuku, root, scope).also { it.start() })
+        val manager = PrivilegeManager(settings, shizuku, root, scope).also { it.start() }
+        // The manager probes capabilities on its own right after connecting; those commands
+        // are not under test, so wait for the probe and record only what follows.
+        runBlocking { withTimeout(PROBE_TIMEOUT_MS) { manager.capabilities.filterNotNull().first() } }
+        commands.clear()
+        return CpuTuningController(manager)
     }
 
     private var statOutput = ""
+
+    private companion object {
+        const val PROBE_TIMEOUT_MS = 5_000L
+    }
 
     @Test
     fun rootWriteWithLock_unlocksWritesThenLocks() = runBlocking {

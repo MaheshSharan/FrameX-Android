@@ -1,10 +1,7 @@
 package com.framex.app.repository
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.framex.app.gaming.GamingOptimizationSnapshot
-import com.framex.app.gaming.GamingPlatformPath
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,18 +32,6 @@ class GamingSettingsRepository @Inject constructor(
     )
     val hasSeenDeepFreezeNotice: StateFlow<Boolean> = _hasSeenDeepFreezeNotice.asStateFlow()
 
-    private val _vivoOptEnabled = MutableStateFlow(
-        store.getBoolean("vivo_opt_enabled", true)
-    )
-    val vivoOptEnabled: StateFlow<Boolean> = _vivoOptEnabled.asStateFlow()
-
-    private val _gamingPlatformPath = MutableStateFlow(
-        store.getString("gaming_platform_path", null)?.let {
-            runCatching { GamingPlatformPath.valueOf(it) }.getOrNull()
-        } ?: GamingPlatformPath.NONE
-    )
-    val gamingPlatformPath: StateFlow<GamingPlatformPath> = _gamingPlatformPath.asStateFlow()
-
     private val _isGamingModeActiveFlow = MutableStateFlow(
         store.getBoolean("is_gaming_mode_active", false)
     )
@@ -58,10 +43,6 @@ class GamingSettingsRepository @Inject constructor(
             prefs[stringSetPreferencesKey("launcher_games")]?.let { _launcherGames.value = it }
             prefs[booleanPreferencesKey("deep_freeze_enabled")]?.let { _deepFreezeEnabled.value = it }
             prefs[booleanPreferencesKey("has_seen_deep_freeze_notice")]?.let { _hasSeenDeepFreezeNotice.value = it }
-            prefs[booleanPreferencesKey("vivo_opt_enabled")]?.let { _vivoOptEnabled.value = it }
-            prefs[stringPreferencesKey("gaming_platform_path")]?.let { raw ->
-                _gamingPlatformPath.value = runCatching { GamingPlatformPath.valueOf(raw) }.getOrDefault(GamingPlatformPath.NONE)
-            }
             prefs[booleanPreferencesKey("is_gaming_mode_active")]?.let { _isGamingModeActiveFlow.value = it }
         }
     }
@@ -96,26 +77,16 @@ class GamingSettingsRepository @Inject constructor(
         store.putBoolean("has_seen_deep_freeze_notice", seen)
     }
 
-    fun setVivoOptEnabled(enabled: Boolean) {
-        _vivoOptEnabled.value = enabled
-        store.putBoolean("vivo_opt_enabled", enabled)
-    }
+    /** The package the catalog engine is currently tuning for; null once no game is targeted. */
+    fun getGamingActiveGamePackage(): String? = store.getString(KEY_ACTIVE_GAME_PACKAGE, null)
 
-    /** Null when no session path was recorded; crash recovery then decides from the hardware. */
-    fun getGamingPlatformPath(): GamingPlatformPath? {
-        return store.getString("gaming_platform_path", null)?.let {
-            runCatching { GamingPlatformPath.valueOf(it) }.getOrNull()
-        }
-    }
+    fun getGamingActiveGameUid(): Int? =
+        store.getInt(KEY_ACTIVE_GAME_UID, NO_UID).takeIf { it != NO_UID }
 
-    fun setGamingPlatformPath(path: GamingPlatformPath?) {
-        val resolved = path ?: GamingPlatformPath.NONE
-        _gamingPlatformPath.value = resolved
-        if (path == null) {
-            store.remove("gaming_platform_path")
-        } else {
-            store.putString("gaming_platform_path", path.name)
-        }
+    /** Persists which package/uid the current session's per-game commands were written for. */
+    fun setGamingActiveGame(packageName: String?, uid: Int?) {
+        if (packageName == null) store.remove(KEY_ACTIVE_GAME_PACKAGE) else store.putString(KEY_ACTIVE_GAME_PACKAGE, packageName)
+        if (uid == null) store.remove(KEY_ACTIVE_GAME_UID) else store.putInt(KEY_ACTIVE_GAME_UID, uid)
     }
 
     /**
@@ -173,23 +144,6 @@ class GamingSettingsRepository @Inject constructor(
         }
     }
 
-    fun saveGamingOptimizationSnapshot(snapshot: GamingOptimizationSnapshot) {
-        store.putString(KEY_GAMING_SNAPSHOT_JSON, snapshot.toJson())
-    }
-
-    fun loadGamingOptimizationSnapshot(): GamingOptimizationSnapshot? {
-        val raw = store.getString(KEY_GAMING_SNAPSHOT_JSON, null) ?: return null
-        return GamingOptimizationSnapshot.fromJson(raw)
-    }
-
-    fun clearGamingOptimizationSnapshot() {
-        store.remove(KEY_GAMING_SNAPSHOT_JSON)
-    }
-
-    fun hasActiveGamingSnapshot(): Boolean {
-        return store.getString(KEY_GAMING_SNAPSHOT_JSON, null) != null
-    }
-
     fun needsThermalOverrideRecovery(): Boolean {
         return store.getBoolean("needs_thermal_override_recovery", false)
     }
@@ -232,8 +186,10 @@ class GamingSettingsRepository @Inject constructor(
     }
 
     companion object {
-        private const val KEY_GAMING_SNAPSHOT_JSON = "gaming_optimization_snapshot_json"
         private const val KEY_GAMING_BASELINES = "gaming_command_baselines"
+        private const val KEY_ACTIVE_GAME_PACKAGE = "gaming_active_game_package"
+        private const val KEY_ACTIVE_GAME_UID = "gaming_active_game_uid"
         private const val BASELINE_SEPARATOR = '\u0001'
+        private const val NO_UID = -1
     }
 }

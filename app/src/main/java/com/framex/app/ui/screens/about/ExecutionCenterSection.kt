@@ -52,10 +52,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.draw.alpha
 import com.framex.app.ui.components.WovenNetBackground
-import com.framex.app.gaming.catalog.Platform
 import com.framex.app.ui.screens.about.components.CommandToggleCard
-import com.framex.app.ui.screens.about.components.VendorCommandsTab
 import com.framex.app.ui.screens.about.components.ExperimentalSectionDivider
 
 @Composable
@@ -70,15 +71,7 @@ fun ExecutionCenterSection(
         label = "chevron_rotation"
     )
 
-    val availableTabs = remember(state.isVivoDevice, state.isIqooDevice, state.isVivoOptActive) {
-        val tabs = mutableListOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC)
-        if (state.isVivoOptActive && state.isIqooDevice) {
-            tabs.add(ExecutionCenterTab.IQOO)
-        } else if (state.isVivoOptActive && state.isVivoDevice) {
-            tabs.add(ExecutionCenterTab.VIVO)
-        }
-        tabs
-    }
+    val availableTabs = listOf(ExecutionCenterTab.COMMON, ExecutionCenterTab.GENERIC)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -141,9 +134,13 @@ fun ExecutionCenterSection(
                             when (state.selectedExecutionTab) {
                                 ExecutionCenterTab.COMMON -> CommonCommandsTab(state, onEvent)
                                 ExecutionCenterTab.GENERIC -> GenericCommandsTab(state, onEvent)
-                                ExecutionCenterTab.VIVO -> VendorCommandsTab(Platform.VIVO, VIVO_TAB, state, onEvent)
-                                ExecutionCenterTab.IQOO -> VendorCommandsTab(Platform.IQOO, IQOO_TAB, state, onEvent)
                             }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            RescanDeviceAction(
+                                isRescanning = state.isRescanningDevice,
+                                onRescan = { onEvent(AboutUiEvent.RescanDevice) }
+                            )
                         }
                     }
                 }
@@ -261,50 +258,58 @@ private fun CommonCommandsTab(
     onEvent: (AboutUiEvent) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        CommandToggleCard(
-            title = "Bypass Thermal Throttling",
-            commandSummary = "• Universal: 'cmd thermalservice override-status 0'\n• Vivo/iQOO: Disables 'game_cube_temper_control'",
-            statusText = if (state.disableThermalThrottling) "Override Active (Aggressive)" else "Safe Mode (Protected)",
-            statusColor = if (state.disableThermalThrottling) Color(0xFFEF4444) else Color(0xFF10B981),
-            isChecked = state.disableThermalThrottling,
-            onCheckedChange = { onEvent(AboutUiEvent.SetDisableThermalThrottling(it)) },
-            icon = Icons.Default.Thermostat,
-            warningText = "Bypassing thermal safety prevents CPU/GPU downclocking during heat buildup, which can increase device temperature and long-term hardware wear."
-        )
+        if (ExecutionCenterCapabilities.THERMAL_OVERRIDE in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Bypass Thermal Throttling",
+                commandSummary = "• 'cmd thermalservice override-status 0'",
+                statusText = if (state.disableThermalThrottling) "Override Active (Aggressive)" else "Safe Mode (Protected)",
+                statusColor = if (state.disableThermalThrottling) Color(0xFFEF4444) else Color(0xFF10B981),
+                isChecked = state.disableThermalThrottling,
+                onCheckedChange = { onEvent(AboutUiEvent.SetDisableThermalThrottling(it)) },
+                icon = Icons.Default.Thermostat,
+                warningText = "Bypassing thermal safety prevents CPU/GPU downclocking during heat buildup, which can increase device temperature and long-term hardware wear."
+            )
+        }
 
-        CommandToggleCard(
-            title = "RAM Cache Pre-Trimming",
-            commandSummary = "• Universal: 'am trim-memory <pkg> RUNNING_CRITICAL'\n• Halts background cache bloat before match render loop",
-            statusText = if (state.ramCachePreTrimEnabled) "Pre-Trim Active" else "Trim Skipped",
-            statusColor = if (state.ramCachePreTrimEnabled) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.ramCachePreTrimEnabled,
-            onCheckedChange = { onEvent(AboutUiEvent.SetRamCachePreTrim(it)) },
-            icon = Icons.Default.Memory
-        )
+        if (ExecutionCenterCapabilities.RAM_TRIM in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "RAM Cache Pre-Trimming",
+                commandSummary = "• 'pm trim-caches', 'am compact background', 'cmd pinner repin'\n• Halts background cache bloat before match render loop",
+                statusText = if (state.ramCachePreTrimEnabled) "Pre-Trim Active" else "Trim Skipped",
+                statusColor = if (state.ramCachePreTrimEnabled) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.ramCachePreTrimEnabled,
+                onCheckedChange = { onEvent(AboutUiEvent.SetRamCachePreTrim(it)) },
+                icon = Icons.Default.Memory
+            )
+        }
 
         ExperimentalSectionDivider(
             description = "Low-level system and cgroup overrides. Safe for standard operation."
         )
 
-        CommandToggleCard(
-            title = "Disable Phantom Process Killer",
-            commandSummary = "• Universal: 'device_config put activity_manager max_phantom_processes 2147483647'\n• Disables 32 child process limit for game engines",
-            statusText = if (state.disablePhantomProcKiller) "PPK Disabled (Max Limit)" else "AOSP Default (32 Procs)",
-            statusColor = if (state.disablePhantomProcKiller) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.disablePhantomProcKiller,
-            onCheckedChange = { onEvent(AboutUiEvent.SetDisablePhantomProcKiller(it)) },
-            icon = Icons.Default.Security
-        )
+        if (ExecutionCenterCapabilities.PHANTOM_PROC_KILLER in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Disable Phantom Process Killer",
+                commandSummary = "• 'device_config put activity_manager max_phantom_processes 2147483647'\n• Disables 32 child process limit for game engines",
+                statusText = if (state.disablePhantomProcKiller) "PPK Disabled (Max Limit)" else "AOSP Default (32 Procs)",
+                statusColor = if (state.disablePhantomProcKiller) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.disablePhantomProcKiller,
+                onCheckedChange = { onEvent(AboutUiEvent.SetDisablePhantomProcKiller(it)) },
+                icon = Icons.Default.Security
+            )
+        }
 
-        CommandToggleCard(
-            title = "Cgroup CPU Priority Lock",
-            commandSummary = "• Universal: 'cmd activity set-bg-restriction-level <pkg> unrestricted'\n• Locks game process to top-app cpusets & prevents down-migration",
-            statusText = if (state.cpuPriorityLock) "Top-App Cpuset Locked" else "Standard Priority",
-            statusColor = if (state.cpuPriorityLock) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.cpuPriorityLock,
-            onCheckedChange = { onEvent(AboutUiEvent.SetCpuPriorityLock(it)) },
-            icon = Icons.Default.Speed
-        )
+        if (ExecutionCenterCapabilities.CPU_PRIORITY_LOCK in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Cgroup CPU Priority Lock",
+                commandSummary = "• 'cmd activity set-bg-restriction-level <pkg> unrestricted'\n• Locks game process to top-app cpusets & prevents down-migration",
+                statusText = if (state.cpuPriorityLock) "Top-App Cpuset Locked" else "Standard Priority",
+                statusColor = if (state.cpuPriorityLock) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.cpuPriorityLock,
+                onCheckedChange = { onEvent(AboutUiEvent.SetCpuPriorityLock(it)) },
+                icon = Icons.Default.Speed
+            )
+        }
     }
 }
 
@@ -314,44 +319,100 @@ private fun GenericCommandsTab(
     onEvent: (AboutUiEvent) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        CommandToggleCard(
-            title = "Fixed Performance Governor",
-            commandSummary = "• Universal: 'cmd performance_hint set-fixed-performance-mode-enabled true'\n• Disables dynamic frequency scaling on supported devices",
-            statusText = if (state.fixedPerformanceMode) "Fixed Mode Active" else "Default Dynamic Scaling",
-            statusColor = if (state.fixedPerformanceMode) Color(0xFFF59E0B) else Color.Gray,
-            isChecked = state.fixedPerformanceMode,
-            onCheckedChange = { onEvent(AboutUiEvent.SetFixedPerformanceMode(it)) },
-            icon = Icons.Default.Bolt
-        )
+        if (ExecutionCenterCapabilities.FIXED_PERFORMANCE_MODE in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Fixed Performance Governor",
+                commandSummary = "• 'cmd power set-fixed-performance-mode-enabled true'\n• Disables dynamic frequency scaling on supported devices",
+                statusText = if (state.fixedPerformanceMode) "Fixed Mode Active" else "Default Dynamic Scaling",
+                statusColor = if (state.fixedPerformanceMode) Color(0xFFF59E0B) else Color.Gray,
+                isChecked = state.fixedPerformanceMode,
+                onCheckedChange = { onEvent(AboutUiEvent.SetFixedPerformanceMode(it)) },
+                icon = Icons.Default.Bolt
+            )
+        }
 
-        CommandToggleCard(
-            title = "Network & Doze Firewall",
-            commandSummary = "• Universal: 'dumpsys deviceidle whitelist +<pkg>'\n• Grants network and sleep immunity to active match package",
-            statusText = if (state.networkFirewall) "Doze Whitelist Active" else "Default Network Rules",
-            statusColor = if (state.networkFirewall) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.networkFirewall,
-            onCheckedChange = { onEvent(AboutUiEvent.SetNetworkFirewall(it)) },
-            icon = Icons.Default.Wifi
-        )
+        if (ExecutionCenterCapabilities.NETWORK_FIREWALL in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Network & Doze Firewall",
+                commandSummary = "• 'cmd netpolicy add restrict-background-whitelist', 'cmd deviceidle whitelist +<pkg>'\n• Grants network and sleep immunity to active match package",
+                statusText = if (state.networkFirewall) "Doze Whitelist Active" else "Default Network Rules",
+                statusColor = if (state.networkFirewall) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.networkFirewall,
+                onCheckedChange = { onEvent(AboutUiEvent.SetNetworkFirewall(it)) },
+                icon = Icons.Default.Wifi
+            )
+        }
 
-        CommandToggleCard(
-            title = "Peak Refresh Rate Lock",
-            commandSummary = "• Universal: 'settings put system peak_refresh_rate / min_refresh_rate'\n• Locks framework refresh rate floor and ceiling to highest display mode",
-            statusText = if (state.refreshRateLock) "Display Mode Pinned" else "Adaptive Refresh Rate",
-            statusColor = if (state.refreshRateLock) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.refreshRateLock,
-            onCheckedChange = { onEvent(AboutUiEvent.SetRefreshRateLock(it)) },
-            icon = Icons.Default.Refresh
-        )
+        if (ExecutionCenterCapabilities.REFRESH_RATE_LOCK in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Peak Refresh Rate Lock",
+                commandSummary = "• 'settings put system peak_refresh_rate / min_refresh_rate'\n• Locks framework refresh rate floor and ceiling to highest display mode",
+                statusText = if (state.refreshRateLock) "Display Mode Pinned" else "Adaptive Refresh Rate",
+                statusColor = if (state.refreshRateLock) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.refreshRateLock,
+                onCheckedChange = { onEvent(AboutUiEvent.SetRefreshRateLock(it)) },
+                icon = Icons.Default.Refresh
+            )
+        }
 
-        CommandToggleCard(
-            title = "Touch Response Boost",
-            commandSummary = "• Universal: 'settings put secure/system touch_response_boost / touch_smooth'\n• Minimizes touch latency and optimizes digitizer dispatch",
-            statusText = if (state.touchBoost) "Low Latency Touch" else "Default Touch Filtering",
-            statusColor = if (state.touchBoost) Color(0xFF10B981) else Color.Gray,
-            isChecked = state.touchBoost,
-            onCheckedChange = { onEvent(AboutUiEvent.SetTouchBoost(it)) },
-            icon = Icons.Default.TouchApp
+        if (ExecutionCenterCapabilities.TOUCH_BOOST in state.capableCommandIds) {
+            CommandToggleCard(
+                title = "Touch Response Boost",
+                commandSummary = "• 'settings put system touch_response_speed 2'\n• Minimizes touch latency and optimizes digitizer dispatch",
+                statusText = if (state.touchBoost) "Low Latency Touch" else "Default Touch Filtering",
+                statusColor = if (state.touchBoost) Color(0xFF10B981) else Color.Gray,
+                isChecked = state.touchBoost,
+                onCheckedChange = { onEvent(AboutUiEvent.SetTouchBoost(it)) },
+                icon = Icons.Default.TouchApp
+            )
+        }
+    }
+}
+
+/** The catalog ids that gate each Execution Center card's visibility. */
+private object ExecutionCenterCapabilities {
+    const val THERMAL_OVERRIDE = "service:thermal_override"
+    const val RAM_TRIM = "service:ram_trim_caches"
+    const val PHANTOM_PROC_KILLER = "service:phantom_proc_max_override"
+    const val CPU_PRIORITY_LOCK = "service:cpu_priority_bg_restriction"
+    const val FIXED_PERFORMANCE_MODE = "service:fixed_performance_mode"
+    const val NETWORK_FIREWALL = "service:network_restrict_bg_whitelist"
+    const val REFRESH_RATE_LOCK = "settings:system:peak_refresh_rate"
+    const val TOUCH_BOOST = "settings:system:touch_response_speed"
+}
+
+@Composable
+private fun RescanDeviceAction(isRescanning: Boolean, onRescan: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = !isRescanning) { onRescan() }
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (isRescanning) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                color = Color.White,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Autorenew,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Rescan Device",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.alpha(if (isRescanning) 0.6f else 1f)
         )
     }
 }

@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.framex.app.BuildConfig
 import com.framex.app.device.DeviceDiagnosticManager
 import com.framex.app.gaming.GamingModeEngine
-import com.framex.app.gaming.VivoSuiteGate
+import com.framex.app.gaming.catalog.GamingCommandCatalog
+import com.framex.app.privilege.DeviceCapabilityProbe
 import com.framex.app.repository.CrashLogRepository
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.update.AppUpdateInfo
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,7 +29,6 @@ import java.io.File
 import javax.inject.Inject
 
 private data class SettingsSnapshot(
-    val vivoOpt: Boolean,
     val autoUpdate: Boolean
 )
 
@@ -46,19 +47,6 @@ private data class GenericSnapshot(
     val touch: Boolean
 )
 
-private data class VivoSnapshot(
-    val monster: Boolean,
-    val vip: Boolean,
-    val handshake: Boolean,
-    val gyro: Boolean,
-    val touch: Boolean,
-    val fps144: Boolean,
-    val pulse: Boolean,
-    val pulseGamePlus: Boolean,
-    val pulseStdPromo: Boolean,
-    val pulseSceneFps: Boolean
-)
-
 private data class ExecutionCenterSnapshot(
     val selectedTab: ExecutionCenterTab,
     val disableThermal: Boolean,
@@ -68,17 +56,16 @@ private data class ExecutionCenterSnapshot(
     val fixedPerf: Boolean,
     val networkFirewall: Boolean,
     val refreshRateLock: Boolean,
-    val touchBoost: Boolean,
-    val vivoMonster: Boolean,
-    val vivoVipThread: Boolean,
-    val vivoHandshake: Boolean,
-    val vivoGyro: Boolean,
-    val vivoTouch: Boolean,
-    val vivo144Fps: Boolean,
-    val vivoPulse: Boolean,
-    val vivoPulseGamePlus: Boolean,
-    val vivoPulseStdPromo: Boolean,
-    val vivoPulseSceneFps: Boolean
+    val touchBoost: Boolean
+)
+
+private data class Tuple6(
+    val settings: SettingsSnapshot,
+    val exec: ExecutionCenterSnapshot,
+    val downloadState: com.framex.app.update.DownloadState,
+    val actions: UpdateActionSnapshot,
+    val versionName: String,
+    val versionCode: Long
 )
 
 private data class UpdateActionSnapshot(
@@ -86,7 +73,6 @@ private data class UpdateActionSnapshot(
     val statusMsg: String?,
     val updateInfo: AppUpdateInfo?,
     val signatureError: String?,
-    val showVivoModal: Boolean,
     val hasCrashLog: Boolean,
     val pendingApk: File?,
     val waitingForInstall: Boolean
@@ -100,15 +86,11 @@ class AboutViewModel @Inject constructor(
     private val updateRepository: UpdateRepository,
     private val updateInstaller: UpdateInstaller,
     private val gamingModeEngine: GamingModeEngine,
-    private val vivoSuiteGate: VivoSuiteGate
+    private val capabilityProbe: DeviceCapabilityProbe
 ) : ViewModel() {
 
     private val _effectChannel = Channel<AboutUiEffect>(Channel.BUFFERED)
     val effect = _effectChannel.receiveAsFlow()
-
-    val isVivoHardware: Boolean get() = deviceDiagnosticManager.isVivoOnly()
-    val isIqooHardware: Boolean get() = deviceDiagnosticManager.isIqooOnly()
-    val deviceModelInfo: String get() = deviceDiagnosticManager.getDeviceModelInfo()
 
     fun canInstallPackages(): Boolean = updateInstaller.canInstallPackages()
     fun openUnknownAppSourcesSettings() = updateInstaller.openUnknownAppSourcesSettings()
@@ -121,17 +103,13 @@ class AboutViewModel @Inject constructor(
     private val _statusMessage = MutableStateFlow<String?>(null)
     private val _updateInfoState = MutableStateFlow<AppUpdateInfo?>(null)
     private val _signatureErrorMessage = MutableStateFlow<String?>(null)
-    private val _showVivoDiagModal = MutableStateFlow(false)
     private val _hasCrashLog = MutableStateFlow(false)
     private val _pendingInstallApk = MutableStateFlow<File?>(null)
     private val _waitingForInstallPermission = MutableStateFlow(false)
+    private val _capableCommandIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _isRescanningDevice = MutableStateFlow(false)
 
-    private val settingsStream = combine(
-        settingsRepository.vivoOptEnabled,
-        settingsRepository.autoUpdateCheckEnabled
-    ) { vivo, auto ->
-        SettingsSnapshot(vivo, auto)
-    }
+    private val settingsStream = settingsRepository.autoUpdateCheckEnabled.map { auto -> SettingsSnapshot(auto) }
 
     private val executionCenterCommonStream = combine(
         _selectedExecutionTab,
@@ -152,37 +130,10 @@ class AboutViewModel @Inject constructor(
         GenericSnapshot(perf, net, refresh, touch)
     }
 
-    private val executionCenterVivoStream = combine(
-        settingsRepository.vivoMonsterMode,
-        settingsRepository.vivoVipThread,
-        settingsRepository.vivoGameHandshake,
-        settingsRepository.vivoGyroPromotion,
-        settingsRepository.vivoTouchOptimization,
-        settingsRepository.vivo144FpsUnlock,
-        settingsRepository.vivoMaintenancePulse,
-        settingsRepository.vivoPulseGamePlusMode,
-        settingsRepository.vivoPulseStandardPromotion,
-        settingsRepository.vivoPulseSceneMoreFps
-    ) { args: Array<Boolean> ->
-        VivoSnapshot(
-            monster = args[0],
-            vip = args[1],
-            handshake = args[2],
-            gyro = args[3],
-            touch = args[4],
-            fps144 = args[5],
-            pulse = args[6],
-            pulseGamePlus = args[7],
-            pulseStdPromo = args[8],
-            pulseSceneFps = args[9]
-        )
-    }
-
     private val executionCenterStream = combine(
         executionCenterCommonStream,
-        executionCenterGenericStream,
-        executionCenterVivoStream
-    ) { common, generic, vivo ->
+        executionCenterGenericStream
+    ) { common, generic ->
         ExecutionCenterSnapshot(
             selectedTab = common.tab,
             disableThermal = common.thermal,
@@ -192,32 +143,21 @@ class AboutViewModel @Inject constructor(
             fixedPerf = generic.perf,
             networkFirewall = generic.net,
             refreshRateLock = generic.refresh,
-            touchBoost = generic.touch,
-            vivoMonster = vivo.monster,
-            vivoVipThread = vivo.vip,
-            vivoHandshake = vivo.handshake,
-            vivoGyro = vivo.gyro,
-            vivoTouch = vivo.touch,
-            vivo144Fps = vivo.fps144,
-            vivoPulse = vivo.pulse,
-            vivoPulseGamePlus = vivo.pulseGamePlus,
-            vivoPulseStdPromo = vivo.pulseStdPromo,
-            vivoPulseSceneFps = vivo.pulseSceneFps
+            touchBoost = generic.touch
         )
     }
 
     private val updateActionStream = combine(
         combine(_isCheckingUpdate, _statusMessage) { c, m -> Pair(c, m) },
         combine(_updateInfoState, _signatureErrorMessage) { u, s -> Pair(u, s) },
-        combine(_showVivoDiagModal, _hasCrashLog) { v, h -> Pair(v, h) },
+        _hasCrashLog,
         combine(_pendingInstallApk, _waitingForInstallPermission) { p, w -> Pair(p, w) }
-    ) { (isChecking, statusMsg), (updateInfo, sigError), (vivoModal, crashLog), (pendingApk, waitingInstall) ->
+    ) { (isChecking, statusMsg), (updateInfo, sigError), crashLog, (pendingApk, waitingInstall) ->
         UpdateActionSnapshot(
             isChecking = isChecking,
             statusMsg = statusMsg,
             updateInfo = updateInfo,
             signatureError = sigError,
-            showVivoModal = vivoModal,
             hasCrashLog = crashLog,
             pendingApk = pendingApk,
             waitingForInstall = waitingInstall
@@ -231,6 +171,11 @@ class AboutViewModel @Inject constructor(
         updateActionStream,
         combine(_versionName, _versionCode) { name, code -> Pair(name, code) }
     ) { settings, exec, downloadState, actions, (versionName, versionCode) ->
+        Tuple6(settings, exec, downloadState, actions, versionName, versionCode)
+    }.combine(
+        combine(_capableCommandIds, _isRescanningDevice) { caps, rescanning -> Pair(caps, rescanning) }
+    ) { partial, (caps, rescanning) ->
+        val (settings, exec, downloadState, actions, versionName, versionCode) = partial
         AboutUiState(
             versionName = versionName,
             versionCode = versionCode,
@@ -240,10 +185,6 @@ class AboutViewModel @Inject constructor(
             updateInfoState = actions.updateInfo,
             signatureErrorMessage = actions.signatureError,
             downloadState = downloadState,
-            isVivoDevice = isVivoHardware,
-            isIqooDevice = isIqooHardware,
-            isVivoOptActive = settings.vivoOpt,
-            showVivoDiagModal = actions.showVivoModal,
             selectedExecutionTab = exec.selectedTab,
             disableThermalThrottling = exec.disableThermal,
             ramCachePreTrimEnabled = exec.ramCachePreTrim,
@@ -253,16 +194,8 @@ class AboutViewModel @Inject constructor(
             networkFirewall = exec.networkFirewall,
             refreshRateLock = exec.refreshRateLock,
             touchBoost = exec.touchBoost,
-            vivoMonsterMode = exec.vivoMonster,
-            vivoVipThread = exec.vivoVipThread,
-            vivoGameHandshake = exec.vivoHandshake,
-            vivoGyroPromotion = exec.vivoGyro,
-            vivoTouchOptimization = exec.vivoTouch,
-            vivo144FpsUnlock = exec.vivo144Fps,
-            vivoMaintenancePulse = exec.vivoPulse,
-            vivoPulseGamePlusMode = exec.vivoPulseGamePlus,
-            vivoPulseStandardPromotion = exec.vivoPulseStdPromo,
-            vivoPulseSceneMoreFps = exec.vivoPulseSceneFps,
+            capableCommandIds = caps,
+            isRescanningDevice = rescanning,
             maxRefreshRate = deviceDiagnosticManager.getMaxHardwareRefreshRate().toInt().coerceAtLeast(60),
             hasCrashLog = actions.hasCrashLog,
             pendingInstallApk = actions.pendingApk,
@@ -273,6 +206,7 @@ class AboutViewModel @Inject constructor(
     init {
         loadPackageAndCrashInfo()
         observeToastEvents()
+        refreshCapableCommandIds()
     }
 
     private fun observeToastEvents() {
@@ -281,6 +215,13 @@ class AboutViewModel @Inject constructor(
                 _effectChannel.send(AboutUiEffect.ShowToast(msg))
             }
         }
+    }
+
+    private fun refreshCapableCommandIds() {
+        _capableCommandIds.value = GamingCommandCatalog.entries
+            .map { it.id }
+            .filter { capabilityProbe.isCapable(it) }
+            .toSet()
     }
 
     private fun loadPackageAndCrashInfo() {
@@ -303,31 +244,7 @@ class AboutViewModel @Inject constructor(
             is AboutUiEvent.SetNetworkFirewall -> settingsRepository.setNetworkFirewall(event.enabled)
             is AboutUiEvent.SetRefreshRateLock -> settingsRepository.setRefreshRateLock(event.enabled)
             is AboutUiEvent.SetTouchBoost -> settingsRepository.setTouchBoost(event.enabled)
-            is AboutUiEvent.SetVivoMonsterMode -> settingsRepository.setVivoMonsterMode(event.enabled)
-            is AboutUiEvent.SetVivoVipThread -> settingsRepository.setVivoVipThread(event.enabled)
-            is AboutUiEvent.SetVivoGameHandshake -> settingsRepository.setVivoGameHandshake(event.enabled)
-            is AboutUiEvent.SetVivoGyroPromotion -> settingsRepository.setVivoGyroPromotion(event.enabled)
-            is AboutUiEvent.SetVivoTouchOptimization -> settingsRepository.setVivoTouchOptimization(event.enabled)
-            is AboutUiEvent.SetVivo144FpsUnlock -> settingsRepository.setVivo144FpsUnlock(event.enabled)
-            is AboutUiEvent.SetVivoMaintenancePulse -> settingsRepository.setVivoMaintenancePulse(event.enabled)
-            is AboutUiEvent.SetVivoPulseGamePlusMode -> settingsRepository.setVivoPulseGamePlusMode(event.enabled)
-            is AboutUiEvent.SetVivoPulseStandardPromotion -> settingsRepository.setVivoPulseStandardPromotion(event.enabled)
-            is AboutUiEvent.SetVivoPulseSceneMoreFps -> settingsRepository.setVivoPulseSceneMoreFps(event.enabled)
-            is AboutUiEvent.SetVivoOptEnabled -> {
-                val wasEnabled = settingsRepository.vivoOptEnabled.value
-                settingsRepository.setVivoOptEnabled(event.enabled)
-                if (!event.enabled) {
-                    if (_selectedExecutionTab.value == ExecutionCenterTab.VIVO ||
-                        _selectedExecutionTab.value == ExecutionCenterTab.IQOO
-                    ) {
-                        _selectedExecutionTab.value = ExecutionCenterTab.COMMON
-                    }
-                    if (wasEnabled) {
-                        gamingModeEngine.onVivoOptToggledOffMidSession()
-                    }
-                }
-            }
-            is AboutUiEvent.SetShowVivoDiagModal -> _showVivoDiagModal.value = event.show
+            AboutUiEvent.RescanDevice -> rescanDevice()
             AboutUiEvent.CheckForUpdates -> performUpdateCheck()
             is AboutUiEvent.SetUpdateInfo -> _updateInfoState.value = event.info
             is AboutUiEvent.SetSignatureError -> _signatureErrorMessage.value = event.message
@@ -349,6 +266,18 @@ class AboutViewModel @Inject constructor(
                 crashLogRepository.clearCrashLog()
                 _hasCrashLog.value = false
             }
+        }
+    }
+
+    /** Manual "Rescan Device" action (Section B): OEM updates can change which keys exist
+     *  without a reconnect, so this is offered alongside the automatic on-connect probe. */
+    private fun rescanDevice() {
+        if (_isRescanningDevice.value) return
+        viewModelScope.launch {
+            _isRescanningDevice.value = true
+            capabilityProbe.runProbe()
+            refreshCapableCommandIds()
+            _isRescanningDevice.value = false
         }
     }
 
