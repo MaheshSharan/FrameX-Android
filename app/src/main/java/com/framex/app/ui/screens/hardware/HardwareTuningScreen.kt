@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -30,10 +31,10 @@ fun HardwareTuningScreen(
     onNavigateBack: () -> Unit,
     viewModel: HardwareTuningViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val privilegeMode by viewModel.privilegeManager.currentMode.collectAsState()
-    val draft by viewModel.draft.collectAsState()
-    val message by viewModel.message.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val privilegeMode by viewModel.privilegeManager.currentMode.collectAsStateWithLifecycle()
+    val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val messageText = message?.let { stringResource(it.resId) }
 
