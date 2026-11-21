@@ -63,6 +63,11 @@ android {
             if (relConfig?.storeFile?.exists() == true) {
                 signingConfig = relConfig
             } else {
+                // The release workflow sets this so a missing keystore fails the build
+                // instead of shipping an APK that cannot update earlier releases.
+                if (System.getenv("REQUIRE_RELEASE_SIGNING") == "true") {
+                    throw GradleException("Release signing is required but app/release.keystore is missing")
+                }
                 signingConfig = signingConfigs.getByName("debug")
             }
         }

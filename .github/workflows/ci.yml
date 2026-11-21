@@ -5,21 +5,27 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push to the same PR makes the older run pointless.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-and-test:
+  verify:
+    name: Lint, tests and debug build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: ./.github/actions/setup-android
 
       - name: Privilege layer boundary
         run: |
@@ -32,11 +38,31 @@ jobs:
       - name: Size limits (functions 60 lines, files 500 lines)
         run: python3 config/check_size_limits.py
 
-      - name: Run Android Lint
-        run: ./gradlew lint
+      # One invocation: Gradle shares its daemon and configuration across the tasks.
+      - name: Lint, unit tests, debug build
+        run: ./gradlew lint testDebugUnitTest assembleDebug --stacktrace
 
-      - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/lint-results-debug.*
+            app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+  release-build:
+    name: Release build (R8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/setup-android
+
+      # Minification only breaks at release time, so exercise it on every change instead
+      # of discovering it when a tag is pushed. Unsigned here; the release workflow signs.
+      - name: Build release APK
+        run: ./gradlew assembleRelease --stacktrace
