@@ -154,15 +154,16 @@ fun resolveMetricModuleOrder(persistedOrder: List<String>): List<MetricModuleId>
 }
 
 /**
- * Formats available CPU cluster frequencies, omitting clusters that are absent (0 MHz)
- * on 1-cluster or 2-cluster SoC architectures (e.g. "P:652 E:1017" or "U:3200 P:2400").
- * Falls back to "P:0 E:0" while initial readings are loading.
+ * Formats CPU cluster frequencies, omitting clusters the device does not have
+ * (null) on 1-cluster or 2-cluster SoCs (e.g. "P:652 E:1017" or "U:3200 P:2400").
+ * An idle cluster reads 0 MHz but is still shown. Falls back to "P:0 E:0"
+ * while initial readings are loading.
  */
-fun formatCpuClusters(ultraMhz: Int, perfMhz: Int, effMhz: Int): String {
+fun formatCpuClusters(ultraMhz: Int?, perfMhz: Int?, effMhz: Int?): String {
     val parts = buildList(3) {
-        if (ultraMhz > 0) add("U:$ultraMhz")
-        if (perfMhz > 0) add("P:$perfMhz")
-        if (effMhz > 0) add("E:$effMhz")
+        ultraMhz?.let { add("U:$it") }
+        perfMhz?.let { add("P:$it") }
+        effMhz?.let { add("E:$it") }
     }
     return if (parts.isNotEmpty()) {
         parts.joinToString(" ")

@@ -97,6 +97,9 @@ class GamingModeEngine @Inject constructor(
     fun getGoogleAppsForWhitelist(): List<AppInfo> =
         oemPackageResolver.getGoogleAppsForWhitelist(context)
 
+    fun getOemAppsForWhitelist(): List<AppInfo> =
+        oemPackageResolver.getOemAppsForWhitelist(context)
+
     fun setSessionActiveForTesting(active: Boolean) {
         _isSessionActive.value = active
         _isActive.value = active

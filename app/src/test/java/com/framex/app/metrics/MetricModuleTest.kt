@@ -95,15 +95,18 @@ class MetricModuleTest {
         assertEquals("U:2800 P:2200 E:1600", formatCpuClusters(2800, 2200, 1600))
 
         // 2-cluster mid-range topology without Ultra core (Issue #113: e.g. SM-P613)
-        assertEquals("P:652 E:1017", formatCpuClusters(0, 652, 1017))
+        assertEquals("P:652 E:1017", formatCpuClusters(null, 652, 1017))
 
         // 2-cluster flagship topology without Efficiency core (Issue #84: e.g. Snapdragon 8 Elite)
-        assertEquals("U:4320 P:3530", formatCpuClusters(4320, 3530, 0))
+        assertEquals("U:4320 P:3530", formatCpuClusters(4320, 3530, null))
 
         // 1-cluster topology
-        assertEquals("E:1800", formatCpuClusters(0, 0, 1800))
+        assertEquals("E:1800", formatCpuClusters(null, null, 1800))
 
         // Uninitialized / loading state fallback
-        assertEquals("P:0 E:0", formatCpuClusters(0, 0, 0))
+        assertEquals("P:0 E:0", formatCpuClusters(null, null, null))
+
+        // An idle cluster is present, so it must not be hidden (Issue #113).
+        assertEquals("U:0 P:600 E:1800", formatCpuClusters(0, 600, 1800))
     }
 }

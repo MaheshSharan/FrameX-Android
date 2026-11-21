@@ -20,9 +20,10 @@ data class CpuClusterMetric(
 data class CpuTelemetrySnapshot(
     val peakMhz: Int = 0,
     val totalUsagePercent: Int? = null,
-    val effMhz: Int = 0,
-    val perfMhz: Int = 0,
-    val ultraMhz: Int = 0,
+    // Null means the device has no such cluster; 0 means present but idle.
+    val effMhz: Int? = null,
+    val perfMhz: Int? = null,
+    val ultraMhz: Int? = null,
     val clusters: List<CpuClusterMetric> = emptyList(),
     val readStatus: MetricReadStatus = MetricReadStatus.Loading
 )
@@ -266,13 +267,13 @@ internal object CpuTopologyParser {
         }
 
         val (effMhz, perfMhz, ultraMhz) = when (sortedPolicies.size) {
-            0 -> Triple(0, 0, 0)
-            1 -> Triple(sortedPolicies[0].currentMhz, 0, 0)
+            0 -> Triple(null, null, null)
+            1 -> Triple(sortedPolicies[0].currentMhz, null, null)
             2 -> {
                 if (sortedPolicies[1].maxMhz >= TWO_CLUSTER_ULTRA_THRESHOLD_MHZ) {
-                    Triple(0, sortedPolicies[0].currentMhz, sortedPolicies[1].currentMhz)
+                    Triple(null, sortedPolicies[0].currentMhz, sortedPolicies[1].currentMhz)
                 } else {
-                    Triple(sortedPolicies[0].currentMhz, sortedPolicies[1].currentMhz, 0)
+                    Triple(sortedPolicies[0].currentMhz, sortedPolicies[1].currentMhz, null)
                 }
             }
             else -> Triple(

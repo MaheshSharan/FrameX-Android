@@ -83,4 +83,19 @@ class CpuTopologyParserTest {
         assertEquals(3200, snap.ultraMhz)
         assertTrue(snap.clusters.any { it.label == "CPU 5~6" })
     }
+
+    @Test
+    fun parseTelemetryPayload_marksMissingClustersAsNullAndKeepsIdleOnes() {
+        val oneCluster = "POLICY:0:0 1 2 3:2000000:1800000"
+        val (one, _) = CpuTopologyParser.parseTelemetryPayload(oneCluster, emptyMap())
+        assertEquals(1800, one.effMhz)
+        assertNull(one.perfMhz)
+        assertNull(one.ultraMhz)
+
+        val twoClusterIdle = "POLICY:0:0 1 2 3:1800000:0\nPOLICY:4:4 5 6 7:2400000:600000"
+        val (two, _) = CpuTopologyParser.parseTelemetryPayload(twoClusterIdle, emptyMap())
+        assertEquals(0, two.effMhz)
+        assertEquals(600, two.perfMhz)
+        assertNull(two.ultraMhz)
+    }
 }
