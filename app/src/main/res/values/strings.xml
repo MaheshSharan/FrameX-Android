@@ -286,10 +286,33 @@
 
     <!-- Performance Screen Toasts & Banners -->
     <string name="perf_toast_add_one_game">Kindly add a minimum of one game in game launcher</string>
-    <string name="perf_toast_open_shizuku_err">Unable to open Shizuku app</string>
-    <string name="perf_toast_open_write_settings_err">Unable to open Write Settings</string>
-    <string name="perf_toast_open_dnd_err">Unable to open DND settings</string>
-    <string name="perf_toast_open_notif_listener_err">Unable to open Notification Listener settings</string>
+    <string name="perf_open_system_status">Open System Status</string>
+    <string name="perf_req_details">Details</string>
+    <string name="perf_req_hide">Hide</string>
+    <string name="perf_req_ready">System Ready</string>
+    <string name="perf_req_incomplete">Setup Incomplete</string>
+    <string name="perf_req_all_active">All %1$d required services are active</string>
+    <string name="perf_req_n_active">%1$d of %2$d required services active</string>
+    <string name="perf_req_privilege">Privilege</string>
+    <string name="perf_req_privilege_ok">Connected through the selected privilege mode</string>
+    <string name="perf_req_privilege_missing">Not connected. Open System Status to fix this</string>
+    <string name="perf_req_write_settings">Write Settings</string>
+    <string name="perf_req_write_settings_ok">Authorized to modify brightness &amp; rotation</string>
+    <string name="perf_req_write_settings_missing">Required for custom brightness/rotate overrides</string>
+    <string name="perf_req_dnd">DND Policy</string>
+    <string name="perf_req_dnd_ok">Can suppress notifications via DND</string>
+    <string name="perf_req_dnd_missing">Required to enable Do Not Disturb during gaming</string>
+    <string name="perf_req_listener">Listener</string>
+    <string name="perf_req_listener_ok">Active. System notifications will be cancelled</string>
+    <string name="perf_req_listener_missing">Optional: cancels notifications that bypass DND</string>
+    <string name="perf_state_connected">Connected</string>
+    <string name="perf_state_offline">Offline</string>
+    <string name="perf_state_authorized">Authorized</string>
+    <string name="perf_state_denied">Denied</string>
+    <string name="perf_state_available">Available</string>
+    <string name="perf_state_missing">Missing</string>
+    <string name="perf_state_active">Active</string>
+    <string name="perf_state_disabled">Disabled</string>
 
     <!-- Chart & Gauge Accessibility Summaries -->
     <string name="thermal_axis_now">now</string>

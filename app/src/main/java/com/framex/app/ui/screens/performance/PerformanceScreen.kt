@@ -51,10 +51,7 @@ fun PerformanceScreen(
     onEvent: (PerformanceUiEvent) -> Unit,
     getGameConfigBoostRam: (String) -> Boolean,
     setGameConfigBoostRam: (String, Boolean) -> Unit,
-    onRequestShizuku: () -> Unit,
-    onRequestWriteSettings: () -> Unit,
-    onRequestDndAccess: () -> Unit,
-    onRequestNotificationListener: () -> Unit,
+    onNavigateToPermissions: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -124,15 +121,9 @@ fun PerformanceScreen(
             // Requirements & Status section
             item(key = "requirements_section") {
                 RequirementsSection(
-                    shizukuReady = shizukuReady,
-                    isShizukuAvailable = uiState.isShizukuAvailable,
-                    hasWriteSettingsAccess = uiState.hasWriteSettingsAccess,
-                    hasDndAccess = uiState.hasDndAccess,
-                    hasNotifListenerAccess = uiState.hasNotifListenerAccess,
-                    onRequestShizuku = onRequestShizuku,
-                    onRequestWriteSettings = onRequestWriteSettings,
-                    onRequestDndAccess = onRequestDndAccess,
-                    onRequestNotificationListener = onRequestNotificationListener
+                    privilegeReady = shizukuReady,
+                    permissions = uiState.permissions,
+                    onOpenSystemStatus = onNavigateToPermissions
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }

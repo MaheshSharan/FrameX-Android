@@ -75,7 +75,10 @@ fun FrameXNavGraph(
             AboutRoute(onNavigateBack = { navController.safePopBackStack() })
         }
         composable(Screen.Performance.route) {
-            PerformanceRoute(onNavigateBack = { navController.safePopBackStack() })
+            PerformanceRoute(
+                onNavigateBack = { navController.safePopBackStack() },
+                onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) }
+            )
         }
         composable(Screen.ThermalDiagnostics.route) {
             ThermalDiagnosticsRoute(onNavigateBack = { navController.safePopBackStack() })

@@ -5,6 +5,7 @@ import com.framex.app.gaming.AppInfo
 import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.ledger.LedgerSummary
 import com.framex.app.metrics.MetricsState
+import com.framex.app.permissions.AppPermission
 
 /**
  * Immutable UI model representing the live state of an active gaming session,
@@ -37,10 +38,8 @@ data class PerformanceUiState(
     val activeGamingSession: ActiveGamingSession? = null,
     val maxRefreshRate: Int = 60,
 
-    // System Access
-    val hasDndAccess: Boolean = false,
-    val hasNotifListenerAccess: Boolean = false,
-    val hasWriteSettingsAccess: Boolean = false,
+    /** Read-only copy of the central permission state; granting happens on System Status. */
+    val permissions: Map<AppPermission, Boolean> = emptyMap(),
 
     // Banner message
     val bannerMessage: String? = null,
@@ -78,7 +77,6 @@ sealed interface PerformanceUiEvent {
     data object ResetDefaults : PerformanceUiEvent
 
     data object RefreshInstalledApps : PerformanceUiEvent
-    data object RefreshSystemState : PerformanceUiEvent
     data class SetAddGameSheetVisible(val visible: Boolean) : PerformanceUiEvent
     data class SetConfigGamePkg(val packageName: String?) : PerformanceUiEvent
     data class SetDeployingGamePkg(val packageName: String?) : PerformanceUiEvent
@@ -116,12 +114,6 @@ data class Tuple4<A, B, C, D>(
     val fourth: D
 )
 
-data class SystemAccessGroup(
-    val hasDndAccess: Boolean,
-    val hasNotifListenerAccess: Boolean,
-    val hasWriteSettingsAccess: Boolean
-)
-
 data class DialogStateGroup(
     val showAddGameSheet: Boolean,
     val configGamePkg: String?,
@@ -146,5 +138,5 @@ data class IntermediateUiState(
     val bannerMessage: String?,
     val actions: ActionStateGroup,
     val dialogs: DialogStateGroup,
-    val systemAccess: SystemAccessGroup
+    val permissions: Map<AppPermission, Boolean>
 )
