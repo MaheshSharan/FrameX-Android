@@ -107,8 +107,8 @@
     <string name="onboarding_page2_desc">Monitor your device\'s core vitals including CPU, RAM, and GPU workloads in a single glance without leaving your game.</string>
     <string name="onboarding_page3_title">Shizuku or Root</string>
     <string name="onboarding_page3_desc">Advanced system-level privileges let FrameX gather deeper Android telemetry. Shizuku needs no root; Root unlocks CPU and GPU tuning.</string>
-    <string name="onboarding_essentials_title">Choose how FrameX gets access</string>
-    <string name="onboarding_essentials_desc">FrameX reads system metrics through Shizuku or Root. You can change this later in System Status.</string>
+    <string name="onboarding_essentials_title">Set up access</string>
+    <string name="onboarding_essentials_desc">Choose how FrameX reads system metrics, then allow the overlay and notifications. You can change all of this later in System Status.</string>
     <string name="onboarding_page_n_of_m">Page %1$d of %2$d</string>
 
     <!-- Permissions Screen -->

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.permissions.AppPermission
 import com.framex.app.ui.screens.onboarding.components.OnboardingEssentialsPage
 import com.framex.app.ui.screens.onboarding.components.OnboardingPageIndicator
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ import kotlinx.coroutines.launch
 fun OnboardingScreen(
     uiState: OnboardingUiState,
     onEvent: (OnboardingUiEvent) -> Unit,
+    onGrantPermission: (AppPermission) -> Unit,
     onFinishOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
     pages: List<OnboardingPage> = DefaultOnboardingPages
@@ -130,7 +132,8 @@ fun OnboardingScreen(
             } else {
                 OnboardingEssentialsPage(
                     uiState = uiState,
-                    onSelectMode = { onEvent(OnboardingUiEvent.SelectMode(it)) }
+                    onSelectMode = { onEvent(OnboardingUiEvent.SelectMode(it)) },
+                    onGrantPermission = onGrantPermission
                 )
             }
         }

@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.framex.app.R
 import com.framex.app.privilege.PrivilegeMode
+import com.framex.app.ui.screens.permissions.PermissionItem
 
 @Immutable
 data class OnboardingPage(
@@ -34,10 +35,12 @@ val DefaultOnboardingPages = listOf(
 @Immutable
 data class OnboardingUiState(
     val selectedMode: PrivilegeMode = PrivilegeMode.SHIZUKU,
-    val isPrivilegeReady: Boolean = false
+    val isPrivilegeReady: Boolean = false,
+    val essentials: List<PermissionItem> = emptyList()
 )
 
 sealed interface OnboardingUiEvent {
     data object CompleteOnboarding : OnboardingUiEvent
     data class SelectMode(val mode: PrivilegeMode) : OnboardingUiEvent
+    data object RefreshPermissions : OnboardingUiEvent
 }
