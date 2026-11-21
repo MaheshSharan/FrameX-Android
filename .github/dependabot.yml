@@ -24,3 +24,7 @@ updates:
       - dependency-name: "com.android*"
       - dependency-name: "com.google.dagger*"
       - dependency-name: "androidx.compose*"
+      - dependency-name: "gradle-wrapper"
+      - dependency-name: "androidx.navigation*"
+      - dependency-name: "androidx.hilt*"
+      - dependency-name: "androidx.datastore*"
