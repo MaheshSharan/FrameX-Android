@@ -13,7 +13,7 @@ coroutines = "1.7.3"
 datastore = "1.0.0"
 shizuku = "13.1.5"
 junit = "4.13.2"
-json = "20240303"
+json = "20260814"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
