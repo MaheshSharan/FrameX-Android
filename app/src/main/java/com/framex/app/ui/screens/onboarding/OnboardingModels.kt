@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.framex.app.R
+import com.framex.app.privilege.PrivilegeMode
 
 @Immutable
 data class OnboardingPage(
@@ -30,6 +31,13 @@ val DefaultOnboardingPages = listOf(
     )
 )
 
+@Immutable
+data class OnboardingUiState(
+    val selectedMode: PrivilegeMode = PrivilegeMode.SHIZUKU,
+    val isPrivilegeReady: Boolean = false
+)
+
 sealed interface OnboardingUiEvent {
-    object CompleteOnboarding : OnboardingUiEvent
+    data object CompleteOnboarding : OnboardingUiEvent
+    data class SelectMode(val mode: PrivilegeMode) : OnboardingUiEvent
 }
