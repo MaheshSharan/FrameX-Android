@@ -11,6 +11,7 @@ import com.framex.app.gaming.GamingModeState
 import com.framex.app.gaming.GamingServiceController
 import com.framex.app.gaming.ledger.ExecutionLedger
 import com.framex.app.metrics.MetricsEngine
+import com.framex.app.permissions.PermissionsManager
 import com.framex.app.repository.SettingsRepository
 import com.framex.app.privilege.PrivilegeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,6 +36,7 @@ class PerformanceViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val metricsEngine: MetricsEngine,
     private val deviceDiagnosticManager: DeviceDiagnosticManager,
+    private val permissionsManager: PermissionsManager,
     private val executionLedger: ExecutionLedger,
     private val gamingServiceController: GamingServiceController,
     private val gamingDeviceReset: GamingDeviceReset
@@ -68,19 +70,6 @@ class PerformanceViewModel @Inject constructor(
     private val _showAddGameSheet = MutableStateFlow(false)
     private val _configGamePkg = MutableStateFlow<String?>(null)
     private val _activeDeployingGamePkg = MutableStateFlow<String?>(null)
-
-    // System Access state
-    private val _hasDndAccess = MutableStateFlow(deviceDiagnosticManager.hasDndAccess())
-    private val _hasNotifListenerAccess = MutableStateFlow(deviceDiagnosticManager.hasNotificationListenerAccess())
-    private val _hasWriteSettingsAccess = MutableStateFlow(deviceDiagnosticManager.hasWriteSettingsAccess())
-
-    private val systemAccessStream = combine(
-        _hasDndAccess,
-        _hasNotifListenerAccess,
-        _hasWriteSettingsAccess
-    ) { dnd, notif, writeSettings ->
-        SystemAccessGroup(dnd, notif, writeSettings)
-    }
 
     // Active session stream
     val activeGamingSession: StateFlow<ActiveGamingSession?> = combine(
@@ -146,7 +135,7 @@ class PerformanceViewModel @Inject constructor(
             _googleApps,
             activeGamingSession,
             _bannerMessage,
-            combine(dialogStateStream, systemAccessStream, actionStateStream) { dialogs, access, actions ->
+            combine(dialogStateStream, permissionsManager.status, actionStateStream) { dialogs, access, actions ->
                 Triple(dialogs, access, actions)
             }
         ) { user, google, session, banner, (dialogs, access, actions) ->
@@ -167,9 +156,7 @@ class PerformanceViewModel @Inject constructor(
             hasSeenDeepFreezeNotice = sys.hasSeenDeepFreezeNotice,
             activeGamingSession = inter.activeSession,
             maxRefreshRate = maxRefreshRate,
-            hasDndAccess = inter.systemAccess.hasDndAccess,
-            hasNotifListenerAccess = inter.systemAccess.hasNotifListenerAccess,
-            hasWriteSettingsAccess = inter.systemAccess.hasWriteSettingsAccess,
+            permissions = inter.permissions,
             bannerMessage = inter.bannerMessage,
             isBoostingRam = inter.actions.isBoostingRam,
             showRamResult = inter.actions.showRamResult,
@@ -208,9 +195,7 @@ class PerformanceViewModel @Inject constructor(
             hasSeenDeepFreezeNotice = settingsRepository.hasSeenDeepFreezeNotice.value,
             activeGamingSession = activeSession,
             maxRefreshRate = maxRefreshRate,
-            hasDndAccess = _hasDndAccess.value,
-            hasNotifListenerAccess = _hasNotifListenerAccess.value,
-            hasWriteSettingsAccess = _hasWriteSettingsAccess.value,
+            permissions = permissionsManager.status.value,
             bannerMessage = null,
             showAddGameSheet = false,
             configGamePkg = null,
@@ -220,21 +205,12 @@ class PerformanceViewModel @Inject constructor(
 
     init {
         loadUserApps()
-        refreshSystemState()
         metricsEngine.setScreenOverrideModules(setOf("cpu", "ram", "fps"), requesterKey = "performance_screen")
     }
 
     override fun onCleared() {
         super.onCleared()
         metricsEngine.setScreenOverrideModules(emptySet(), requesterKey = "performance_screen")
-    }
-
-    fun refreshSystemState() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _hasDndAccess.value = deviceDiagnosticManager.hasDndAccess()
-            _hasNotifListenerAccess.value = deviceDiagnosticManager.hasNotificationListenerAccess()
-            _hasWriteSettingsAccess.value = deviceDiagnosticManager.hasWriteSettingsAccess()
-        }
     }
 
     fun onEvent(event: PerformanceUiEvent) {
@@ -250,10 +226,6 @@ class PerformanceViewModel @Inject constructor(
             PerformanceUiEvent.CheckPing -> checkPingAction()
             PerformanceUiEvent.ResetDefaults -> resetDefaultsAction()
             PerformanceUiEvent.RefreshInstalledApps -> loadUserApps()
-            PerformanceUiEvent.RefreshSystemState -> {
-                loadUserApps()
-                refreshSystemState()
-            }
             is PerformanceUiEvent.SetAddGameSheetVisible -> _showAddGameSheet.value = event.visible
             is PerformanceUiEvent.SetConfigGamePkg -> _configGamePkg.value = event.packageName
             is PerformanceUiEvent.SetDeployingGamePkg -> _activeDeployingGamePkg.value = event.packageName
@@ -288,6 +260,7 @@ class PerformanceViewModel @Inject constructor(
     fun enableGamingMode() {
         if (settingsRepository.launcherGames.value.isEmpty()) {
             _effectChannel.trySend(PerformanceUiEffect.ShowToast(R.string.perf_toast_add_one_game))
+            _effectChannel.trySend(PerformanceUiEffect.ScrollToGameLauncher)
             return
         }
         viewModelScope.launch {

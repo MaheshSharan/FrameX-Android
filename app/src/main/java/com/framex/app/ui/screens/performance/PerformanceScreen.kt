@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -51,12 +53,10 @@ fun PerformanceScreen(
     onEvent: (PerformanceUiEvent) -> Unit,
     getGameConfigBoostRam: (String) -> Boolean,
     setGameConfigBoostRam: (String, Boolean) -> Unit,
-    onRequestShizuku: () -> Unit,
-    onRequestWriteSettings: () -> Unit,
-    onRequestDndAccess: () -> Unit,
-    onRequestNotificationListener: () -> Unit,
+    onNavigateToPermissions: () -> Unit,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val shizukuReady = uiState.isShizukuAvailable && uiState.hasShizukuPermission
     val canActivate = shizukuReady
@@ -91,6 +91,7 @@ fun PerformanceScreen(
         contentAlignment = Alignment.TopCenter
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .widthIn(max = FrameXSpacing.MaxContentWidth)
                 .fillMaxSize()
@@ -124,15 +125,9 @@ fun PerformanceScreen(
             // Requirements & Status section
             item(key = "requirements_section") {
                 RequirementsSection(
-                    shizukuReady = shizukuReady,
-                    isShizukuAvailable = uiState.isShizukuAvailable,
-                    hasWriteSettingsAccess = uiState.hasWriteSettingsAccess,
-                    hasDndAccess = uiState.hasDndAccess,
-                    hasNotifListenerAccess = uiState.hasNotifListenerAccess,
-                    onRequestShizuku = onRequestShizuku,
-                    onRequestWriteSettings = onRequestWriteSettings,
-                    onRequestDndAccess = onRequestDndAccess,
-                    onRequestNotificationListener = onRequestNotificationListener
+                    privilegeReady = shizukuReady,
+                    permissions = uiState.permissions,
+                    onOpenSystemStatus = onNavigateToPermissions
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -245,3 +240,6 @@ fun PerformanceScreen(
         }
     }
 }
+
+/** Position of [game_launcher_section] in the list above: header, hero, requirements, gauges, sliders. */
+internal const val GAME_LAUNCHER_ITEM_INDEX = 5

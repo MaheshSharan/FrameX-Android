@@ -13,6 +13,7 @@ import com.framex.app.R
 import com.framex.app.ui.components.FrameXTopBar
 import com.framex.app.ui.screens.sessionlogs.components.ClearLogsConfirmDialog
 import com.framex.app.ui.screens.sessionlogs.components.SessionLogEntryCard
+import com.framex.app.ui.screens.sessionlogs.components.SessionLogsActionRow
 import com.framex.app.ui.screens.sessionlogs.components.SessionLogsEmptyView
 import com.framex.app.ui.screens.sessionlogs.components.SessionLogsFilterBar
 import com.framex.app.ui.screens.sessionlogs.components.SessionLogsHeaderCard
@@ -70,7 +71,7 @@ private fun SessionLogsListContent(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "header_status_card") {
             SessionLogsHeaderCard(
@@ -82,16 +83,21 @@ private fun SessionLogsListContent(
             )
         }
 
-        item(key = "filter_actions_bar") {
+        item(key = "log_actions_row") {
+            SessionLogsActionRow(
+                onCopyAll = { onEvent(SessionLogsUiEvent.CopyAllLogs) },
+                onClearClick = onOpenClearDialog
+            )
+        }
+
+        item(key = "filter_chips_bar") {
             SessionLogsFilterBar(
                 selectedFilter = uiState.filter,
                 totalCount = uiState.totalCount,
                 successCount = uiState.successCount,
                 failedCount = uiState.failedCount,
                 infoCount = uiState.infoCount,
-                onSelectFilter = { onEvent(SessionLogsUiEvent.SelectFilter(it)) },
-                onCopyAll = { onEvent(SessionLogsUiEvent.CopyAllLogs) },
-                onClearClick = onOpenClearDialog
+                onSelectFilter = { onEvent(SessionLogsUiEvent.SelectFilter(it)) }
             )
         }
 

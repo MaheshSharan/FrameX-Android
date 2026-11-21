@@ -48,10 +48,9 @@
     <string name="dashboard_theme_desc">Appearance</string>
     <string name="dashboard_performance_title">Performance</string>
     <string name="dashboard_performance_desc">Game mode</string>
-    <string name="dashboard_shizuku_title">Shizuku</string>
-    <string name="dashboard_adb">ADB</string>
-    <string name="dashboard_connected">Connected</string>
-    <string name="dashboard_disconnected">Disconnected</string>
+    <string name="dashboard_system_title">System Status</string>
+    <string name="dashboard_system_ready">Ready</string>
+    <string name="dashboard_system_setup_needed">Setup needed</string>
     <string name="dashboard_thermal_title">Thermal diagnostics</string>
     <string name="dashboard_thermal_desc">Track throttling</string>
     <string name="dashboard_hero_desc_ready">Start the overlay to see real-time FPS, CPU, GPU, RAM and more in your games.</string>
@@ -81,6 +80,7 @@
     <string name="session_logs_clear_action">Clear All</string>
     <string name="session_logs_cancel_action">Cancel</string>
     <string name="session_logs_copy_all">Export</string>
+    <string name="session_logs_copy_entry">Copy log details</string>
     <string name="session_logs_copied_toast">Session audit logs copied to clipboard</string>
     <string name="session_logs_entry_copied_toast">Log entry copied to clipboard</string>
     <string name="session_logs_filter_all">All</string>
@@ -93,6 +93,9 @@
 
     <!-- Splash Screen -->
     <string name="splash_performance_suite">PERFORMANCE SUITE</string>
+    <string name="about_current_version">Current version</string>
+    <string name="about_check_updates">Check for updates</string>
+    <string name="about_checking_updates">Checking…</string>
     <string name="splash_checking_updates">Checking for updates…</string>
     <string name="splash_no_updates_found">No updates found</string>
     <string name="splash_launching_framex">Launching FrameX…</string>
@@ -106,27 +109,29 @@
     <string name="onboarding_page1_desc">FrameX prioritizes frame rates above all else. Experience a modular system designed to keep your workflow at maximum refresh rates.</string>
     <string name="onboarding_page2_title">Real-time Metrics</string>
     <string name="onboarding_page2_desc">Monitor your device\'s core vitals including CPU, RAM, and GPU workloads in a single glance without leaving your game.</string>
-    <string name="onboarding_page3_title">Powered by Shizuku</string>
-    <string name="onboarding_page3_desc">Advanced system-level privileges allow FrameX to gather deeper Android telemetry without touching root or voiding your warranty.</string>
+    <string name="onboarding_page3_title">Shizuku or Root</string>
+    <string name="onboarding_page3_desc">Advanced system-level privileges let FrameX gather deeper Android telemetry. Shizuku needs no root; Root unlocks CPU and GPU tuning.</string>
+    <string name="onboarding_essentials_title">Set up access</string>
+    <string name="onboarding_essentials_desc">Choose how FrameX reads system metrics, then allow the overlay and notifications. You can change all of this later in System Status.</string>
     <string name="onboarding_page_n_of_m">Page %1$d of %2$d</string>
 
     <!-- Permissions Screen -->
     <string name="perm_screen_title">System Status</string>
     <string name="perm_setup_title">Setup FrameX</string>
-    <string name="perm_setup_desc">FrameX needs specific permissions to monitor performance metrics like FPS, thermal stats, and power usage without root access.</string>
+    <string name="perm_setup_desc">Choose how FrameX gets elevated access, then grant the permissions you want to use. Overlay and notifications are needed to get started.</string>
     <string name="perm_shizuku_title">Shizuku Service</string>
-    <string name="perm_shizuku_desc">The core bridge for non-root access. Please ensure Shizuku is running via ADB or Wireless Debugging.</string>
+    <string name="perm_shizuku_desc">Used when Shizuku is the selected mode. Make sure Shizuku is running, using ADB or Wireless Debugging.</string>
     <string name="perm_shizuku_running_granted">RUNNING &amp; GRANTED</string>
     <string name="perm_shizuku_perm_required">PERMISSION REQUIRED</string>
     <string name="perm_shizuku_not_running">NOT RUNNING</string>
     <string name="perm_launch_app">Launch App</string>
     <string name="perm_grant_access">Grant Access</string>
     <string name="perm_authorized">Authorized</string>
-    <string name="perm_required_section">REQUIRED PERMISSIONS</string>
+    <string name="perm_required_section">PERMISSIONS</string>
     <string name="perm_overlay_title">Overlay Permission</string>
     <string name="perm_overlay_desc">Required for the FPS counter overlay</string>
     <string name="perm_usage_title">Usage Access</string>
-    <string name="perm_usage_desc">Read app-specific performance data</string>
+    <string name="perm_usage_desc">Lets FrameX see which app is in the foreground</string>
     <string name="perm_battery_title">Battery Optimization</string>
     <string name="perm_battery_desc">Prevents OS from killing overlay</string>
     <string name="perm_battery_disable">Disable</string>
@@ -134,10 +139,17 @@
     <string name="perm_notifications_desc">Shows overlay status and Gaming Mode recovery alerts</string>
     <string name="perm_write_settings_title">Write System Settings</string>
     <string name="perm_write_settings_desc">Required to toggle auto-brightness &amp; rotation</string>
+    <string name="perm_dnd_title">Do Not Disturb Access</string>
+    <string name="perm_dnd_desc">Lets Gaming Mode silence calls and alerts while you play</string>
+    <string name="perm_listener_title">Notification Listener</string>
+    <string name="perm_listener_desc">Optional. Hides notifications that bypass Do Not Disturb</string>
+    <string name="perm_listener_enable">Enable</string>
+    <string name="perm_granted_count">%1$d of %2$d</string>
     <string name="perm_why_title">Why are these needed?</string>
-    <string name="perm_why_desc">FrameX operates as a high-privilege tool. Without overlay access, we cannot draw the HUD. Without usage stats, we cannot identify which game is running. Shizuku allows us to bypass Android 14+ restrictions securely.</string>
+    <string name="perm_why_desc">FrameX reads system metrics through Shizuku or Root. Overlay access lets it draw the HUD over your game and notifications show its status. The rest unlock Gaming Mode features such as Do Not Disturb.</string>
     <string name="perm_return_dashboard">Return to Dashboard</string>
     <string name="perm_shizuku_not_found">Shizuku app not found</string>
+    <string name="perm_open_settings_failed">Unable to open this screen on your device</string>
     <string name="perm_start_shizuku_first">Start Shizuku service first</string>
     <string name="perm_status_format">%1$s: %2$s</string>
 
@@ -220,7 +232,6 @@
     <string name="tuning_cpu_section">CPU clusters</string>
     <string name="tuning_banner_root">Root mode</string>
     <string name="tuning_banner_shizuku">Shizuku mode</string>
-    <string name="tuning_banner_none">No privilege mode</string>
     <string name="tuning_banner_can_tune">Frequency and governor changes are available.</string>
     <string name="tuning_banner_read_only">Read-only. Changing CPU or GPU limits needs Root access that can write to the kernel.</string>
     <string name="tuning_unlock_nodes">Unlock to edit</string>
@@ -251,11 +262,10 @@
     <string name="perm_mode_shizuku_desc">Uses the Shizuku service. No root needed.</string>
     <string name="perm_mode_root">Root</string>
     <string name="perm_mode_root_desc">Uses your root manager (Magisk, KernelSU). Needed to change CPU and GPU limits.</string>
-    <string name="perm_mode_none">None</string>
-    <string name="perm_mode_none_desc">Overlay only. Gaming Mode and tuning are off.</string>
     <string name="perm_mode_state_connected">Connected</string>
     <string name="perm_mode_state_not_ready">Not connected yet</string>
     <string name="perm_mode_root_retry">Request root access</string>
+    <string name="perm_mode_root_denied">Root access was denied. Grant it in your root manager, or use Shizuku.</string>
     <string name="perm_mode_blocked_gaming">Turn off Gaming Mode before switching privilege mode.</string>
     <string name="perm_mode_blocked_recovery">Finish restoring Gaming Mode changes before switching privilege mode.</string>
     <string name="gaming_alert_channel_name">FrameX Gaming Mode alerts</string>
@@ -280,10 +290,33 @@
 
     <!-- Performance Screen Toasts & Banners -->
     <string name="perf_toast_add_one_game">Kindly add a minimum of one game in game launcher</string>
-    <string name="perf_toast_open_shizuku_err">Unable to open Shizuku app</string>
-    <string name="perf_toast_open_write_settings_err">Unable to open Write Settings</string>
-    <string name="perf_toast_open_dnd_err">Unable to open DND settings</string>
-    <string name="perf_toast_open_notif_listener_err">Unable to open Notification Listener settings</string>
+    <string name="perf_open_system_status">Open System Status</string>
+    <string name="perf_req_details">Details</string>
+    <string name="perf_req_hide">Hide</string>
+    <string name="perf_req_ready">System Ready</string>
+    <string name="perf_req_incomplete">Setup Incomplete</string>
+    <string name="perf_req_all_active">All %1$d required services are active</string>
+    <string name="perf_req_n_active">%1$d of %2$d required services active</string>
+    <string name="perf_req_privilege">Privilege</string>
+    <string name="perf_req_privilege_ok">Connected through the selected privilege mode</string>
+    <string name="perf_req_privilege_missing">Not connected. Open System Status to fix this</string>
+    <string name="perf_req_write_settings">Write Settings</string>
+    <string name="perf_req_write_settings_ok">Authorized to modify brightness &amp; rotation</string>
+    <string name="perf_req_write_settings_missing">Required for custom brightness/rotate overrides</string>
+    <string name="perf_req_dnd">DND Policy</string>
+    <string name="perf_req_dnd_ok">Can suppress notifications via DND</string>
+    <string name="perf_req_dnd_missing">Required to enable Do Not Disturb during gaming</string>
+    <string name="perf_req_listener">Listener</string>
+    <string name="perf_req_listener_ok">Active. System notifications will be cancelled</string>
+    <string name="perf_req_listener_missing">Optional: cancels notifications that bypass DND</string>
+    <string name="perf_state_connected">Connected</string>
+    <string name="perf_state_offline">Offline</string>
+    <string name="perf_state_authorized">Authorized</string>
+    <string name="perf_state_denied">Denied</string>
+    <string name="perf_state_available">Available</string>
+    <string name="perf_state_missing">Missing</string>
+    <string name="perf_state_active">Active</string>
+    <string name="perf_state_disabled">Disabled</string>
 
     <!-- Chart & Gauge Accessibility Summaries -->
     <string name="thermal_axis_now">now</string>

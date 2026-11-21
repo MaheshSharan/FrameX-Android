@@ -71,6 +71,13 @@ val DEFAULT_METRIC_MODULE_ORDER: List<MetricModuleId> = listOf(
     MetricModuleId.PING
 )
 
+/** Modules a first-run user sees; applies only when no choice is stored. */
+val DEFAULT_ENABLED_METRIC_MODULES: Set<MetricModuleId> = setOf(
+    MetricModuleId.FPS,
+    MetricModuleId.CPU_FREQUENCY,
+    MetricModuleId.BATTERY_TEMPERATURE
+)
+
 val METRIC_MODULE_REGISTRY: Map<MetricModuleId, MetricModuleInfo> = listOf(
     MetricModuleInfo(MetricModuleId.FPS, "Frames Per Second", "FPS", Icons.Outlined.Speed, "120"),
     MetricModuleInfo(MetricModuleId.CPU_FREQUENCY, "CPU Frequency", "CPU", Icons.Outlined.Memory, "2.8 GHz"),

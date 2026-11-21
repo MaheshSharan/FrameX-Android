@@ -14,6 +14,14 @@ class MetricModuleTest {
     }
 
     @Test
+    fun defaultEnabledModules_areFpsCpuFrequencyAndBatteryTemperature() {
+        assertEquals(
+            setOf("fps", "cpu", "temp"),
+            DEFAULT_ENABLED_METRIC_MODULES.map { it.storageKey }.toSet()
+        )
+    }
+
+    @Test
     fun resolveMetricModuleOrder_appendsNewModulesToCustomOrder() {
         // User had customized order from previous version with only fps and cpu
         val userCustomized = listOf("fps", "cpu")

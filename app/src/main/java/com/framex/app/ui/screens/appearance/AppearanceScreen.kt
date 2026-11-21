@@ -83,21 +83,22 @@ fun AppearanceScreen(
                 onNavigateBack = onNavigateBack
             )
 
-            // Scrollable Content
+            // Pinned preview: only the options below it scroll.
+            AppearancePreviewCard(
+                uiState = uiState,
+                onCycleBackground = { onEvent(AppearanceUiEvent.CyclePreviewBackground) },
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Scrollable options
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp)
             ) {
-                // Live Preview
-                AppearancePreviewCard(
-                    uiState = uiState,
-                    onCycleBackground = { onEvent(AppearanceUiEvent.CyclePreviewBackground) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
                 // Visibility / Opacity
                 OpacityCard(
                     opacity = uiState.opacity,

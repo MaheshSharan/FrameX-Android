@@ -40,21 +40,6 @@ open class DeviceDiagnosticManager @Inject constructor(
         return memInfo.availMem
     }
 
-    open fun hasDndAccess(): Boolean {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-        return nm?.isNotificationPolicyAccessGranted == true
-    }
-
-    open fun hasNotificationListenerAccess(): Boolean {
-        return android.provider.Settings.Secure.getString(
-            context.contentResolver, "enabled_notification_listeners"
-        )?.contains(context.packageName) == true
-    }
-
-    open fun hasWriteSettingsAccess(): Boolean {
-        return android.provider.Settings.System.canWrite(context)
-    }
-
     private fun readSystemProperty(key: String): String {
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("getprop", key))

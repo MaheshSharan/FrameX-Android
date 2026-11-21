@@ -1,10 +1,12 @@
 package com.framex.app.ui.screens.onboarding
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.framex.app.ui.components.ToastEffect
+import com.framex.app.ui.screens.permissions.rememberPermissionGranter
 
 @Composable
 fun OnboardingRoute(
@@ -12,15 +14,18 @@ fun OnboardingRoute(
     modifier: Modifier = Modifier,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
-    val selectedMode by viewModel.selectedMode.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val grantPermission = rememberPermissionGranter {
+        viewModel.onEvent(OnboardingUiEvent.RefreshPermissions)
+    }
+    ToastEffect(viewModel.toasts)
 
     OnboardingScreen(
-        selectedMode = selectedMode,
-        onSelectPrivilege = { mode, onResult ->
-            viewModel.selectPrivilege(mode, onResult)
-        },
+        uiState = uiState,
+        onEvent = viewModel::onEvent,
+        onGrantPermission = grantPermission,
         onFinishOnboarding = {
-            viewModel.completeOnboarding()
+            viewModel.onEvent(OnboardingUiEvent.CompleteOnboarding)
             onFinishOnboarding()
         },
         modifier = modifier

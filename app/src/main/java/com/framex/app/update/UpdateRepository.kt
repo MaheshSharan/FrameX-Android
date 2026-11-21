@@ -163,7 +163,7 @@ class UpdateRepository @Inject constructor(
             Result.success(
                 AppUpdateInfo(
                     versionName = tagName,
-                    releaseNotes = releaseNotes,
+                    releaseNotes = releaseNotes.lineSequence().filterNot { SHA256_REGEX.containsMatchIn(it) }.joinToString("\n").trim(),
                     downloadUrl = downloadUrl,
                     assetSize = assetSize,
                     isUpdateAvailable = isAvailable,

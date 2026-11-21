@@ -125,26 +125,6 @@ class LegacyMigrationPlannerTest {
     }
 
     @Test
-    fun existingUserIsSeededToShizukuMode() {
-        val result = plan(legacy = mapOf("is_onboarding_completed" to true))
-        assertEquals("shizuku", result["privilege_mode"])
-    }
-
-    @Test
-    fun explicitPrivilegeModeIsKept() {
-        val result = plan(
-            legacy = mapOf("is_onboarding_completed" to true),
-            current = mapOf("privilege_mode" to "root")
-        )
-        assertFalse(result.containsKey("privilege_mode"))
-    }
-
-    @Test
-    fun freshInstallIsNotSeededWithAPrivilegeMode() {
-        assertNull(plan()["privilege_mode"])
-    }
-
-    @Test
     fun discoveryFlagsKeepTheirNames() {
         val result = plan(legacy = mapOf("globally_dismissed" to true, "completed_dashboard" to true))
         assertEquals(true, result["globally_dismissed"])

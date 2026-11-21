@@ -48,7 +48,7 @@ fun PermissionSummaryHeader(
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "$grantedCount of $totalCount",
+                    text = stringResource(R.string.perm_granted_count, grantedCount, totalCount),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (grantedCount == totalCount) Color(0xFF10B981) else Color.White

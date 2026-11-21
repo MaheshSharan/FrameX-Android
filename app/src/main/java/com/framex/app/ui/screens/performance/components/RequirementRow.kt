@@ -22,9 +22,7 @@ import androidx.compose.ui.unit.sp
 fun RequirementRow(
     label: String,
     description: String,
-    satisfied: Boolean,
-    onAction: (() -> Unit)? = null,
-    actionLabel: String = "Grant"
+    satisfied: Boolean
 ) {
     Row(
         modifier = Modifier
@@ -56,17 +54,6 @@ fun RequirementRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             Text(description, color = Color.Gray, fontSize = 11.sp)
-        }
-        if (!satisfied && onAction != null) {
-            Button(
-                onClick = onAction,
-                modifier = Modifier.height(32.dp),
-                shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text(actionLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
         }
     }
 }

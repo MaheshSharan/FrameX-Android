@@ -27,8 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.ui.theme.FrameXBorders
+import com.framex.app.ui.theme.FrameXShapes
 
-private val HeaderCardShape = RoundedCornerShape(16.dp)
+private val HeaderCardShape = FrameXShapes.Large
 private val StatBoxShape = RoundedCornerShape(10.dp)
 
 /**
@@ -48,7 +50,7 @@ fun SessionLogsHeaderCard(
             .fillMaxWidth()
             .clip(HeaderCardShape)
             .background(Color(0xFF0F1015))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), HeaderCardShape)
+            .border(1.dp, FrameXBorders.CardStroke, HeaderCardShape)
             .padding(16.dp)
     ) {
         Column(
@@ -114,8 +116,7 @@ private fun RecordingStatusIndicatorRow(
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                 uncheckedThumbColor = Color(0xFF94A3B8),
                 uncheckedTrackColor = Color(0xFF1E2028)
-            ),
-            modifier = Modifier.height(24.dp)
+            )
         )
     }
 }

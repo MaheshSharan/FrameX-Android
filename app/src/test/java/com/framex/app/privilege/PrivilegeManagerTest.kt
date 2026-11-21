@@ -48,13 +48,14 @@ class PrivilegeManagerTest {
     }
 
     @Test
-    fun noModeSelected_failsWithoutStartingAnyBackend() = runBlocking {
+    fun freshInstall_usesShizukuAndNeverStartsRoot() = runBlocking {
         val shizuku = FakePrivilegeBackend(PrivilegeMode.SHIZUKU)
         val root = FakePrivilegeBackend(PrivilegeMode.ROOT)
-        val manager = manager(PrivilegeMode.NONE, shizuku, root)
+        val manager = PrivilegeManager(settings, shizuku, root, scope).also { it.start() }
 
-        assertFalse(manager.exec("id").isSuccess)
-        assertEquals(0, shizuku.startCalls + root.startCalls)
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
+        assertEquals(1, shizuku.startCalls)
+        assertEquals(0, root.startCalls)
     }
 
     @Test
@@ -84,6 +85,36 @@ class PrivilegeManagerTest {
 
         assertEquals(1, shizuku.stopCalls)
         assertEquals(1, root.startCalls)
+    }
+
+    @Test
+    fun selectMode_keepsRootWhenAccessIsGranted() = runBlocking {
+        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
+
+        assertEquals(SwitchResult.SWITCHED, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.ROOT, manager.currentMode.value)
+    }
+
+    @Test
+    fun selectMode_goesBackToThePreviousModeWhenRootIsDenied() = runBlocking {
+        val manager = manager(
+            PrivilegeMode.SHIZUKU,
+            FakePrivilegeBackend(PrivilegeMode.SHIZUKU),
+            FakePrivilegeBackend(PrivilegeMode.ROOT, connectsOnStart = false)
+        )
+
+        assertEquals(SwitchResult.ROOT_DENIED, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
+        assertEquals(PrivilegeMode.SHIZUKU, settings.appPrefs.getPrivilegeMode())
+    }
+
+    @Test
+    fun selectMode_reportsTheBlockAndChangesNothing() = runBlocking {
+        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
+        settings.setGamingModeActive(true)
+
+        assertEquals(SwitchResult.BLOCKED_GAMING_ACTIVE, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
     }
 
     @Test

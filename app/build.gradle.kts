@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 35
-        versionName = "1.6.0-beta"
+        versionName = "1.6.0"
     }
 
     buildFeatures {
@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.process)
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

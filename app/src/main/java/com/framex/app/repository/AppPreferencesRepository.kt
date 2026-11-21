@@ -42,12 +42,6 @@ class AppPreferencesRepository @Inject constructor(
         store.putBoolean("auto_update_check_enabled", enabled)
     }
 
-    fun getLastSeenVersionCode(): Long = store.getLong("last_seen_version_code", 0L)
-
-    fun updateLastSeenVersionCode(versionCode: Long) {
-        store.putLong("last_seen_version_code", versionCode)
-    }
-
     fun isFeatureDiscoveryGloballyDismissed(): Boolean {
         return store.getBoolean("globally_dismissed", default = false)
     }
@@ -65,8 +59,7 @@ class AppPreferencesRepository @Inject constructor(
     }
 
     fun getPrivilegeMode(): com.framex.app.privilege.PrivilegeMode {
-        val raw = store.getString("privilege_mode", com.framex.app.privilege.PrivilegeMode.NONE.key)
-        return com.framex.app.privilege.PrivilegeMode.fromKey(raw)
+        return com.framex.app.privilege.PrivilegeMode.fromKey(store.getString("privilege_mode", null))
     }
 
     fun setPrivilegeMode(mode: com.framex.app.privilege.PrivilegeMode) {

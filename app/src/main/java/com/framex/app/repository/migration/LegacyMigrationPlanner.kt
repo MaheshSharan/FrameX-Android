@@ -25,8 +25,6 @@ internal object LegacyMigrationPlanner {
     private const val DEFAULT_TEXT_SIZE_INDEX = 1
     private val TEXT_SIZE_RANGE = 0..2
     private const val AFFECTED_PACKAGES_KEY = "gaming_affected_packages"
-    private const val PRIVILEGE_MODE_KEY = "privilege_mode"
-    private const val SHIZUKU_MODE = "shizuku"
 
     fun plan(sources: LegacySources): Map<String, Any> {
         val result = LinkedHashMap<String, Any>()
@@ -43,7 +41,6 @@ internal object LegacyMigrationPlanner {
         mergeAffectedPackages(sources, result)
         if (sources.legacy.isNotEmpty()) materializeOldDefaults(sources, result, ::isSet)
         sanitizeTextSize(sources, result)
-        seedPrivilegeMode(sources, result, ::isSet)
         return result
     }
 
@@ -83,16 +80,5 @@ internal object LegacyMigrationPlanner {
     private fun sanitizeTextSize(sources: LegacySources, result: MutableMap<String, Any>) {
         val value = (result[TEXT_SIZE_KEY] ?: sources.current[TEXT_SIZE_KEY]) as? Int ?: return
         if (value !in TEXT_SIZE_RANGE) result[TEXT_SIZE_KEY] = DEFAULT_TEXT_SIZE_INDEX
-    }
-
-    /** Existing users relied on Shizuku before a mode existed; do not strand them on NONE. */
-    private fun seedPrivilegeMode(
-        sources: LegacySources,
-        result: MutableMap<String, Any>,
-        isSet: (String) -> Boolean
-    ) {
-        if (isSet(PRIVILEGE_MODE_KEY)) return
-        val onboarded = (sources.current["onboarding_completed"] ?: result["onboarding_completed"]) == true
-        if (onboarded) result[PRIVILEGE_MODE_KEY] = SHIZUKU_MODE
     }
 }

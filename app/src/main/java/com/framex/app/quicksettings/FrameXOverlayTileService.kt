@@ -6,14 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
-import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.annotation.SuppressLint
 import com.framex.app.MainActivity
 import com.framex.app.R
 import com.framex.app.overlay.OverlayService
+import com.framex.app.permissions.AppPermission
+import com.framex.app.permissions.PermissionsManager
 import com.framex.app.utils.FrameXLog
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * System Quick Settings Tile allowing users to toggle the FrameX performance overlay
@@ -23,7 +26,11 @@ import com.framex.app.utils.FrameXLog
  * [OverlayService.isRunning]. Uses [unlockAndRun] on keyguard and safe [PendingIntent]
  * collapsing on Android 14+ (API 34+).
  */
+@AndroidEntryPoint
 class FrameXOverlayTileService : TileService() {
+
+    @Inject
+    lateinit var permissionsManager: PermissionsManager
 
     override fun onStartListening() {
         super.onStartListening()
@@ -42,7 +49,7 @@ class FrameXOverlayTileService : TileService() {
     }
 
     private fun handleTileClick() {
-        if (!Settings.canDrawOverlays(this)) {
+        if (!permissionsManager.isGranted(AppPermission.OVERLAY)) {
             FrameXLog.w("Overlay permission missing. Redirecting user to application.")
             openAppForPermission()
             return

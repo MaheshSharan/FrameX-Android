@@ -18,8 +18,6 @@
     <!-- Gaming Mode permissions -->
     <!-- specialUse FGS required for Android 14+ to declare our aggressive purge service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- Allows KILL_BACKGROUND_PROCESSES via standard API (am kill-all is still Shizuku-gated) -->
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- Required to toggle DND interruption filter during Gaming Mode -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Required to enumerate all installed packages for the Gaming Mode whitelist on Android 11+ -->

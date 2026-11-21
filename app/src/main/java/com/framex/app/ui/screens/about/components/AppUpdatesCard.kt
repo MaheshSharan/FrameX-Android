@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,7 +18,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,11 +36,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.ui.theme.FrameXAccessibility
+import com.framex.app.ui.theme.FrameXShapes
+import com.framex.app.ui.theme.FrameXSpacing
 
 private val CardBackground = Color(0xFF0F1015)
 
@@ -161,79 +166,82 @@ fun AppUpdatesCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Version indicator and Check for Updates action
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Current Version",
-                            fontSize = 11.5.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        val versionDisplay = if (versionCode > 0) "v$versionName (Build $versionCode)" else "v$versionName"
-                        Text(
-                            text = versionDisplay,
-                            fontSize = 14.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (statusMessage != null) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = statusMessage,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = onCheckForUpdates,
-                        enabled = !isCheckingUpdate,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.height(42.dp)
-                    ) {
-                        if (isCheckingUpdate) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Checking...",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Check for Updates",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
+                VersionCheckRow(
+                    isCheckingUpdate = isCheckingUpdate,
+                    statusMessage = statusMessage,
+                    versionName = versionName,
+                    versionCode = versionCode,
+                    onCheckForUpdates = onCheckForUpdates
+                )
             }
+        }
+    }
+}
+
+/** Version label with a full-width check button below it, so nothing drifts to one side. */
+@Composable
+private fun VersionCheckRow(
+    isCheckingUpdate: Boolean,
+    statusMessage: String?,
+    versionName: String,
+    versionCode: Long,
+    onCheckForUpdates: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FrameXSpacing.Medium)) {
+        Column {
+            Text(
+                text = stringResource(R.string.about_current_version),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Gray
+            )
+            val versionDisplay = if (versionCode > 0) "v$versionName ($versionCode)" else "v$versionName"
+            Text(
+                text = versionDisplay,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            if (statusMessage != null) {
+                Text(
+                    text = statusMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Button(
+            onClick = onCheckForUpdates,
+            enabled = !isCheckingUpdate,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            ),
+            shape = FrameXShapes.Large,
+            modifier = Modifier.fillMaxWidth().heightIn(min = FrameXAccessibility.MinTouchTarget)
+        ) {
+            if (isCheckingUpdate) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(FrameXSpacing.Small))
+            Text(
+                text = stringResource(
+                    if (isCheckingUpdate) R.string.about_checking_updates else R.string.about_check_updates
+                ),
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

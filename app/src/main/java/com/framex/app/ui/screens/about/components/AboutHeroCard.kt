@@ -18,10 +18,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,20 +87,27 @@ fun AboutHeroCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp)
                 .padding(bottom = 16.dp)
         ) {
-            HeroTopBar(onNavigateBack = onNavigateBack)
-            Spacer(modifier = Modifier.height(18.dp))
-            HeroBrandingContent(
-                versionName = versionName,
-                versionCode = versionCode
+            // Top bar sits outside the 20dp content inset so the back arrow
+            // lines up with every other full screen.
+            FrameXTopBar(
+                title = stringResource(R.string.about_legal_title),
+                onNavigateBack = onNavigateBack,
+                applyStatusBarsPadding = false
             )
-            Spacer(modifier = Modifier.height(20.dp))
-            HeroActionButtons(
-                onViewGithub = { onOpenUrl(GITHUB_REPO_URL) },
-                onContactDeveloper = onContactDeveloper
-            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                HeroBrandingContent(
+                    versionName = versionName,
+                    versionCode = versionCode
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                HeroActionButtons(
+                    onViewGithub = { onOpenUrl(GITHUB_REPO_URL) },
+                    onContactDeveloper = onContactDeveloper
+                )
+            }
         }
     }
 }
@@ -174,19 +179,6 @@ private fun HeroBackgroundArtwork(
                 .background(radialBloom)
         )
     }
-}
-
-@Composable
-private fun HeroTopBar(
-    onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    FrameXTopBar(
-        title = stringResource(R.string.about_legal_title),
-        onNavigateBack = onNavigateBack,
-        applyStatusBarsPadding = false,
-        modifier = modifier.padding(vertical = 4.dp)
-    )
 }
 
 @Composable

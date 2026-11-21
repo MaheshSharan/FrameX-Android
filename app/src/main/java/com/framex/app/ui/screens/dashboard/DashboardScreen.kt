@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.framex.app.ui.screens.dashboard.components.DashboardHeader
 import com.framex.app.ui.screens.dashboard.components.HeroStatusCard
@@ -30,7 +29,6 @@ import com.framex.app.ui.screens.dashboard.components.LiveFpsSparklineCard
 import com.framex.app.ui.screens.dashboard.components.QuickAccessGrid
 import com.framex.app.ui.screens.dashboard.components.RecentSessionsSection
 import com.framex.app.ui.screens.dashboard.components.ToolsSection
-import com.framex.app.ui.screens.dashboard.components.WhatsNewDialog
 import com.framex.app.ui.theme.FrameXMotion
 import com.framex.app.ui.theme.FrameXSpacing
 
@@ -58,8 +56,6 @@ fun DashboardScreen(
     LaunchedEffect(reduceMotion) {
         contentVisible = true
     }
-
-    val isWhatsNewVisible = uiState.whatsNewInfo != null
 
     Box(
         modifier = modifier
@@ -122,7 +118,7 @@ fun DashboardScreen(
                     // 3. Quick Access 2x2 Grid (Metrics, Theme, Performance, Shizuku)
                     item(key = "quick_access_grid") {
                         QuickAccessGrid(
-                            isShizukuReady = uiState.isShizukuReady,
+                            isReady = uiState.isReady,
                             onNavigateToOverlayCustomization = onNavigateToOverlayCustomization,
                             onNavigateToAppearance = onNavigateToAppearance,
                             onNavigateToPerformance = onNavigateToPerformance,
@@ -144,29 +140,6 @@ fun DashboardScreen(
                     }
                 }
             }
-        }
-
-        // Lightweight scrim replaces root blur when What's New dialog is visible (Plan 2.1)
-        if (isWhatsNewVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f))
-            )
-        }
-
-        // Post-Update What's New Dialog
-        uiState.whatsNewInfo?.let { info ->
-            WhatsNewDialog(
-                info = info,
-                onDismiss = { onEvent(DashboardUiEvent.DismissWhatsNew) },
-                onActionClick = { actionId ->
-                    if (actionId == "execution_center") {
-                        onEvent(DashboardUiEvent.DismissWhatsNew)
-                        onNavigateToAbout()
-                    }
-                }
-            )
         }
     }
 }
