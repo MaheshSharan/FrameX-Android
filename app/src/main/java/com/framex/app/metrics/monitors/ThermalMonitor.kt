@@ -79,7 +79,7 @@ class ThermalMonitor @Inject constructor(
                                     lastGoodState = null
                                 }
                                 val status = parsed?.thermalStatus?.takeIf { it > 0 } ?: powerManager.thermalStatusOrDefault()
-                                val statusType = if (parsed?.halNotReady == true) {
+                                val statusType = if (parsed?.halNotReady == true || parsed?.halReportedNoSensors == true) {
                                     MetricReadStatus.HardwareUnsupported
                                 } else {
                                     MetricReadStatus.ParseFailed

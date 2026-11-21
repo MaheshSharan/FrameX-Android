@@ -267,7 +267,9 @@ class PerformanceViewModel @Inject constructor(
                 gamingModeEngine.getInstalledUserApps()
             }
             val installedGoogle = withContext(Dispatchers.IO) {
-                gamingModeEngine.getGoogleAppsForWhitelist()
+                // OEM apps share the Deep Freeze list so users can protect them too.
+                (gamingModeEngine.getGoogleAppsForWhitelist() + gamingModeEngine.getOemAppsForWhitelist())
+                    .sortedBy { it.label.lowercase() }
             }
             _userApps.value = installedUser
             _googleApps.value = installedGoogle

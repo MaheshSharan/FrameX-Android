@@ -53,10 +53,17 @@ class OemPackageResolver @Inject constructor() {
         }
     }
 
-    fun getGoogleAppsForWhitelist(context: Context): List<AppInfo> {
+    fun getGoogleAppsForWhitelist(context: Context): List<AppInfo> =
+        installedAppInfos(context, GOOGLE_SAFE_TO_SUSPEND)
+
+    /** OEM packages present on this device that the user may protect from suspension. */
+    fun getOemAppsForWhitelist(context: Context): List<AppInfo> =
+        installedAppInfos(context, (OEM_BLOATED_PACKAGES + OEM_DEEP_FREEZE_PACKAGES) - CRITICAL_SYSTEM_PACKAGES)
+
+    private fun installedAppInfos(context: Context, packages: Collection<String>): List<AppInfo> {
         return try {
             val pm = context.packageManager
-            GOOGLE_SAFE_TO_SUSPEND.mapNotNull { pkg ->
+            packages.mapNotNull { pkg ->
                 try {
                     @Suppress("DEPRECATION")
                     val appInfo = pm.getApplicationInfo(pkg, 0)
@@ -68,7 +75,7 @@ class OemPackageResolver @Inject constructor() {
                 }
             }.sortedBy { it.label.lowercase() }
         } catch (e: Exception) {
-            FrameXLog.e("getGoogleAppsForWhitelist failed", e, tag = TAG)
+            FrameXLog.e("installedAppInfos failed", e, tag = TAG)
             emptyList()
         }
     }
@@ -93,7 +100,7 @@ class OemPackageResolver @Inject constructor() {
         val userPkgs = getInstalledUserApps(context).map { it.packageName }
         val bloatPkgs = queryBloatwareInstalled(context, protectedSet)
         val googleCandidates = if (deepFreezeEnabled) {
-            GOOGLE_SAFE_TO_SUSPEND.filter { it !in whitelist }
+            (GOOGLE_SAFE_TO_SUSPEND + OEM_DEEP_FREEZE_PACKAGES).filter { it !in whitelist }
         } else {
             emptyList()
         }
@@ -317,6 +324,18 @@ class OemPackageResolver @Inject constructor() {
     companion object {
         private const val TAG = "OemPackageResolver"
 
+        /**
+         * Everyday OEM apps that are only suspended when Deep Freeze is on, like the Google set,
+         * so nobody loses their camera or dialer without opting in. Each can be protected
+         * individually from the Deep Freeze list; the default dialer is always protected anyway.
+         */
+        val OEM_DEEP_FREEZE_PACKAGES = setOf(
+            "com.samsung.android.dialer", "com.samsung.android.calendar",
+            "com.sec.android.app.camera", "com.sec.android.app.clockpackage",
+            "com.sec.android.gallery3d", "com.sec.android.app.myfiles",
+            "com.sec.android.app.vepreload"
+        )
+
         val GOOGLE_SAFE_TO_SUSPEND = setOf(
             "com.google.android.youtube",
             "com.google.android.apps.youtube.music",
@@ -365,7 +384,7 @@ class OemPackageResolver @Inject constructor() {
             "com.whatsapp.w4b"
         )
 
-        val OEM_BLOATED_PACKAGES = listOf(
+        val OEM_BLOATED_PACKAGES = setOf(
             "com.vivo.browser", "com.vivo.appstore", "com.vivo.game",
             "com.vivo.weather", "com.vivo.weather.provider",
             "com.vivo.email", "com.vivo.Tips", "com.vivo.feedback",

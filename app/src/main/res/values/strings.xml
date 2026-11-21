@@ -161,6 +161,13 @@
     <string name="appearance_title">Appearance</string>
     <string name="appearance_preview_header">PREVIEW</string>
     <string name="appearance_preview_subtitle">Respects selected Metrics config</string>
+    <string name="appearance_preview_bg_action">Change preview background</string>
+    <string name="appearance_preview_bg_hint">Tap to change background</string>
+    <string name="appearance_preview_bg_dark">Dark</string>
+    <string name="appearance_preview_bg_light">Light</string>
+    <string name="appearance_preview_bg_sunset">Sunset</string>
+    <string name="appearance_preview_bg_forest">Forest</string>
+    <string name="appearance_preview_bg_busy">Busy scene</string>
     <string name="appearance_visibility_header">VISIBILITY</string>
     <string name="appearance_opacity_title">Overlay Opacity</string>
     <string name="appearance_container_header">CONTAINER</string>
@@ -279,6 +286,12 @@
     <string name="perf_toast_open_notif_listener_err">Unable to open Notification Listener settings</string>
 
     <!-- Chart & Gauge Accessibility Summaries -->
+    <string name="thermal_axis_now">now</string>
+    <string name="thermal_window_2m">2 min</string>
+    <string name="thermal_window_5m">5 min</string>
+    <string name="thermal_window_10m">10 min</string>
+    <string name="thermal_window_all">All</string>
+    <string name="cd_timeline_window_label">Timeline span</string>
     <string name="cd_metric_chart_summary">%1$s chart, current %2$s %3$s, minimum %4$s %3$s, maximum %5$s %3$s</string>
     <string name="cd_gauge_summary">%1$s gauge, current %2$s</string>
 

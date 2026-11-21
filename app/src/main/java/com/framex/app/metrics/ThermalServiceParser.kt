@@ -47,6 +47,8 @@ internal object ThermalServiceParser {
         val entryCount: Int = 0,
         /** True if HAL is explicitly reported as not ready/disabled (e.g. HAL Ready: false). */
         val halNotReady: Boolean = false,
+        /** True when the HAL section exists but lists no temperatures (e.g. HyperOS), so no sensor is exposed. */
+        val halReportedNoSensors: Boolean = false,
         /** True strictly if CPU/cpufreq cooling devices report active throttling. */
         val isCpuThrottling: Boolean = false,
         /** All raw sensor readings preserved for diagnostics. */
@@ -199,6 +201,8 @@ internal object ThermalServiceParser {
             thermalStatus = thermalStatus,
             entryCount = entryCount,
             halNotReady = halNotReady,
+            halReportedNoSensors = entryCount == 0 && halSection.isBlank() &&
+                output.contains("Current temperatures from HAL:"),
             isCpuThrottling = isCpuThrottling,
             rawSensors = rawSensors,
             cpuCandidates = cpuCandidates
@@ -388,10 +392,12 @@ internal object ThermalServiceParser {
 
         val n = name.uppercase()
         return when {
+            // Modem sensors carry "skin" in some names but are not the device skin.
+            n.contains("MODEM") || n.contains("MDMSS") -> SensorKind.UNKNOWN
             n.contains("SKIN") || n.contains("QUIET_THERM") || n.contains("XO_THERM") ||
                 n.contains("SHELL_TEMP") || n.contains("BACK_THERM") || n.contains("CHASSIS") -> SensorKind.SKIN
             isGpuName(n) -> SensorKind.GPU
-            n.contains("NPU") || n.contains("TPU") || n.contains("APU") || n.contains("Q6-HVX") -> SensorKind.NPU
+            n.contains("NPU") || n.contains("NSPSS") || n.contains("TPU") || n.contains("APU") || n.contains("Q6-HVX") -> SensorKind.NPU
             n.contains("BATTERY") || n.contains("BATT") -> SensorKind.BATTERY
             n.contains("CPU") || n.contains("SOC") || n.contains("CLUSTER") || n.contains("CPUSS") ||
                 n.contains("TSENS") || n.contains("APC") || n.contains("SILVER") || n.contains("GOLD") ||

@@ -224,7 +224,7 @@ private fun GoogleAppsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isExpanded) "Show Less" else "Show All (${sortedApps.size} Google apps)",
+                        text = if (isExpanded) "Show Less" else "Show All (${sortedApps.size} apps)",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF38BDF8)

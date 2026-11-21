@@ -91,7 +91,10 @@ fun AppearanceScreen(
                     .padding(horizontal = 24.dp)
             ) {
                 // Live Preview
-                AppearancePreviewCard(uiState = uiState)
+                AppearancePreviewCard(
+                    uiState = uiState,
+                    onCycleBackground = { onEvent(AppearanceUiEvent.CyclePreviewBackground) }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 

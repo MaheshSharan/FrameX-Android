@@ -14,6 +14,16 @@ data class TargetAppOption(
 )
 
 /**
+ * How much recent history the telemetry timelines show; [seconds] is null for everything kept.
+ */
+enum class TimelineWindow(val seconds: Int?, val labelRes: Int) {
+    TWO_MIN(120, com.framex.app.R.string.thermal_window_2m),
+    FIVE_MIN(300, com.framex.app.R.string.thermal_window_5m),
+    TEN_MIN(600, com.framex.app.R.string.thermal_window_10m),
+    ALL(null, com.framex.app.R.string.thermal_window_all)
+}
+
+/**
  * 4-column hardware identity strip: Chipset (SoC) | Device (Model) | System (OS) | Display (Max Hz).
  */
 @Immutable

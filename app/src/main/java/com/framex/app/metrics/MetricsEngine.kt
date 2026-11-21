@@ -38,9 +38,9 @@ data class MetricsState(
     val fpsReadStatus: MetricReadStatus = MetricReadStatus.Loading,
     val cpuMhz: Int = 0,
     val cpuPercentage: Int? = null,
-    val cpuClusterUltraMhz: Int = 0,
-    val cpuClusterPerfMhz: Int = 0,
-    val cpuClusterEffMhz: Int = 0,
+    val cpuClusterUltraMhz: Int? = null,
+    val cpuClusterPerfMhz: Int? = null,
+    val cpuClusterEffMhz: Int? = null,
     val cpuClusters: List<CpuClusterMetric> = emptyList(),
     val cpuReadStatus: MetricReadStatus = MetricReadStatus.Loading,
     val ramUsedGb: Float = 0f,
@@ -213,9 +213,9 @@ class MetricsEngine @Inject constructor(
             _metricsState.value = _metricsState.value.copy(
                 cpuMhz = 0,
                 cpuPercentage = null,
-                cpuClusterEffMhz = 0,
-                cpuClusterPerfMhz = 0,
-                cpuClusterUltraMhz = 0,
+                cpuClusterEffMhz = null,
+                cpuClusterPerfMhz = null,
+                cpuClusterUltraMhz = null,
                 cpuClusters = emptyList(),
                 cpuReadStatus = MetricReadStatus.Loading
             )
