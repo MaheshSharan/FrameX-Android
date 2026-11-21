@@ -19,23 +19,15 @@ enum class OverlayActionState {
 @Immutable
 data class DashboardUiState(
     val isOverlayRunning: Boolean = false,
-    val hasOverlayPermission: Boolean = false,
-    val isShizukuAvailable: Boolean = false,
-    val hasShizukuPermission: Boolean = false,
+    /** Shared readiness rule from [com.framex.app.permissions.PermissionsManager]. */
+    val isReady: Boolean = false,
     val fpsHistory: List<Int> = emptyList(),
     val fpsStats: FpsStatsSummary = FpsStatsSummary(),
     /** True only under Root; write-locking sysfs nodes needs Root, Shizuku support is partial. */
     val canShowHardwareTuning: Boolean = false
-) {
-    val allPermissionsReady: Boolean
-        get() = hasOverlayPermission && isShizukuAvailable && hasShizukuPermission
-
-    val isShizukuReady: Boolean
-        get() = isShizukuAvailable && hasShizukuPermission
-}
+)
 
 sealed interface DashboardUiEvent {
     data object StartOverlay : DashboardUiEvent
     data object StopOverlay : DashboardUiEvent
-    data object RefreshPermissions : DashboardUiEvent
 }

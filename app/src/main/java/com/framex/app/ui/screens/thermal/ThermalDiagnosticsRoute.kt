@@ -16,6 +16,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.framex.app.permissions.ShizukuIntents
 
 @Composable
 fun ThermalDiagnosticsRoute(
@@ -64,14 +65,7 @@ fun ThermalDiagnosticsRoute(
         onSelectApp = viewModel::selectTargetApp,
         onToggleMetric = viewModel::toggleRecordedMetric,
         onNavigateBack = onNavigateBack,
-        onOpenShizuku = {
-            val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-            if (intent != null) {
-                context.startActivity(intent)
-            } else {
-                Toast.makeText(context, "Shizuku app not found", Toast.LENGTH_SHORT).show()
-            }
-        },
+        onOpenShizuku = { ShizukuIntents.launch(context) },
         onRequestShizukuPermission = viewModel::requestShizukuPermission,
         onToggleRecording = viewModel::toggleRecording,
         onExportCsv = {

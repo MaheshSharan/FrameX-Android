@@ -1,5 +1,6 @@
 package com.framex.app.ui.screens.permissions.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.framex.app.R
 import com.framex.app.privilege.PrivilegeMode
+import com.framex.app.privilege.SwitchResult
 
 /** Stateless picker for how FrameX gets elevated access. Every row is at least 48dp tall. */
 @Composable
@@ -76,6 +78,15 @@ fun PrivilegeModeSelector(
             }
         }
     }
+}
+
+/** Toast text for a refused or failed mode change; null when the change succeeded. */
+@StringRes
+fun SwitchResult.messageRes(): Int? = when (this) {
+    SwitchResult.SWITCHED -> null
+    SwitchResult.BLOCKED_GAMING_ACTIVE -> R.string.perm_mode_blocked_gaming
+    SwitchResult.BLOCKED_RECOVERY_PENDING -> R.string.perm_mode_blocked_recovery
+    SwitchResult.ROOT_DENIED -> R.string.perm_mode_root_denied
 }
 
 private class ModeOption(val mode: PrivilegeMode, val titleRes: Int, val descriptionRes: Int)

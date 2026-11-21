@@ -1,18 +1,14 @@
 package com.framex.app.ui.screens.dashboard
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
- * Stateful Route wrapper for Dashboard that collects state in a lifecycle-aware manner,
- * observes ON_RESUME to refresh permissions, and delegates to the stateless [DashboardScreen].
+ * Stateful Route wrapper for Dashboard that collects state in a lifecycle-aware manner
+ * and delegates to the stateless [DashboardScreen].
  */
 @Composable
 fun DashboardRoute(
@@ -28,18 +24,6 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    // Documented reason: Synchronizes permissions and Shizuku status when returning from System Settings.
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshPermissions()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
     DashboardScreen(
         uiState = uiState,

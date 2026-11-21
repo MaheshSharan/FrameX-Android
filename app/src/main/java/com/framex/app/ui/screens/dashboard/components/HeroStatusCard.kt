@@ -280,7 +280,7 @@ fun HeroStatusCard(
             AnimatedContent(
                 targetState = when {
                     uiState.isOverlayRunning -> OverlayActionState.RUNNING
-                    uiState.allPermissionsReady -> OverlayActionState.READY
+                    uiState.isReady -> OverlayActionState.READY
                     else -> OverlayActionState.MISSING_PERMISSIONS
                 },
                 transitionSpec = {

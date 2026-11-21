@@ -5,11 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.framex.app.metrics.MetricsEngine
 import com.framex.app.overlay.OverlayService
 import com.framex.app.overlay.OverlayServiceController
+import com.framex.app.permissions.PermissionsManager
 import com.framex.app.privilege.PrivilegeManager
 import com.framex.app.privilege.PrivilegeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -20,11 +20,11 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val overlayServiceController: OverlayServiceController,
+    private val permissionsManager: PermissionsManager,
     private val privilegeManager: PrivilegeManager,
     private val metricsEngine: MetricsEngine
 ) : ViewModel() {
 
-    private val hasOverlayPermission = MutableStateFlow(overlayServiceController.hasOverlayPermission())
     init {
         metricsEngine.setScreenOverrideModules(setOf("fps"), requesterKey = "dashboard_screen")
     }
@@ -36,22 +36,17 @@ class DashboardViewModel @Inject constructor(
 
     val uiState: StateFlow<DashboardUiState> = combine(
         OverlayService.isRunning,
-        hasOverlayPermission,
-        privilegeManager.isAvailable,
-        privilegeManager.isReady,
+        permissionsManager.isReady,
+        privilegeManager.currentMode,
         metricsEngine.fpsHistory
-    ) { isRunning, hasOverlay, isShizukuAvail, hasShizukuPerm, history ->
-        val stats = DashboardUtils.computeFpsStats(history)
+    ) { isRunning, isReady, mode, history ->
         DashboardUiState(
             isOverlayRunning = isRunning,
-            hasOverlayPermission = hasOverlay,
-            isShizukuAvailable = isShizukuAvail,
-            hasShizukuPermission = hasShizukuPerm,
+            isReady = isReady,
             fpsHistory = history,
-            fpsStats = stats
+            fpsStats = DashboardUtils.computeFpsStats(history),
+            canShowHardwareTuning = mode == PrivilegeMode.ROOT
         )
-    }.combine(privilegeManager.currentMode) { state, mode ->
-        state.copy(canShowHardwareTuning = mode == PrivilegeMode.ROOT)
     }
     .flowOn(Dispatchers.Default)
     .stateIn(
@@ -59,9 +54,7 @@ class DashboardViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DashboardUiState(
             isOverlayRunning = OverlayService.isRunning.value,
-            hasOverlayPermission = overlayServiceController.hasOverlayPermission(),
-            isShizukuAvailable = privilegeManager.isAvailable.value,
-            hasShizukuPermission = privilegeManager.isReady.value,
+            isReady = permissionsManager.isReady.value,
             canShowHardwareTuning = privilegeManager.currentMode.value == PrivilegeMode.ROOT
         )
     )
@@ -70,12 +63,6 @@ class DashboardViewModel @Inject constructor(
         when (event) {
             DashboardUiEvent.StartOverlay -> overlayServiceController.startOverlayService()
             DashboardUiEvent.StopOverlay -> overlayServiceController.stopOverlayService()
-            DashboardUiEvent.RefreshPermissions -> refreshPermissions()
         }
-    }
-
-    fun refreshPermissions() {
-        hasOverlayPermission.value = overlayServiceController.hasOverlayPermission()
-        privilegeManager.refresh()
     }
 }

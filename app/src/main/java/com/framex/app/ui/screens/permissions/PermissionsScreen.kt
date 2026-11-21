@@ -1,6 +1,5 @@
 package com.framex.app.ui.screens.permissions
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -9,18 +8,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,9 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.framex.app.R
+import com.framex.app.permissions.AppPermission
 import com.framex.app.privilege.PrivilegeMode
 import com.framex.app.ui.screens.permissions.components.PrivilegeModeSelector
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.testTag
 import com.framex.app.ui.components.FrameXTopBar
 import com.framex.app.ui.screens.permissions.components.PermissionRow
@@ -48,49 +40,10 @@ fun PermissionsScreen(
     uiState: PermissionsUiState,
     onNavigateBack: () -> Unit,
     onEvent: (PermissionsUiEvent) -> Unit,
+    onGrantPermission: (AppPermission) -> Unit,
+    onLaunchShizuku: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val permissionItems = remember(uiState) {
-        listOf(
-            PermissionItem(
-                id = PermissionId.OVERLAY,
-                titleRes = R.string.perm_overlay_title,
-                descriptionRes = R.string.perm_overlay_desc,
-                icon = Icons.Default.Layers,
-                isGranted = uiState.hasOverlayPermission
-            ),
-            PermissionItem(
-                id = PermissionId.USAGE_STATS,
-                titleRes = R.string.perm_usage_title,
-                descriptionRes = R.string.perm_usage_desc,
-                icon = Icons.Default.BarChart,
-                isGranted = uiState.hasUsageStatsPermission
-            ),
-            PermissionItem(
-                id = PermissionId.BATTERY_OPT,
-                titleRes = R.string.perm_battery_title,
-                descriptionRes = R.string.perm_battery_desc,
-                icon = Icons.Default.BatteryFull,
-                isGranted = uiState.hasBatteryOptDisabled,
-                actionTextRes = R.string.perm_battery_disable
-            ),
-            PermissionItem(
-                id = PermissionId.NOTIFICATIONS,
-                titleRes = R.string.perm_notifications_title,
-                descriptionRes = R.string.perm_notifications_desc,
-                icon = Icons.Default.CheckCircle,
-                isGranted = uiState.hasNotificationPermission
-            ),
-            PermissionItem(
-                id = PermissionId.WRITE_SETTINGS,
-                titleRes = R.string.perm_write_settings_title,
-                descriptionRes = R.string.perm_write_settings_desc,
-                icon = Icons.Default.Settings,
-                isGranted = uiState.hasWriteSettingsPermission
-            )
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -133,7 +86,7 @@ fun PermissionsScreen(
 
                 PrivilegeModeSelector(
                     selectedMode = uiState.selectedMode,
-                    isReady = uiState.isShizukuReady,
+                    isReady = uiState.isPrivilegeReady,
                     onModeSelected = { onEvent(PermissionsUiEvent.SelectMode(it)) }
                 )
 
@@ -141,14 +94,14 @@ fun PermissionsScreen(
 
                 if (uiState.selectedMode == PrivilegeMode.SHIZUKU) {
                     ShizukuStatusCard(
-                        isShizukuAvailable = uiState.isShizukuAvailable,
-                        hasShizukuPermission = uiState.hasShizukuPermission,
-                        onLaunchShizuku = { onEvent(PermissionsUiEvent.LaunchShizukuApp) },
-                        onRequestPermission = { onEvent(PermissionsUiEvent.RequestShizukuPermission) }
+                        isShizukuAvailable = uiState.isPrivilegeAvailable,
+                        hasShizukuPermission = uiState.isPrivilegeReady,
+                        onLaunchShizuku = onLaunchShizuku,
+                        onRequestPermission = { onEvent(PermissionsUiEvent.RequestPrivilegeAccess) }
                     )
-                } else if (uiState.selectedMode == PrivilegeMode.ROOT && !uiState.isShizukuReady) {
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = { onEvent(PermissionsUiEvent.RequestShizukuPermission) },
+                } else if (!uiState.isPrivilegeReady) {
+                    OutlinedButton(
+                        onClick = { onEvent(PermissionsUiEvent.RequestPrivilegeAccess) },
                         modifier = Modifier
                             .heightIn(min = 48.dp)
                             .testTag("privilege_root_retry")
@@ -161,18 +114,18 @@ fun PermissionsScreen(
 
                 // Animated Progress Summary Header
                 PermissionSummaryHeader(
-                    grantedCount = uiState.grantedPermissionsCount,
-                    totalCount = uiState.totalPermissionsCount
+                    grantedCount = uiState.grantedCount,
+                    totalCount = uiState.items.size
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Permissions List
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    permissionItems.forEach { item ->
+                    uiState.items.forEach { item ->
                         PermissionRow(
                             item = item,
-                            onGrantClick = { onEvent(PermissionsUiEvent.RequestPermission(item.id)) }
+                            onGrantClick = { onGrantPermission(item.permission) }
                         )
                     }
                 }
@@ -230,8 +183,8 @@ fun PermissionsScreen(
             Button(
                 onClick = onNavigateBack,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (uiState.isAllReady) MaterialTheme.colorScheme.primary else Color.White.copy(0.1f),
-                    contentColor = if (uiState.isAllReady) Color.White else Color.Gray
+                    containerColor = if (uiState.isReady) MaterialTheme.colorScheme.primary else Color.White.copy(0.1f),
+                    contentColor = if (uiState.isReady) Color.White else Color.Gray
                 ),
                 shape = CircleShape,
                 modifier = Modifier
@@ -246,7 +199,7 @@ fun PermissionsScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
-                    imageVector = if (uiState.isAllReady) Icons.Default.Check else Icons.Default.Lock,
+                    imageVector = if (uiState.isReady) Icons.Default.Check else Icons.Default.Lock,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp)
                 )

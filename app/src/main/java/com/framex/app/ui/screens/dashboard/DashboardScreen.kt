@@ -118,7 +118,7 @@ fun DashboardScreen(
                     // 3. Quick Access 2x2 Grid (Metrics, Theme, Performance, Shizuku)
                     item(key = "quick_access_grid") {
                         QuickAccessGrid(
-                            isShizukuReady = uiState.isShizukuReady,
+                            isReady = uiState.isReady,
                             onNavigateToOverlayCustomization = onNavigateToOverlayCustomization,
                             onNavigateToAppearance = onNavigateToAppearance,
                             onNavigateToPerformance = onNavigateToPerformance,

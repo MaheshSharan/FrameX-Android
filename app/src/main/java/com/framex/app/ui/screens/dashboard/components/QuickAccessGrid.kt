@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,12 +40,12 @@ import com.framex.app.ui.theme.StatusGreen
 
 /**
  * 2x2 Quick Access Grid for primary configuration destinations:
- * Metrics, Theme, Performance, and Shizuku.
+ * Metrics, Theme, Performance, and System Status.
  * Section icon and header text are kept pure white per design specification.
  */
 @Composable
 fun QuickAccessGrid(
-    isShizukuReady: Boolean,
+    isReady: Boolean,
     onNavigateToOverlayCustomization: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToPerformance: () -> Unit,
@@ -56,10 +57,10 @@ fun QuickAccessGrid(
     val errorColor = MaterialTheme.colorScheme.error
 
     // Pulsing glow animation scoped exclusively to graphicsLayer; static when reduce motion is enabled
-    val alphaGlow = if (reduceMotion || !isShizukuReady) {
+    val alphaGlow = if (reduceMotion || !isReady) {
         1.0f
     } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "shizukuGlowPulse")
+        val infiniteTransition = rememberInfiniteTransition(label = "statusGlowPulse")
         val animated by infiniteTransition.animateFloat(
             initialValue = 0.35f,
             targetValue = 1.0f,
@@ -67,7 +68,7 @@ fun QuickAccessGrid(
                 animation = tween(1000, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
-            label = "shizukuGlowAlpha"
+            label = "statusGlowAlpha"
         )
         animated
     }
@@ -168,11 +169,11 @@ fun QuickAccessGrid(
             )
 
             QuickAccessCard(
-                title = stringResource(R.string.dashboard_shizuku_title),
-                subtitle = if (isShizukuReady) {
-                    stringResource(R.string.dashboard_connected)
+                title = stringResource(R.string.dashboard_system_title),
+                subtitle = if (isReady) {
+                    stringResource(R.string.dashboard_system_ready)
                 } else {
-                    stringResource(R.string.dashboard_disconnected)
+                    stringResource(R.string.dashboard_system_setup_needed)
                 },
                 subtitleContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -181,32 +182,32 @@ fun QuickAccessGrid(
                                 .size(6.dp)
                                 .clip(CircleShape)
                                 .graphicsLayer {
-                                    if (isShizukuReady) {
+                                    if (isReady) {
                                         alpha = alphaGlow
                                     }
                                 }
-                                .background(if (isShizukuReady) emeraldColor else errorColor)
+                                .background(if (isReady) emeraldColor else errorColor)
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = if (isShizukuReady) {
-                                stringResource(R.string.dashboard_connected)
+                            text = if (isReady) {
+                                stringResource(R.string.dashboard_system_ready)
                             } else {
-                                stringResource(R.string.dashboard_disconnected)
+                                stringResource(R.string.dashboard_system_setup_needed)
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isShizukuReady) emeraldColor else errorColor,
+                            color = if (isReady) emeraldColor else errorColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 },
-                iconContainerColor = if (isShizukuReady) {
+                iconContainerColor = if (isReady) {
                     Color(0xFF3B82F6).copy(alpha = 0.16f)
                 } else {
                     errorColor.copy(alpha = 0.16f)
                 },
-                iconContentColor = if (isShizukuReady) {
+                iconContentColor = if (isReady) {
                     MutedBlue
                 } else {
                     errorColor
@@ -216,12 +217,11 @@ fun QuickAccessGrid(
                     .weight(1f)
                     .fillMaxHeight(),
                 icon = {
-                    Text(
-                        text = stringResource(R.string.dashboard_adb),
-                        color = if (isShizukuReady) MutedBlue else errorColor,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 11.sp
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = if (isReady) MutedBlue else errorColor,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             )

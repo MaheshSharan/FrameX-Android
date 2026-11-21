@@ -10,6 +10,7 @@ import android.net.VpnService
 import android.provider.Settings
 import android.provider.Telephony
 import androidx.compose.runtime.Immutable
+import com.framex.app.permissions.ShizukuIntents
 import com.framex.app.utils.FrameXLog
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -358,7 +359,7 @@ class OemPackageResolver @Inject constructor() {
 
         val CRITICAL_SYSTEM_PACKAGES = setOf(
             "com.framex.app",
-            "moe.shizuku.privileged.api",
+            ShizukuIntents.PACKAGE,
             "com.android.systemui",
             "android",
             "com.android.settings",

@@ -30,7 +30,10 @@ class FrameXApplication : Application() {
         // including translucent dialogs that never stop the activity.
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) permissionsManager.refresh()
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    privilegeManager.refresh()
+                    permissionsManager.refresh()
+                }
             }
         )
         // Recover gaming mode state if the process was killed while mode was active.

@@ -88,6 +88,36 @@ class PrivilegeManagerTest {
     }
 
     @Test
+    fun selectMode_keepsRootWhenAccessIsGranted() = runBlocking {
+        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
+
+        assertEquals(SwitchResult.SWITCHED, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.ROOT, manager.currentMode.value)
+    }
+
+    @Test
+    fun selectMode_goesBackToThePreviousModeWhenRootIsDenied() = runBlocking {
+        val manager = manager(
+            PrivilegeMode.SHIZUKU,
+            FakePrivilegeBackend(PrivilegeMode.SHIZUKU),
+            FakePrivilegeBackend(PrivilegeMode.ROOT, connectsOnStart = false)
+        )
+
+        assertEquals(SwitchResult.ROOT_DENIED, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
+        assertEquals(PrivilegeMode.SHIZUKU, settings.appPrefs.getPrivilegeMode())
+    }
+
+    @Test
+    fun selectMode_reportsTheBlockAndChangesNothing() = runBlocking {
+        val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
+        settings.setGamingModeActive(true)
+
+        assertEquals(SwitchResult.BLOCKED_GAMING_ACTIVE, manager.selectMode(PrivilegeMode.ROOT))
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
+    }
+
+    @Test
     fun runWithBackend_restoresTheSelectedModeWhenTheBlockThrows() = runBlocking {
         val manager = manager(PrivilegeMode.SHIZUKU, FakePrivilegeBackend(PrivilegeMode.SHIZUKU), FakePrivilegeBackend(PrivilegeMode.ROOT))
 

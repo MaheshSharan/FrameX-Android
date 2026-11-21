@@ -22,8 +22,11 @@ import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Result of asking to change the privilege mode. */
-enum class SwitchResult { SWITCHED, BLOCKED_GAMING_ACTIVE, BLOCKED_RECOVERY_PENDING }
+/**
+ * Result of asking to change the privilege mode. [ROOT_DENIED] is only returned by
+ * [PrivilegeManager.selectMode], when Root was chosen but no root access was granted.
+ */
+enum class SwitchResult { SWITCHED, BLOCKED_GAMING_ACTIVE, BLOCKED_RECOVERY_PENDING, ROOT_DENIED }
 
 /**
  * The only entry point for privileged work. The selected mode is authoritative: a command
@@ -85,6 +88,20 @@ class PrivilegeManager internal constructor(
         settings.appPrefs.setPrivilegeMode(target)
         activate(target)
         SwitchResult.SWITCHED
+    }
+
+    /**
+     * The user-facing way to pick a mode: switches, then asks Root for access and goes back to
+     * the previous mode when that is refused, so a mode that cannot work is never left selected.
+     */
+    suspend fun selectMode(target: PrivilegeMode): SwitchResult {
+        val previous = _currentMode.value
+        val switched = switchMode(target)
+        if (switched != SwitchResult.SWITCHED || target != PrivilegeMode.ROOT) return switched
+        requestAccess()
+        if (backendFor(target).state.value is BackendState.Connected) return SwitchResult.SWITCHED
+        switchMode(previous)
+        return SwitchResult.ROOT_DENIED
     }
 
     /**
