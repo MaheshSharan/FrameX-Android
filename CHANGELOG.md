@@ -1,8 +1,13 @@
 # Changelog
 
-## 1.6.0-beta
+## 1.6.0
 
 ### Added
+- **Samsung and other OEM apps in Deep Freeze.** The Deep Freeze list now shows installed OEM apps, not only Google apps, so you can protect any of them. Everyday apps such as Camera, Gallery, Clock and Calendar are suspended only when Deep Freeze is on.
+- **Thermal timeline window.** Choose 2, 5 or 10 minutes, or All. Labels count back from now, and the min, max and average under each chart follow the chosen window.
+- **Overlay preview backgrounds.** Tap the preview in Appearance to cycle backgrounds and judge opacity against a light, dark or busy scene.
+- **Shizuku logo on System Status.**
+- **Activate Gaming Mode with no game added** now scrolls to the Game Launcher after the reminder.
 - **Root mode.** Choose Shizuku or Root in System Status. The selected mode is the only one used; FrameX never falls back from one to the other. Root uses one persistent shell (Magisk and KernelSU supported).
 - **System Status.** The Permissions screen is now System Status, and it is the one place to grant access. It lists Overlay, Notifications, Usage Access, Battery optimization, Write Settings, Do Not Disturb and Notification Listener, and updates when you return to the app.
 - **Setup step.** The last onboarding page now picks the privilege mode and asks for the overlay and notification permissions. Skip still works.
@@ -16,6 +21,12 @@
 - Crash recovery for Gaming Mode now uses the backend that started the session, and raises a high-priority alert if it cannot finish.
 
 ### Changed
+- **The overlay starts with three modules on:** FPS, CPU frequency and battery temperature. Your saved choices are kept.
+- **Appearance keeps the preview pinned** while the options below scroll.
+- **Session logs are redesigned.** Clear summary and filter chips colored by status, and Export and Clear are in their own action row so nothing overlaps.
+- **About & Legal.** The update row is tidier with a full-width check button, and the back button lines up with the other screens.
+- Thermal sources a device does not provide now read **Unavailable** instead of Parse Failed or Not Supported.
+- The update dialog no longer shows the checksum line from the release notes.
 - **Shizuku is the default privilege mode and None is gone.** One mode is always selected. If you had None selected, you are now on Shizuku.
 - **Performance shows access read-only.** It no longer opens permission screens itself; the System Status card there links to System Status.
 - **One readiness rule.** The Dashboard and System Status both count FrameX as ready when the selected mode is connected and Overlay and Notifications are granted.
@@ -32,9 +43,10 @@
 - The overlay restarts after a reboot and after an app update.
 - The phantom-process guard moved out of the Vivo/iQOO code path and applies on Android 12 and later; its original value is restored when Gaming Mode ends.
 
-- The update check now offers `1.6.0` to `1.6.0-beta` users, and `-beta` tags are published as GitHub pre-releases.
 
 ### Fixed
+- Thermal Diagnostics showing Parse Failed on HyperOS when the thermal service listed only cooling devices. The sysfs thermal zones are now read as a fallback, and modem sensors are no longer mistaken for skin temperature.
+- The CPU clusters overlay showing a cluster the device does not have.
 - The Dashboard and the Permissions screen could disagree about whether setup was complete.
 - Permission status could be out of date after returning from a system settings screen.
 - Gaming Mode failing with "Failed to capture system settings snapshot" when a device lacked one of the settings (for example on HyperOS).

@@ -8,8 +8,8 @@
   <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
     <img src="https://img.shields.io/github/downloads/MaheshSharan/FrameX-Android/total?style=for-the-badge&logo=android&label=Total%20Downloads&color=4CAF50" alt="Total Downloads"/>
   </a>
-  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/tag/v1.5.28">
-    <img src="https://img.shields.io/badge/Version-1.5.28-orange?style=for-the-badge&logo=github" alt="Version"/>
+  <a href="https://github.com/MaheshSharan/FrameX-Android/releases/latest">
+    <img src="https://img.shields.io/github/v/release/MaheshSharan/FrameX-Android?style=for-the-badge&logo=github&label=Version" alt="Version"/>
   </a>
   <a href="https://developer.android.com/about/versions/oreo">
     <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=for-the-badge&logo=android" alt="Min API"/>
@@ -24,31 +24,10 @@
 
 ---
 > [!NOTE]
-> **Gaming Performance Mode** adapts dynamically based on your device hardware:
-> - **Generic / Non-Vivo Devices:** Applies standard AOSP optimizations (RAM cache purge, CPU process priority locks, network/doze bypass, and display/touch boosts).
-> - **Vivo / iQOO (Hardware Optimizations ON):** Activates the verified OriginOS/FuntouchOS hardware suite (1080p @ 120Hz Mode 4 lock, RMS display arbitration, touch boost, and OEM daemon whitelisting).
-> - **Vivo / iQOO (Hardware Optimizations OFF):** Safely executes **only non-invasive baseline tweaks** (RAM cache purge, background app suspension, and DND). Generic AOSP display/thermal overrides are deliberately bypassed to protect against 60Hz lockouts and RMS arbitration conflicts.
+> Gaming Mode runs only the optimizations your device actually supports, checked once when Shizuku or Root connects. Everything it changes is captured first and restored when you stop.
 
 > [!IMPORTANT]
-> **Encountering "Parse Failed" or "Unsupported Hardware"?**
->
-> If thermal monitoring displays **"Parse Failed"** or **"Unsupported Hardware"** on your device:
-> 1. Clone the repository and install the **Debug APK** (`./gradlew installDebug`) or download **[FrameX-v1.5.16-debug.apk](https://github.com/MaheshSharan/FrameX-Android/releases/download/v1.5.16/FrameX_v1.5.16-debug.apk)**. *(Release builds strip diagnostic logs via ProGuard).*
-> 2. Open the **Thermal Diagnostics** screen in FrameX.
-> 3. Run the following ADB commands to capture complete diagnostics:
->    ```bash
->    # 1. Capture FrameX internal thermal logs
->    adb logcat -d | grep -E "ThermalMonitor|CmdRunner"
->
->    # 2. Capture raw system thermal HAL dump
->    adb shell dumpsys thermalservice
->
->    # 3. Capture sysfs thermal zones (if dumpsys is empty/HAL Ready: false)
->    adb shell "for z in /sys/class/thermal/thermal_zone*; do echo \"\$(cat \$z/type 2>/dev/null):\$(cat \$z/temp 2>/dev/null)\"; done"
->    ```
->    *(On Windows PowerShell for Step 1: `adb logcat -d | Select-String -Pattern "ThermalMonitor|CmdRunner"`)*
-> 4. Open a GitHub Issue attaching the outputs above along with your **device model**, **SoC**, and **Android/ROM version**.
-
+> **Thermal shows "Unavailable"?** Open an issue with your device model, SoC, Android/ROM version and the output of `adb shell dumpsys thermalservice`.
 ---
 ## What it does
 
@@ -58,7 +37,6 @@ FrameX displays a fully customizable, low-overhead overlay on top of any applica
 | :--- | :--- |
 | **Real-Time Telemetry** | **FPS** · **CPU Frequencies** · **Thermals** *(CPU/GPU/Skin/NPU/Battery)* · **RAM Usage** · **Network Speed** · **Ping** |
 | **System Optimization** | • **Crash-Safe Snapshots:** Automatic pre-game setting capture & auto-revert on exit<br>• **Process Management:** Background app suspension & Doze CPU whitelisting<br>• **Emergency Safety:** One-swipe reset slider to purge overrides back to stock OS defaults |
-| **OEM Hardware Locks** | • **Vivo OriginOS Engine:** Forces hardware Mode 4 ($1080 \times 2400$ @ 120Hz) lock<br>• **Triple Whitelisting:** Automatic injection across 4 native OriginOS game-booster daemons |
 
 ---
 
@@ -119,17 +97,16 @@ cd FrameX-Android
 | Draw over other apps | Display the overlay on top of games |
 | Foreground service | Keep the overlay alive while the screen is on |
 | Wake lock | Prevent CPU sleep during an active session |
-| PACKAGE_USAGE_STATS | Identify which game is in the foreground |
+| PACKAGE_USAGE_STATS | Optional. Granted from System Status for foreground-game detection |
 | REQUEST_IGNORE_BATTERY_OPTIMIZATIONS | Survive aggressive OEM background-kill policies |
 | Receive boot completed | Auto-restart overlay after reboot if it was active |
 | Internet | Ping measurement to `8.8.8.8` (Google Public DNS) only |
-| Kill background processes | Used to purge cached background apps during Gaming Mode activation |
 | Access notification policy | Required to toggle Do Not Disturb mode automatically |
 | Modify system settings | Required to deploy per-game brightness, volume, and rotation overrides |
 | Foreground service (Special Use) | Ensures Gaming Mode stays active on Android 14+ |
 | Post Notifications (Android 13+) | Display session status & quick-control notification controls |
 | QUERY_ALL_PACKAGES | Load installed games and apps for Game Launcher optimization |
-| Shizuku or Root (your choice) | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), ART RAM heap compaction, and OriginOS Esports hardware engine |
+| Shizuku or Root (your choice) | High-precision FPS metering (`SurfaceFlinger`), multi-sensor thermal diagnostics (`IThermalService`), and the Gaming Mode optimizations |
 
 ---
 
