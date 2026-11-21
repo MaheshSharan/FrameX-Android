@@ -46,14 +46,14 @@ class PrivilegeManager internal constructor(
 
     private val switchLock = Mutex()
 
-    private val _currentMode = MutableStateFlow(PrivilegeMode.NONE)
+    private val _currentMode = MutableStateFlow(PrivilegeMode.SHIZUKU)
     val currentMode: StateFlow<PrivilegeMode> = _currentMode.asStateFlow()
 
     private val _capabilities = MutableStateFlow<PrivilegeCapabilities?>(null)
     val capabilities: StateFlow<PrivilegeCapabilities?> = _capabilities.asStateFlow()
 
     val backendState: StateFlow<BackendState> = _currentMode
-        .flatMapLatest { backendFor(it)?.state ?: MutableStateFlow(BackendState.Idle) }
+        .flatMapLatest { backendFor(it).state }
         .stateIn(scope, SharingStarted.Eagerly, BackendState.Idle)
 
     val isReady: StateFlow<Boolean> = backendState
@@ -103,7 +103,7 @@ class PrivilegeManager internal constructor(
         try {
             val backend = backendFor(mode)
             val ready = withTimeoutOrNull(timeoutMs) {
-                backend?.state?.first { it is BackendState.Connected }
+                backend.state.first { it is BackendState.Connected }
                 // isReady follows the backend state asynchronously; wait until it agrees.
                 isReady.first { it }
             }
@@ -115,22 +115,21 @@ class PrivilegeManager internal constructor(
 
     /** Waits briefly for the selected backend, e.g. while the root shell restarts after a timeout. */
     suspend fun awaitReady(timeoutMs: Long): Boolean =
-        isReady.value || kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { isReady.first { it } } == true
+        isReady.value || withTimeoutOrNull(timeoutMs) { isReady.first { it } } == true
 
     fun refresh() {
-        backendFor(_currentMode.value)?.refresh()
+        backendFor(_currentMode.value).refresh()
     }
 
     suspend fun requestAccess() {
-        backendFor(_currentMode.value)?.requestAccess()
+        backendFor(_currentMode.value).requestAccess()
         if (isReady.value) probeCapabilities()
     }
 
     suspend fun exec(command: String, timeoutMs: Long = PrivilegeBackend.DEFAULT_TIMEOUT_MS): PrivilegedOutcome {
         val mode = _currentMode.value
         val started = System.nanoTime()
-        val outcome = backendFor(mode)?.exec(command, timeoutMs)
-            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+        val outcome = backendFor(mode).exec(command, timeoutMs)
         val ms = (System.nanoTime() - started) / 1_000_000
         FrameXLog.d(
             "exec mode=$mode ${ms}ms exit=${outcome.exitCode} (${outcome::class.simpleName}) cmd=${command.replace('\n', ' ').take(160)}",
@@ -154,21 +153,19 @@ class PrivilegeManager internal constructor(
     }
 
     suspend fun readCpuTelemetry(): PrivilegedOutcome =
-        backendFor(_currentMode.value)?.readCpuTelemetry()
-            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+        backendFor(_currentMode.value).readCpuTelemetry()
 
     suspend fun readThermalTemperatures(): PrivilegedOutcome =
-        backendFor(_currentMode.value)?.readThermalTemperatures()
-            ?: PrivilegedOutcome.PermissionDenied("No privilege mode selected")
+        backendFor(_currentMode.value).readThermalTemperatures()
 
     suspend fun suspendPackages(packages: List<String>, suspended: Boolean): SuspendOutcome? =
-        backendFor(_currentMode.value)?.suspendPackages(packages, suspended)
+        backendFor(_currentMode.value).suspendPackages(packages, suspended)
 
     suspend fun setAppOpMode(packages: List<String>, opCode: Int, mode: Int): Int =
-        backendFor(_currentMode.value)?.setAppOpMode(packages, opCode, mode) ?: 0
+        backendFor(_currentMode.value).setAppOpMode(packages, opCode, mode)
 
     private suspend fun probeCapabilities() {
-        val backend = backendFor(_currentMode.value) ?: return
+        val backend = backendFor(_currentMode.value)
         _capabilities.value = runCatching { CapabilityProbe.run(backend) }
             .onFailure { FrameXLog.w("Capability probe failed: ${it.message}") }
             .getOrNull()
@@ -177,21 +174,18 @@ class PrivilegeManager internal constructor(
     private fun activate(target: PrivilegeMode) {
         val previous = backendFor(_currentMode.value)
         val next = backendFor(target)
-        if (previous !== next) previous?.stop()
+        if (previous !== next) previous.stop()
         _capabilities.value = null
         _currentMode.value = target
-        next?.start()
-        if (next != null) {
-            scope.launch {
-                next.state.collect { if (it is BackendState.Connected) { probeCapabilities(); return@collect } }
-            }
+        next.start()
+        scope.launch {
+            next.state.collect { if (it is BackendState.Connected) { probeCapabilities(); return@collect } }
         }
     }
 
-    private fun backendFor(mode: PrivilegeMode): PrivilegeBackend? = when (mode) {
+    private fun backendFor(mode: PrivilegeMode): PrivilegeBackend = when (mode) {
         PrivilegeMode.SHIZUKU -> shizuku
         PrivilegeMode.ROOT -> root
-        PrivilegeMode.NONE -> null
     }
 
     private companion object {

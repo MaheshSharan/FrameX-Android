@@ -39,7 +39,7 @@ internal class GamingRecoveryCoordinator(
             // Undo through the backend that applied the changes, not the one selected now.
             val recorded = settingsRepository.getGamingAppliedVia()
             val current = privilegeManager.currentMode.value
-            if (recorded != PrivilegeMode.NONE && recorded != current) {
+            if (recorded != null && recorded != current) {
                 if (triedRecordedBackend) return@collect
                 triedRecordedBackend = true
                 FrameXLog.w("Recovering Gaming Mode through recorded backend ${recorded.key}", tag = TAG)

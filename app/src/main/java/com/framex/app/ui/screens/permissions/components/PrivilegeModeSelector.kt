@@ -63,7 +63,7 @@ fun PrivilegeModeSelector(
                     )
                     Text(
                         text = stringResource(
-                            if (selected && option.mode != PrivilegeMode.NONE) {
+                            if (selected) {
                                 if (isReady) R.string.perm_mode_state_connected else R.string.perm_mode_state_not_ready
                             } else {
                                 option.descriptionRes
@@ -82,6 +82,5 @@ private class ModeOption(val mode: PrivilegeMode, val titleRes: Int, val descrip
 
 private val MODES = listOf(
     ModeOption(PrivilegeMode.SHIZUKU, R.string.perm_mode_shizuku, R.string.perm_mode_shizuku_desc),
-    ModeOption(PrivilegeMode.ROOT, R.string.perm_mode_root, R.string.perm_mode_root_desc),
-    ModeOption(PrivilegeMode.NONE, R.string.perm_mode_none, R.string.perm_mode_none_desc)
+    ModeOption(PrivilegeMode.ROOT, R.string.perm_mode_root, R.string.perm_mode_root_desc)
 )

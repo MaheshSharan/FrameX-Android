@@ -1,15 +1,11 @@
 package com.framex.app.privilege
 
 enum class PrivilegeMode(val key: String) {
-    NONE("none"),
     SHIZUKU("shizuku"),
     ROOT("root");
 
     companion object {
-        fun fromKey(key: String?): PrivilegeMode = when (key?.lowercase()) {
-            "root" -> ROOT
-            "shizuku" -> SHIZUKU
-            else -> NONE
-        }
+        /** Unknown, missing and legacy `none` values map to Shizuku, the default mode. */
+        fun fromKey(key: String?): PrivilegeMode = if (key.equals(ROOT.key, ignoreCase = true)) ROOT else SHIZUKU
     }
 }

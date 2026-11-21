@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnboardingScreen(
     onFinishOnboarding: () -> Unit,
-    selectedMode: PrivilegeMode = PrivilegeMode.NONE,
+    selectedMode: PrivilegeMode = PrivilegeMode.SHIZUKU,
     onSelectPrivilege: (PrivilegeMode, (Boolean) -> Unit) -> Unit = { _, cb -> cb(true) },
     modifier: Modifier = Modifier,
     pages: List<OnboardingPage> = DefaultOnboardingPages
@@ -246,9 +246,6 @@ fun OnboardingScreen(
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
                         } else {
-                            if (selectedMode == PrivilegeMode.NONE) {
-                                onSelectPrivilege(PrivilegeMode.SHIZUKU) {}
-                            }
                             onFinishOnboarding()
                         }
                     },

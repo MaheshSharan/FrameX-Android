@@ -220,7 +220,6 @@
     <string name="tuning_cpu_section">CPU clusters</string>
     <string name="tuning_banner_root">Root mode</string>
     <string name="tuning_banner_shizuku">Shizuku mode</string>
-    <string name="tuning_banner_none">No privilege mode</string>
     <string name="tuning_banner_can_tune">Frequency and governor changes are available.</string>
     <string name="tuning_banner_read_only">Read-only. Changing CPU or GPU limits needs Root access that can write to the kernel.</string>
     <string name="tuning_unlock_nodes">Unlock to edit</string>
@@ -251,8 +250,6 @@
     <string name="perm_mode_shizuku_desc">Uses the Shizuku service. No root needed.</string>
     <string name="perm_mode_root">Root</string>
     <string name="perm_mode_root_desc">Uses your root manager (Magisk, KernelSU). Needed to change CPU and GPU limits.</string>
-    <string name="perm_mode_none">None</string>
-    <string name="perm_mode_none_desc">Overlay only. Gaming Mode and tuning are off.</string>
     <string name="perm_mode_state_connected">Connected</string>
     <string name="perm_mode_state_not_ready">Not connected yet</string>
     <string name="perm_mode_root_retry">Request root access</string>

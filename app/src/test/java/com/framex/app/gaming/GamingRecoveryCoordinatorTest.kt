@@ -32,7 +32,7 @@ class GamingRecoveryCoordinatorTest {
     /** Runs the coordinator and returns the privilege mode that was active when `disable` ran, or null. */
     private fun recover(
         selected: PrivilegeMode,
-        appliedVia: PrivilegeMode,
+        appliedVia: PrivilegeMode?,
         gamingActive: Boolean,
         sessionActive: Boolean = false
     ): PrivilegeMode? = runBlocking {
@@ -76,7 +76,7 @@ class GamingRecoveryCoordinatorTest {
 
     @Test
     fun cleanState_doesNothing() {
-        assertNull(recover(PrivilegeMode.SHIZUKU, PrivilegeMode.NONE, gamingActive = false))
+        assertNull(recover(PrivilegeMode.SHIZUKU, null, gamingActive = false))
     }
 
     @Test

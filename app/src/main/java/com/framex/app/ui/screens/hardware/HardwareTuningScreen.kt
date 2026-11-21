@@ -195,7 +195,6 @@ private fun PrivilegeBanner(mode: PrivilegeMode, canTune: Boolean) {
                     when (mode) {
                         PrivilegeMode.ROOT -> R.string.tuning_banner_root
                         PrivilegeMode.SHIZUKU -> R.string.tuning_banner_shizuku
-                        PrivilegeMode.NONE -> R.string.tuning_banner_none
                     }
                 ),
                 fontWeight = FontWeight.SemiBold,

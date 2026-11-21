@@ -59,8 +59,7 @@ class AppPreferencesRepository @Inject constructor(
     }
 
     fun getPrivilegeMode(): com.framex.app.privilege.PrivilegeMode {
-        val raw = store.getString("privilege_mode", com.framex.app.privilege.PrivilegeMode.NONE.key)
-        return com.framex.app.privilege.PrivilegeMode.fromKey(raw)
+        return com.framex.app.privilege.PrivilegeMode.fromKey(store.getString("privilege_mode", null))
     }
 
     fun setPrivilegeMode(mode: com.framex.app.privilege.PrivilegeMode) {

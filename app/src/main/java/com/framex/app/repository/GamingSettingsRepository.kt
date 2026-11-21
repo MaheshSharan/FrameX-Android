@@ -103,11 +103,11 @@ class GamingSettingsRepository @Inject constructor(
     }
 
     /** Backend that applied the current Gaming Mode session; recovery must undo through the same one. */
-    fun getAppliedVia(): com.framex.app.privilege.PrivilegeMode =
-        com.framex.app.privilege.PrivilegeMode.fromKey(store.getString("gaming_applied_via", null))
+    fun getAppliedVia(): com.framex.app.privilege.PrivilegeMode? =
+        com.framex.app.privilege.PrivilegeMode.entries.firstOrNull { it.key == store.getString("gaming_applied_via", null) }
 
     fun setAppliedVia(mode: com.framex.app.privilege.PrivilegeMode?) {
-        if (mode == null || mode == com.framex.app.privilege.PrivilegeMode.NONE) {
+        if (mode == null) {
             store.remove("gaming_applied_via")
         } else {
             store.putString("gaming_applied_via", mode.key)

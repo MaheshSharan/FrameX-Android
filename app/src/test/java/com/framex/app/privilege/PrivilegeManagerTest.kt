@@ -48,13 +48,14 @@ class PrivilegeManagerTest {
     }
 
     @Test
-    fun noModeSelected_failsWithoutStartingAnyBackend() = runBlocking {
+    fun freshInstall_usesShizukuAndNeverStartsRoot() = runBlocking {
         val shizuku = FakePrivilegeBackend(PrivilegeMode.SHIZUKU)
         val root = FakePrivilegeBackend(PrivilegeMode.ROOT)
-        val manager = manager(PrivilegeMode.NONE, shizuku, root)
+        val manager = PrivilegeManager(settings, shizuku, root, scope).also { it.start() }
 
-        assertFalse(manager.exec("id").isSuccess)
-        assertEquals(0, shizuku.startCalls + root.startCalls)
+        assertEquals(PrivilegeMode.SHIZUKU, manager.currentMode.value)
+        assertEquals(1, shizuku.startCalls)
+        assertEquals(0, root.startCalls)
     }
 
     @Test

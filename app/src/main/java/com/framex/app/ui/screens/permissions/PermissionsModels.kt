@@ -26,7 +26,7 @@ data class PermissionItem(
 
 @Immutable
 data class PermissionsUiState(
-    val selectedMode: PrivilegeMode = PrivilegeMode.NONE,
+    val selectedMode: PrivilegeMode = PrivilegeMode.SHIZUKU,
     val isShizukuAvailable: Boolean = false,
     val hasShizukuPermission: Boolean = false,
     val hasOverlayPermission: Boolean = false,
